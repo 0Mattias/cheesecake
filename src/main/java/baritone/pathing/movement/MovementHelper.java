@@ -668,48 +668,39 @@ public interface MovementHelper extends ActionCosts, Helper {
         Rotation blockRotation = RotationUtils.calcRotationFromVec3d(ctx.playerHead(),
                 VecUtils.getBlockPosCenter(dest),
                 ctx.playerRotations());
-        int selection = getSelection(blockRotation, ax, az);
-        switch (selection) {
-            case 0 -> state.setInput(Input.MOVE_FORWARD, true);
-            case 1 -> state.setInput(Input.MOVE_BACK, true);
-            case 2 -> state.setInput(Input.MOVE_LEFT, true);
-            case 3 -> state.setInput(Input.MOVE_RIGHT, true);
-            case 4 -> state.setInput(Input.MOVE_FORWARD, true).setInput(Input.MOVE_LEFT, true);
-            case 5 -> state.setInput(Input.MOVE_FORWARD, true).setInput(Input.MOVE_RIGHT, true);
-            case 6 -> state.setInput(Input.MOVE_BACK, true).setInput(Input.MOVE_LEFT, true);
-            case 7 -> state.setInput(Input.MOVE_BACK, true).setInput(Input.MOVE_RIGHT, true);
-            default -> {}
-        }
+        MovementOption selection = getSelection(blockRotation, ax, az);
+        selection.setInputs(state);
     }
 
-    private static int getSelection(Rotation blockRotation, float ax, float az) {
+    private static MovementOption getSelection(Rotation blockRotation, float ax, float az) {
         float targetAx = Mth.sin(blockRotation.getYaw() * DEG_TO_RAD_F);
         float targetAz = Mth.cos(blockRotation.getYaw() * DEG_TO_RAD_F);
-        Vec2[] options = getOptions(ax, az);
-        int selection = -1;
+        MovementOption[] options = getOptions(ax, az);
+        MovementOption selection = null;
         float closestX = 100000;
         float closestZ = 100000;
-        for (int i = 0; i < options.length; i++) {
-            if (Mth.abs(targetAx - options[i].x) + Mth.abs(targetAz - options[i].y) < closestX + closestZ) {
-                closestX = Math.abs(targetAx - options[i].x);
-                closestZ = Math.abs(targetAz - options[i].y);
-                selection = i;
+        for (MovementOption option : options) {
+            if (Mth.abs(targetAx - option.motionX()) + Mth.abs(targetAz - option.motionZ()) < closestX + closestZ) {
+                closestX = Math.abs(targetAx - option.motionX());
+                closestZ = Math.abs(targetAz - option.motionZ());
+                selection = option;
             }
         }
         return selection;
     }
 
-    private static Vec2[] getOptions(float ax, float az) {
+    private static MovementOption[] getOptions(float ax, float az) {
         boolean canSprint = Baritone.settings().allowSprint.value;
-        return new Vec2[]{
-                new Vec2(canSprint ? ax * 1.3f : ax, canSprint ? az * 1.3f : az), // W
-                new Vec2(-ax, -az), // S
-                new Vec2(-az, ax), // A
-                new Vec2(az, -ax), // D
-                new Vec2((canSprint ? ax * 1.3f : ax) - az, (canSprint ? az * 1.3f : az) + ax), // W+A
-                new Vec2((canSprint ? ax * 1.3f : ax) + az, (canSprint ? az * 1.3f : az) - ax), // W+D
-                new Vec2(-ax - az, -az + ax), // S+A
-                new Vec2(-ax + az, -az - ax) // S+D
+
+        return new MovementOption[]{
+                new MovementOption(Input.MOVE_FORWARD, canSprint ? ax * 1.3f : ax, canSprint ? az * 1.3f : az),
+                new MovementOption(Input.MOVE_BACK, -ax, -az),
+                new MovementOption(Input.MOVE_LEFT, -az, ax),
+                new MovementOption(Input.MOVE_RIGHT, az, -ax),
+                new MovementOption(Input.MOVE_FORWARD, Input.MOVE_LEFT, (canSprint ? ax * 1.3f : ax) - az, (canSprint ? az * 1.3f : az) + ax),
+                new MovementOption(Input.MOVE_FORWARD, Input.MOVE_RIGHT, (canSprint ? ax * 1.3f : ax) + az, (canSprint ? az * 1.3f : az) - ax),
+                new MovementOption(Input.MOVE_BACK, Input.MOVE_LEFT, -ax - az, -az + ax),
+                new MovementOption(Input.MOVE_BACK, Input.MOVE_RIGHT, -ax + az, -az - ax),
         };
     }
 
