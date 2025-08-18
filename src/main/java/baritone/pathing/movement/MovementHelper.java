@@ -52,9 +52,7 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec2;
 import net.minecraft.world.phys.Vec3;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 
 import static baritone.api.utils.RotationUtils.DEG_TO_RAD_F;
 import static baritone.pathing.movement.Movement.HORIZONTALS_BUT_ALSO_DOWN_____SO_EVERY_DIRECTION_EXCEPT_UP;
@@ -668,25 +666,10 @@ public interface MovementHelper extends ActionCosts, Helper {
         Rotation blockRotation = RotationUtils.calcRotationFromVec3d(ctx.playerHead(),
                 VecUtils.getBlockPosCenter(dest),
                 ctx.playerRotations());
-        MovementOption selection = getSelection(blockRotation, ax, az);
-        selection.setInputs(state);
-    }
-
-    private static MovementOption getSelection(Rotation blockRotation, float ax, float az) {
-        float targetAx = Mth.sin(blockRotation.getYaw() * DEG_TO_RAD_F);
-        float targetAz = Mth.cos(blockRotation.getYaw() * DEG_TO_RAD_F);
-        MovementOption[] options = getOptions(ax, az);
-        MovementOption selection = null;
-        float closestX = 100000;
-        float closestZ = 100000;
-        for (MovementOption option : options) {
-            if (Mth.abs(targetAx - option.motionX()) + Mth.abs(targetAz - option.motionZ()) < closestX + closestZ) {
-                closestX = Math.abs(targetAx - option.motionX());
-                closestZ = Math.abs(targetAz - option.motionZ());
-                selection = option;
-            }
-        }
-        return selection;
+        Arrays.stream(getOptions(ax, az)).min(Comparator.comparing(option -> option.distanceToSq(
+                Mth.sin(blockRotation.getYaw() * DEG_TO_RAD_F),
+                Mth.cos(blockRotation.getYaw() * DEG_TO_RAD_F)
+        ))).ifPresent(selection -> selection.setInputs(state));
     }
 
     private static MovementOption[] getOptions(float ax, float az) {

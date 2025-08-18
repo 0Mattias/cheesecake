@@ -18,6 +18,7 @@
 package baritone.pathing.movement;
 
 import baritone.api.utils.input.Input;
+import net.minecraft.util.Mth;
 
 public record MovementOption(Input input1, Input input2, float motionX, float motionZ) {
 
@@ -32,5 +33,9 @@ public record MovementOption(Input input1, Input input2, float motionX, float mo
         if (input2 != null) {
             movementState.setInput(input2, true);
         }
+    }
+
+    public float distanceToSq(float otherX, float otherZ) {
+        return Mth.abs(motionX() - otherX) + Mth.abs(motionZ() - otherZ);
     }
 }
