@@ -666,16 +666,8 @@ public interface MovementHelper extends ActionCosts, Helper {
         Rotation blockRotation = RotationUtils.calcRotationFromVec3d(ctx.playerHead(),
                 VecUtils.getBlockPosCenter(dest),
                 ctx.playerRotations());
-        Arrays.stream(getOptions(ax, az)).min(Comparator.comparing(option -> option.distanceToSq(
-                Mth.sin(blockRotation.getYaw() * DEG_TO_RAD_F),
-                Mth.cos(blockRotation.getYaw() * DEG_TO_RAD_F)
-        ))).ifPresent(selection -> selection.setInputs(state));
-    }
-
-    private static MovementOption[] getOptions(float ax, float az) {
         boolean canSprint = Baritone.settings().allowSprint.value;
-
-        return new MovementOption[]{
+        Arrays.stream(new MovementOption[]{
                 new MovementOption(Input.MOVE_FORWARD, canSprint ? ax * 1.3f : ax, canSprint ? az * 1.3f : az),
                 new MovementOption(Input.MOVE_BACK, -ax, -az),
                 new MovementOption(Input.MOVE_LEFT, -az, ax),
@@ -684,7 +676,10 @@ public interface MovementHelper extends ActionCosts, Helper {
                 new MovementOption(Input.MOVE_FORWARD, Input.MOVE_RIGHT, (canSprint ? ax * 1.3f : ax) + az, (canSprint ? az * 1.3f : az) - ax),
                 new MovementOption(Input.MOVE_BACK, Input.MOVE_LEFT, -ax - az, -az + ax),
                 new MovementOption(Input.MOVE_BACK, Input.MOVE_RIGHT, -ax + az, -az - ax),
-        };
+        }).min(Comparator.comparing(option -> option.distanceToSq(
+                Mth.sin(blockRotation.getYaw() * DEG_TO_RAD_F),
+                Mth.cos(blockRotation.getYaw() * DEG_TO_RAD_F)
+        ))).ifPresent(selection -> selection.setInputs(state));
     }
 
     /**
