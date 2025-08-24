@@ -20,6 +20,8 @@ package baritone.pathing.movement;
 import baritone.api.utils.input.Input;
 import net.minecraft.util.Mth;
 
+import java.util.stream.Stream;
+
 public record MovementOption(Input input1, Input input2, float motionX, float motionZ) {
 
     public MovementOption(Input input1, float motionX, float motionZ) {
@@ -37,5 +39,18 @@ public record MovementOption(Input input1, Input input2, float motionX, float mo
 
     public float distanceToSq(float otherX, float otherZ) {
         return Mth.abs(motionX() - otherX) + Mth.abs(motionZ() - otherZ);
+    }
+    
+    public static Stream<MovementOption> getOptions(float motionX, float motionZ, boolean canSprint) {
+        return Stream.of(
+                new MovementOption(Input.MOVE_FORWARD, canSprint ? motionX * 1.3f : motionX, canSprint ? motionZ * 1.3f : motionZ),
+                new MovementOption(Input.MOVE_BACK, -motionX, -motionZ),
+                new MovementOption(Input.MOVE_LEFT, -motionZ, motionX),
+                new MovementOption(Input.MOVE_RIGHT, motionZ, -motionX),
+                new MovementOption(Input.MOVE_FORWARD, Input.MOVE_LEFT, (canSprint ? motionX * 1.3f : motionX) - motionZ, (canSprint ? motionZ * 1.3f : motionZ) + motionX),
+                new MovementOption(Input.MOVE_FORWARD, Input.MOVE_RIGHT, (canSprint ? motionX * 1.3f : motionX) + motionZ, (canSprint ? motionZ * 1.3f : motionZ) - motionX),
+                new MovementOption(Input.MOVE_BACK, Input.MOVE_LEFT, -motionX - motionZ, -motionZ + motionX),
+                new MovementOption(Input.MOVE_BACK, Input.MOVE_RIGHT, -motionX + motionZ, -motionZ - motionX)
+        );
     }
 }

@@ -356,6 +356,7 @@ public class MovementTraverse extends Movement {
                 }
                 return state;
             }
+            MovementHelper.roundYaw(ctx, state);
             MovementHelper.moveTowardsWithoutRotation(ctx, state, dest);
             return state;
         }
