@@ -660,12 +660,7 @@ public interface MovementHelper extends ActionCosts, Helper {
         )).setInput(Input.MOVE_FORWARD, true);
     }
 
-    static void moveTowardsWithoutRotation(IPlayerContext ctx, MovementState state, BlockPos dest) {
-        float idealYaw = RotationUtils.calcRotationFromVec3d(
-                ctx.playerHead(),
-                VecUtils.getBlockPosCenter(dest),
-                ctx.playerRotations()
-        ).getYaw();
+    static void moveTowardsWithoutRotation(IPlayerContext ctx, MovementState state, float idealYaw) {
         MovementOption.getOptions(
                 Mth.sin(ctx.playerRotations().getYaw() * DEG_TO_RAD_F),
                 Mth.cos(ctx.playerRotations().getYaw() * DEG_TO_RAD_F),
@@ -676,9 +671,39 @@ public interface MovementHelper extends ActionCosts, Helper {
         ))).ifPresent(selection -> selection.setInputs(state));
     }
 
-    static void roundYaw(IPlayerContext ctx, MovementState state) {
+    static void moveTowardsWithoutRotation(IPlayerContext ctx, MovementState state, BlockPos dest) {
+        float idealYaw = RotationUtils.calcRotationFromVec3d(
+                ctx.playerHead(),
+                VecUtils.getBlockPosCenter(dest),
+                ctx.playerRotations()
+        ).getYaw();
+        moveTowardsWithoutRotation(ctx, state, idealYaw);
+    }
+
+    static void moveTowardsWithSlightRotation(IPlayerContext ctx, MovementState state, BlockPos dest) {
+        float idealYaw = RotationUtils.calcRotationFromVec3d(
+                ctx.playerHead(),
+                VecUtils.getBlockPosCenter(dest),
+                ctx.playerRotations()
+        ).getYaw();
+        moveTowardsWithoutRotation(ctx, state, idealYaw);
+        float distance = Rotation.yawDistanceFromOffset(ctx.playerRotations().getYaw(), idealYaw) % 45f;
+        float newYaw;
+        if (distance > 0) {
+            if (distance > 22.5f) {
+                newYaw = -45f + distance;
+            } else {
+                newYaw = distance;
+            }
+        } else {
+            if (distance < -22.5f) {
+                newYaw = 45f + distance;
+            } else {
+                newYaw = distance;
+            }
+        }
         state.setTarget(new MovementTarget(new Rotation(
-                Math.round(ctx.playerRotations().getYaw() / 45f) * 45f,
+                ctx.playerRotations().getYaw() - newYaw,
                 ctx.playerRotations().getPitch()
         ), true));
     }
