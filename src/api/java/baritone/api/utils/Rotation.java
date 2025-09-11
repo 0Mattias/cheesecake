@@ -161,7 +161,7 @@ public class Rotation {
 
     /**
      * Gets the distance between a starting yaw and an offset yaw.
-     * Distance can be negative if the offset yaw is left of the starting yaw.
+     * Distance can be negative if the offset yaw is behind of the starting yaw.
      *
      * @param yaw The initial yaw
      * @param offsetYaw The offset yaw
