@@ -1,6 +1,8 @@
 # Cheesecake - Baritone for 1.21.11
 ## 🚨 WARNING: HIGHLY EXPERIMENTAL. 🚨 This porting process was done with the help of Antigravity. Baritone's codebase is massive and I have not been able to look over every single line of code myself.
 
+# [DOWNLOAD HERE](https://github.com/0Mattias/cheesecake/blob/6eaf2b65f86ffe13975b31d6c651345811d30436/cheesecake-0.1-2-ga160ae3a-dirty.jar)
+
 ## How is Cheesecake different?
 
 Cheesecake is ported from the 1.19.4 fabric version of Baritone rather than the current 1.21.8 version. You're probably wondering why. The reason is that I didn't scroll down far enough down the Baritone Github repo to see that it had already been ported to a recent Minecraft version. This isn't a joke and this cost me an unbelievable amount of time to create. The result is nothing short of a miracle and is a 1:1 port of the 1.19.4 fabric version. I recommend you try it yourself, because honestly I'm kind of shocked how well it worked out.
