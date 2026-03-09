@@ -1,0 +1,30 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "cheesecake.launch.mixins",
+  "compatibilityLevel": "JAVA_21",
+  "refmap": "cheesecake-refmap.json",
+  "mixins": [],
+  "client": [
+    "MixinFireworkRocketEntity",
+    "MixinClientChunkProvider",
+    "MixinClientPlayerEntity",
+    "MixinEntity",
+    "MixinScreen",
+    "MixinNetworkManager",
+    "MixinPalettedContainer$Data",
+    "MixinClientPlayNetHandler",
+    "MixinChunkArray",
+    "MixinLivingEntity",
+    "MixinItemStack",
+    "MixinPlayerController",
+    "MixinWorldRenderer",
+    "MixinEntityRenderManager",
+    "MixinCommandSuggestionHelper",
+    "MixinMinecraft",
+    "MixinPalettedContainer"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
