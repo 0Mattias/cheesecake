@@ -30,7 +30,6 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.RenderLayers;
 import net.minecraft.client.render.Tessellator;
 import com.mojang.blaze3d.vertex.VertexFormat;
-import net.minecraft.client.render.VertexFormats;
 import net.minecraft.client.render.BuiltBuffer;
 import net.minecraft.client.texture.TextureManager;
 import net.minecraft.client.util.math.MatrixStack;
@@ -52,6 +51,10 @@ public interface IRenderer {
 
     float[] color = new float[] { 1.0F, 1.0F, 1.0F, 255.0F };
 
+    class LineState {
+        static float currentLineWidth = 1.0F;
+    }
+
     static void glColor(Color color, float alpha) {
         float[] colorComponents = color.getColorComponents(null);
         IRenderer.color[0] = colorComponents[0];
@@ -62,11 +65,12 @@ public interface IRenderer {
 
     static void startLines(Color color, float alpha, float lineWidth, boolean ignoreDepth) {
         glColor(color, alpha);
+        LineState.currentLineWidth = lineWidth;
 
         // depth test configuration is now handled via RenderLayers in 1.21.2+
 
         RenderState.buffer = Tessellator.getInstance().begin(VertexFormat.DrawMode.LINES,
-                VertexFormats.POSITION_COLOR_NORMAL);
+                RenderLayers.LINES.getVertexFormat());
     }
 
     static void startLines(Color color, float lineWidth, boolean ignoreDepth) {
@@ -76,7 +80,17 @@ public interface IRenderer {
     static void endLines(boolean ignoreDepth) {
         BuiltBuffer builtBuffer = RenderState.buffer.endNullable();
         if (builtBuffer != null) {
+            if (ignoreDepth) {
+                org.lwjgl.opengl.GL11.glDisable(org.lwjgl.opengl.GL11.GL_DEPTH_TEST);
+                org.lwjgl.opengl.GL11.glDepthFunc(org.lwjgl.opengl.GL11.GL_ALWAYS);
+            }
+
             RenderLayers.LINES.draw(builtBuffer);
+
+            if (ignoreDepth) {
+                org.lwjgl.opengl.GL11.glEnable(org.lwjgl.opengl.GL11.GL_DEPTH_TEST);
+                org.lwjgl.opengl.GL11.glDepthFunc(org.lwjgl.opengl.GL11.GL_LEQUAL);
+            }
         }
     }
 
@@ -107,18 +121,19 @@ public interface IRenderer {
             float x1, float y1, float z1,
             float x2, float y2, float z2,
             float nx, float ny, float nz) {
+
         final Matrix4f matrix4f = stack.peek().getPositionMatrix();
-//         final Matrix3f normal = stack.peek().getNormalMatrix();
+        // final Matrix3f normal = stack.peek().getNormalMatrix();
 
         RenderState.buffer
                 .vertex(matrix4f, x1, y1, z1)
                 .color(color[0], color[1], color[2], color[3])
                 .normal(stack.peek(), nx, ny, nz)
-                .light(0)
+                .lineWidth(LineState.currentLineWidth)
                 .vertex(matrix4f, x2, y2, z2)
                 .color(color[0], color[1], color[2], color[3])
                 .normal(stack.peek(), nx, ny, nz)
-                .light(0);
+                .lineWidth(LineState.currentLineWidth);
     }
 
     static void emitAABB(MatrixStack stack, Box aabb) {
