@@ -1,3 +1,7 @@
+# Cheesecake - Baritone for 1.21.11
+## 🚨 WARNING: HIGHLY EXPERIMENTAL. 🚨 This porting process was done with the help of Gemini 3.1 Pro. Baritone's codebase is massive and I have not been able to look over every single line of code myself.
+### ⚠️ Everything works exactly like Baritone, below is the original readme file. All credit goes to the original authors and their incredible hard work. Please support the original release. ⚠️
+
 # Baritone
 <p align="center">
   <a href="https://github.com/cabaletta/baritone/releases/"><img src="https://img.shields.io/github/downloads/cabaletta/baritone/total.svg" alt="GitHub All Releases"/></a>
