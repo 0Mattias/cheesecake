@@ -27,6 +27,38 @@ jobs:
       - name: Build
         run: ./gradlew build --stacktrace --no-daemon
 
+      - name: Check the built jar
+        run: |
+          set -euo pipefail
+          jar=$(ls build/libs/*.jar | grep -v -- '-sources' | head -1)
+          echo "Inspecting $jar"
+
+          # The Schematica/Litematica API stubs are compile-only. Shipping them would shadow the
+          # real mods on Fabric's flat mod classpath.
+          if unzip -l "$jar" | grep -E ' (fi/dy/masa|com/github/lunatrius)/'; then
+            echo "::error::jar ships Schematica/Litematica stub classes"
+            exit 1
+          fi
+
+          # The mod must be remapped to intermediary, not left as a dev jar.
+          unzip -p "$jar" cheesecake/Cheesecake.class > /tmp/Cheesecake.class
+          if ! javap -p -c /tmp/Cheesecake.class | grep -q 'net/minecraft/class_'; then
+            echo "::error::jar does not look remapped to intermediary"
+            exit 1
+          fi
+
+          # processResources must have substituted the real version.
+          unzip -p "$jar" fabric.mod.json | tee /tmp/fabric.mod.json
+          if grep -q '\${version}' /tmp/fabric.mod.json; then
+            echo "::error::fabric.mod.json version was not expanded"
+            exit 1
+          fi
+
+          # The icon fabric.mod.json points at has to actually be in the jar.
+          unzip -l "$jar" | grep -q 'assets/cheesecake/icon.png'
+
+          echo "jar checks passed"
+
       - name: Upload mod jar
         if: success()
         uses: actions/upload-artifact@v4
