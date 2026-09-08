@@ -4,8 +4,9 @@
 # [DOWNLOAD HERE](https://github.com/0Mattias/cheesecake/blob/6eaf2b65f86ffe13975b31d6c651345811d30436/cheesecake-0.1-2-ga160ae3a-dirty.jar)
 
 > **Note:** that prebuilt jar is from an early commit and predates a batch of fixes to
-> rendering, sprinting, tool selection and jar packaging. Build from source until it is
-> replaced.
+> rendering, sprinting, tool selection and jar packaging. Until it is replaced, either build
+> from source (see below) or grab the `cheesecake-jar` artifact from the most recent green run
+> on the [Actions tab](https://github.com/0Mattias/cheesecake/actions).
 
 ## How is Cheesecake different?
 
