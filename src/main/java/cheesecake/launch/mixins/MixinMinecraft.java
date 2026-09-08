@@ -29,13 +29,11 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.Slice;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.util.function.BiFunction;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.world.ClientWorld;
 
@@ -127,20 +125,16 @@ public class MixinMinecraft {
                                                 EventState.POST));
         }
 
-        /**
-         * While Cheesecake is pathing, pretend no screen is open for the part of the client tick that
-         * handles keybinds and block interaction. Without this the bot stops breaking and placing blocks
-         * the moment any GUI is open, which is exactly what {@code #click} needs to be able to do.
+        /*
+         * Upstream Baritone additionally redirects the `currentScreen` reads in the middle of
+         * MinecraftClient.tick() to null while pathing (its `passEvents` redirect), so that the client
+         * behaves as if no screen were open for that stretch of the tick -- most visibly, missTime is not
+         * pinned to 10000. Cheesecake breaks and places blocks through the player controller rather than
+         * through vanilla's keybind handling, so the practical effect here is small, and porting the
+         * redirect means matching a @Slice that cannot be verified without a running client: getting it
+         * wrong is a hard crash at startup rather than a missing feature. Left out deliberately; if you
+         * add it back, test it in a real client first.
          */
-        @Redirect(method = "tick", at = @At(value = "FIELD", opcode = Opcodes.GETFIELD, target = "Lnet/minecraft/client/MinecraftClient;currentScreen:Lnet/minecraft/client/gui/screen/Screen;"), slice = @Slice(from = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/hud/DebugHud;shouldShowDebugHud()Z"), to = @At(value = "CONSTANT", args = "stringValue=Keybindings")))
-        private Screen passEvents(MinecraftClient instance) {
-                // allow user input is only the primary cheesecake
-                if (CheesecakeAPI.getProvider().getPrimaryCheesecake().getPathingBehavior().isPathing()
-                                && player != null) {
-                        return null;
-                }
-                return instance.currentScreen;
-        }
 
         // TODO
         // FIXME
