@@ -51,30 +51,14 @@ allprojects {
         }
     }
 
+    // Only what a Fabric + yarn build actually needs. The parchment, multimc, impact and
+    // spongepowered repos were inherited from upstream's multi-loader build; parchmentmc in
+    // particular now refuses connections, and Gradle treats that as a hard failure rather than
+    // moving on to the next repository.
     repositories {
-        maven {
-            name = 'spongepowered-repo'
-            url = 'https://repo.spongepowered.org/repository/maven-public/'
-        }
         maven {
             name = 'fabric-maven'
             url = 'https://maven.fabricmc.net/'
-        }
-        maven {
-            name = 'impactdevelopment-repo'
-            url = 'https://impactdevelopment.github.io/maven/'
-        }
-        maven {
-            name = "ldtteam"
-            url = "https://maven.parchmentmc.net/"
-        }
-        // for the newer version of launchwrapper
-        maven {
-            name = "multimc-maven"
-            url = "https://files.multimc.org/maven/"
-            metadataSources {
-                artifact()
-            }
         }
         mavenCentral()
         maven {
