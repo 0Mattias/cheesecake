@@ -73,3 +73,70 @@ jobs:
           name: test-results
           path: build/reports/tests/test
           if-no-files-found: ignore
+
+  # The build proves the mixin configs are well-formed. It does not prove they APPLY -- that
+  # happens at class load in a running client. Launch one headless on software GL and fail on any
+  # mixin error. Getting to the main menu means every @Mixin target, @Shadow and @Inject resolved
+  # against the real Minecraft classes.
+  smoke:
+    name: headless client smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Install a headless GL stack
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libgl1-mesa-dri libglx-mesa0 mesa-utils libopenal1
+
+      - name: Launch the client
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+          GALLIUM_DRIVER: llvmpipe
+        run: |
+          set +e
+          xvfb-run -a --server-args="-screen 0 1280x720x24" \
+            timeout --signal=INT 600 ./gradlew runClient --no-daemon --stacktrace > client.log 2>&1
+          echo "gradle exited $?"
+          tail -60 client.log
+
+      - name: Assert the client came up with mixins applied
+        run: |
+          set -euo pipefail
+
+          if grep -nE "Mixin apply failed|mixin\.transformer\.throwables|InvalidInjectionException|InvalidAccessorException|InvalidMixinException|ShadowException|Critical injection failure|was not found in" client.log; then
+            echo "::error::mixin failure while loading the client - see the lines above"
+            exit 1
+          fi
+
+          if ! grep -q "cheesecake" client.log; then
+            echo "::error::fabric never mentioned the mod; it did not load"
+            exit 1
+          fi
+
+          # Something that only prints once the client is actually up and rendering.
+          if ! grep -qE "Backend library: LWJGL|Narrator library|Sound engine started|Created: .*texture" client.log; then
+            echo "::error::client never finished starting - no render/sound init markers found"
+            sed -n '1,200p' client.log
+            exit 1
+          fi
+
+          echo "client started, mod loaded, no mixin errors"
+
+      - name: Upload client log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: client-log
+          path: client.log
+          if-no-files-found: ignore
