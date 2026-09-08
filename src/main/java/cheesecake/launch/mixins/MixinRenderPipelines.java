@@ -15,11 +15,24 @@
  * along with Cheesecake.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package com.github.lunatrius.schematica.proxy;
+package cheesecake.launch.mixins;
 
-import com.github.lunatrius.schematica.client.world.SchematicWorld;
+import cheesecake.utils.accessor.IRenderPipelines;
+import com.mojang.blaze3d.pipeline.RenderPipeline;
+import net.minecraft.client.gl.RenderPipelines;
+import org.spongepowered.asm.mixin.Final;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 
-public class ClientProxy extends CommonProxy {
+@Mixin(RenderPipelines.class)
+public class MixinRenderPipelines implements IRenderPipelines {
 
-    public static SchematicWorld schematic;
+    @Final
+    @Shadow
+    private static RenderPipeline.Snippet RENDERTYPE_LINES_SNIPPET;
+
+    @Override
+    public RenderPipeline.Snippet cheesecake$getLinesSnippet() {
+        return RENDERTYPE_LINES_SNIPPET;
+    }
 }

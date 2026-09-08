@@ -38,6 +38,7 @@ import net.minecraft.util.Formatting;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.client.render.BufferBuilder;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.RaycastContext;
@@ -83,6 +84,13 @@ public class GuiClick extends Screen implements Helper {
                 currentMouseOver = ((BlockHitResult) result).getBlockPos();
             }
         }
+    }
+
+    @Override
+    public void renderBackground(net.minecraft.client.gui.DrawContext context, int mouseX, int mouseY,
+            float partialTicks) {
+        // Deliberately empty: vanilla would blur and darken the world behind the screen, which makes it
+        // impossible to see the blocks you are trying to click.
     }
 
     @Override
@@ -133,12 +141,14 @@ public class GuiClick extends Screen implements Helper {
             PathRenderer.drawManySelectionBoxes(modelViewStack, e, Collections.singletonList(currentMouseOver),
                     Color.CYAN);
             if (clickStart != null && !clickStart.equals(currentMouseOver)) {
-                IRenderer.startLines(Color.RED, Cheesecake.settings().pathRenderLineWidthPixels.value, true);
+                BufferBuilder bufferBuilder = IRenderer.startLines(Color.RED);
                 BetterBlockPos a = new BetterBlockPos(currentMouseOver);
                 BetterBlockPos b = new BetterBlockPos(clickStart);
-                IRenderer.emitAABB(modelViewStack, new Box(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.min(a.z, b.z),
-                        Math.max(a.x, b.x) + 1, Math.max(a.y, b.y) + 1, Math.max(a.z, b.z) + 1));
-                IRenderer.endLines(true);
+                IRenderer.emitAABB(bufferBuilder, modelViewStack,
+                        new Box(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.min(a.z, b.z),
+                                Math.max(a.x, b.x) + 1, Math.max(a.y, b.y) + 1, Math.max(a.z, b.z) + 1),
+                        Cheesecake.settings().pathRenderLineWidthPixels.value);
+                IRenderer.endLines(bufferBuilder, true);
             }
         }
     }

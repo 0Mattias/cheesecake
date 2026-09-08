@@ -26,6 +26,7 @@ import net.minecraft.block.BlockState;
 // import net.minecraft.client.MinecraftClient;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 // import net.minecraft.loot.context.LootContext;
 // import net.minecraft.loot.context.LootContextParameters;
 // import net.minecraft.loot.context.LootContextTypes;
@@ -203,9 +204,22 @@ public final class BlockOptionalMeta {
         return stackHashes;
     }
 
+    /**
+     * KNOWN LIMITATION: upstream Baritone resolves a block's real drops by loading the vanilla loot
+     * tables and rolling them, so it knows that e.g. iron ore drops raw iron and stone drops cobblestone.
+     * That machinery (a faked ServerLevel plus loot table accessor mixins) was dropped in the port to
+     * 1.21.11, so we fall back to "a block drops itself".
+     *
+     * The visible consequence is that {@code #mine <quantity> <block>} cannot recognise the mined item
+     * for any block whose drop differs from its own item form, so the quantity limit never trips, and
+     * {@code mineScanDroppedItems} will not target those drops on the ground.
+     */
     private static synchronized List<Item> drops(Block b) {
         return drops.computeIfAbsent(b, block -> {
-            return Collections.singletonList(block.asItem());
+            Item item = block.asItem();
+            // Blocks with no item form map to AIR; letting that through would make every empty
+            // inventory slot look like a match.
+            return item == Items.AIR ? Collections.emptyList() : Collections.singletonList(item);
         });
     }
 
