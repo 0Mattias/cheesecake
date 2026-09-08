@@ -226,8 +226,8 @@ public interface MovementHelper extends ActionCosts, Helper {
                 return NO;
             }
         } catch (Throwable exception) {
-            System.out.println("The block " + state.getBlock().getName().getString()
-                    + " requires a special case due to the exception " + exception.getMessage());
+            // Don't log here: this runs for essentially every block the pathfinder considers, so a single
+            // misbehaving block would flood stdout and tank pathing throughput.
             return MAYBE;
         }
     }
@@ -319,9 +319,7 @@ public interface MovementHelper extends ActionCosts, Helper {
                 return NO;
             }
         } catch (Throwable exception) {
-            // see PR #1087 for why
-            System.out.println("The block " + state.getBlock().getName().getString()
-                    + " requires a special case due to the exception " + exception.getMessage());
+            // see PR #1087 for why. Deliberately silent: this is on the pathfinding hot path.
             return MAYBE;
         }
     }

@@ -89,7 +89,7 @@ public class MixinMinecraft {
                 this.tickProvider = null;
         }
 
-        @Inject(method = "tick", at = @At(value = "INVOKE", target = "net/minecraft/client/world/ClientWorld.tick(Ljava/util/function/BooleanSupplier;)V", shift = At.Shift.AFTER))
+        @Inject(method = "tick", at = @At(value = "INVOKE", target = "net/minecraft/client/world/ClientWorld.tickEntities()V", shift = At.Shift.AFTER))
         private void postUpdateEntities(CallbackInfo ci) {
                 ICheesecake cheesecake = CheesecakeAPI.getProvider().getCheesecakeForPlayer(this.player);
                 if (cheesecake != null) {

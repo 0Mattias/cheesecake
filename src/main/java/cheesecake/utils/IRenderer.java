@@ -20,40 +20,76 @@ package cheesecake.utils;
 import cheesecake.api.CheesecakeAPI;
 import cheesecake.api.Settings;
 import cheesecake.utils.accessor.IEntityRenderManager;
-// import com.mojang.blaze3d.systems.RenderSystem;
-// import com.mojang.blaze3d.systems.RenderSystem;
-// import com.mojang.blaze3d.vertex.*;
-import org.joml.Matrix4f;
-
-import java.awt.Color;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.render.RenderLayers;
-import net.minecraft.client.render.Tessellator;
+import cheesecake.utils.accessor.IRenderLayer;
+import cheesecake.utils.accessor.IRenderPipelines;
+import com.mojang.blaze3d.pipeline.BlendFunction;
+import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.blaze3d.platform.DepthTestFunction;
+import com.mojang.blaze3d.platform.DestFactor;
+import com.mojang.blaze3d.platform.SourceFactor;
 import com.mojang.blaze3d.vertex.VertexFormat;
+import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gl.RenderPipelines;
+import net.minecraft.client.render.BufferBuilder;
 import net.minecraft.client.render.BuiltBuffer;
-import net.minecraft.client.texture.TextureManager;
+import net.minecraft.client.render.RenderLayer;
+import net.minecraft.client.render.RenderLayers;
+import net.minecraft.client.render.RenderSetup;
+import net.minecraft.client.render.Tessellator;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
+import org.joml.Matrix4f;
+
+import java.awt.Color;
 
 public interface IRenderer {
 
     Tessellator tessellator = Tessellator.getInstance();
 
-    class RenderState {
-        static net.minecraft.client.render.BufferBuilder buffer;
-    }
-
     IEntityRenderManager renderManager = (IEntityRenderManager) MinecraftClient.getInstance()
             .getEntityRenderDispatcher();
-    TextureManager textureManager = MinecraftClient.getInstance().getTextureManager();
     Settings settings = CheesecakeAPI.getSettings();
 
-    float[] color = new float[] { 1.0F, 1.0F, 1.0F, 255.0F };
+    /**
+     * Vanilla's lines snippet with alpha blending enabled and depth writes/backface culling disabled,
+     * so overlapping path lines blend instead of fighting each other.
+     */
+    RenderPipeline.Snippet CHEESECAKE_LINES_SNIPPET = RenderPipeline
+            .builder(((IRenderPipelines) new RenderPipelines()).cheesecake$getLinesSnippet())
+            .withBlend(new BlendFunction(
+                    SourceFactor.SRC_ALPHA,
+                    DestFactor.ONE_MINUS_SRC_ALPHA,
+                    SourceFactor.ONE,
+                    DestFactor.ZERO))
+            .withDepthWrite(false)
+            .withCull(false)
+            .buildSnippet();
 
-    class LineState {
-        static float currentLineWidth = 1.0F;
-    }
+    /**
+     * The two layers only differ in their depth test function. Prior to 1.21.5 the "ignore depth" settings
+     * were implemented by toggling GL_DEPTH_TEST around the draw call, but the render pipeline owns that
+     * state now, so the toggle silently did nothing (and left vanilla's state tracker out of sync).
+     */
+    RenderLayer linesWithDepthRenderLayer = ((IRenderLayer) RenderLayers.LINES).cheesecake$createRenderLayer(
+            "renderLayer/cheesecake_lines_with_depth",
+            RenderSetup.builder(RenderPipeline.builder(CHEESECAKE_LINES_SNIPPET)
+                    .withLocation("pipeline/cheesecake_lines_with_depth")
+                    .withDepthTestFunction(DepthTestFunction.LEQUAL_DEPTH_TEST)
+                    .build())
+                    .expectedBufferSize(256)
+                    .build());
+
+    RenderLayer linesNoDepthRenderLayer = ((IRenderLayer) RenderLayers.LINES).cheesecake$createRenderLayer(
+            "renderLayer/cheesecake_lines_no_depth",
+            RenderSetup.builder(RenderPipeline.builder(CHEESECAKE_LINES_SNIPPET)
+                    .withLocation("pipeline/cheesecake_lines_no_depth")
+                    .withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+                    .build())
+                    .expectedBufferSize(256)
+                    .build());
+
+    float[] color = new float[] { 1.0F, 1.0F, 1.0F, 255.0F };
 
     static void glColor(Color color, float alpha) {
         float[] colorComponents = color.getColorComponents(null);
@@ -63,38 +99,26 @@ public interface IRenderer {
         IRenderer.color[3] = alpha;
     }
 
-    static void startLines(Color color, float alpha, float lineWidth, boolean ignoreDepth) {
+    static BufferBuilder startLines(Color color, float alpha) {
         glColor(color, alpha);
-        LineState.currentLineWidth = lineWidth;
-
-        // depth test configuration is now handled via RenderLayers in 1.21.2+
-
-        RenderState.buffer = Tessellator.getInstance().begin(VertexFormat.DrawMode.LINES,
-                RenderLayers.LINES.getVertexFormat());
+        return tessellator.begin(VertexFormat.DrawMode.LINES, RenderLayers.LINES.getVertexFormat());
     }
 
-    static void startLines(Color color, float lineWidth, boolean ignoreDepth) {
-        startLines(color, .4f, lineWidth, ignoreDepth);
+    static BufferBuilder startLines(Color color) {
+        return startLines(color, .4f);
     }
 
-    static void endLines(boolean ignoreDepth) {
-        BuiltBuffer builtBuffer = RenderState.buffer.endNullable();
+    static void endLines(BufferBuilder bufferBuilder, boolean ignoreDepth) {
+        BuiltBuffer builtBuffer = bufferBuilder.endNullable();
         if (builtBuffer != null) {
-            if (ignoreDepth) {
-                org.lwjgl.opengl.GL11.glDisable(org.lwjgl.opengl.GL11.GL_DEPTH_TEST);
-                org.lwjgl.opengl.GL11.glDepthFunc(org.lwjgl.opengl.GL11.GL_ALWAYS);
-            }
-
-            RenderLayers.LINES.draw(builtBuffer);
-
-            if (ignoreDepth) {
-                org.lwjgl.opengl.GL11.glEnable(org.lwjgl.opengl.GL11.GL_DEPTH_TEST);
-                org.lwjgl.opengl.GL11.glDepthFunc(org.lwjgl.opengl.GL11.GL_LEQUAL);
-            }
+            (ignoreDepth ? linesNoDepthRenderLayer : linesWithDepthRenderLayer).draw(builtBuffer);
         }
     }
 
-    static void emitLine(MatrixStack stack, double x1, double y1, double z1, double x2, double y2, double z2) {
+    static void emitLine(BufferBuilder bufferBuilder, MatrixStack stack,
+            double x1, double y1, double z1,
+            double x2, double y2, double z2,
+            float lineWidth) {
         final double dx = x2 - x1;
         final double dy = y2 - y1;
         final double dz = z2 - z1;
@@ -104,67 +128,73 @@ public interface IRenderer {
         final float ny = (float) (dy * invMag);
         final float nz = (float) (dz * invMag);
 
-        emitLine(stack, x1, y1, z1, x2, y2, z2, nx, ny, nz);
+        emitLine(bufferBuilder, stack, x1, y1, z1, x2, y2, z2, nx, ny, nz, lineWidth);
     }
 
-    static void emitLine(MatrixStack stack,
+    static void emitLine(BufferBuilder bufferBuilder, MatrixStack stack,
             double x1, double y1, double z1,
             double x2, double y2, double z2,
-            double nx, double ny, double nz) {
-        emitLine(stack,
+            double nx, double ny, double nz,
+            float lineWidth) {
+        emitLine(bufferBuilder, stack,
                 (float) x1, (float) y1, (float) z1,
                 (float) x2, (float) y2, (float) z2,
-                (float) nx, (float) ny, (float) nz);
+                (float) nx, (float) ny, (float) nz,
+                lineWidth);
     }
 
-    static void emitLine(MatrixStack stack,
+    static void emitLine(BufferBuilder bufferBuilder, MatrixStack stack,
             float x1, float y1, float z1,
             float x2, float y2, float z2,
-            float nx, float ny, float nz) {
+            float nx, float ny, float nz,
+            float lineWidth) {
 
-        final Matrix4f matrix4f = stack.peek().getPositionMatrix();
-        // final Matrix3f normal = stack.peek().getNormalMatrix();
+        final MatrixStack.Entry entry = stack.peek();
+        final Matrix4f matrix4f = entry.getPositionMatrix();
 
-        RenderState.buffer
+        bufferBuilder
                 .vertex(matrix4f, x1, y1, z1)
                 .color(color[0], color[1], color[2], color[3])
-                .normal(stack.peek(), nx, ny, nz)
-                .lineWidth(LineState.currentLineWidth)
+                .normal(entry, nx, ny, nz)
+                .lineWidth(lineWidth);
+        bufferBuilder
                 .vertex(matrix4f, x2, y2, z2)
                 .color(color[0], color[1], color[2], color[3])
-                .normal(stack.peek(), nx, ny, nz)
-                .lineWidth(LineState.currentLineWidth);
+                .normal(entry, nx, ny, nz)
+                .lineWidth(lineWidth);
     }
 
-    static void emitAABB(MatrixStack stack, Box aabb) {
+    static void emitAABB(BufferBuilder bufferBuilder, MatrixStack stack, Box aabb, float lineWidth) {
         Box toDraw = aabb.offset(-renderManager.renderPosX(), -renderManager.renderPosY(), -renderManager.renderPosZ());
 
         // bottom
-        emitLine(stack, toDraw.minX, toDraw.minY, toDraw.minZ, toDraw.maxX, toDraw.minY, toDraw.minZ, 1.0, 0.0, 0.0);
-        emitLine(stack, toDraw.maxX, toDraw.minY, toDraw.minZ, toDraw.maxX, toDraw.minY, toDraw.maxZ, 0.0, 0.0, 1.0);
-        emitLine(stack, toDraw.maxX, toDraw.minY, toDraw.maxZ, toDraw.minX, toDraw.minY, toDraw.maxZ, -1.0, 0.0, 0.0);
-        emitLine(stack, toDraw.minX, toDraw.minY, toDraw.maxZ, toDraw.minX, toDraw.minY, toDraw.minZ, 0.0, 0.0, -1.0);
+        emitLine(bufferBuilder, stack, toDraw.minX, toDraw.minY, toDraw.minZ, toDraw.maxX, toDraw.minY, toDraw.minZ, 1.0, 0.0, 0.0, lineWidth);
+        emitLine(bufferBuilder, stack, toDraw.maxX, toDraw.minY, toDraw.minZ, toDraw.maxX, toDraw.minY, toDraw.maxZ, 0.0, 0.0, 1.0, lineWidth);
+        emitLine(bufferBuilder, stack, toDraw.maxX, toDraw.minY, toDraw.maxZ, toDraw.minX, toDraw.minY, toDraw.maxZ, -1.0, 0.0, 0.0, lineWidth);
+        emitLine(bufferBuilder, stack, toDraw.minX, toDraw.minY, toDraw.maxZ, toDraw.minX, toDraw.minY, toDraw.minZ, 0.0, 0.0, -1.0, lineWidth);
         // top
-        emitLine(stack, toDraw.minX, toDraw.maxY, toDraw.minZ, toDraw.maxX, toDraw.maxY, toDraw.minZ, 1.0, 0.0, 0.0);
-        emitLine(stack, toDraw.maxX, toDraw.maxY, toDraw.minZ, toDraw.maxX, toDraw.maxY, toDraw.maxZ, 0.0, 0.0, 1.0);
-        emitLine(stack, toDraw.maxX, toDraw.maxY, toDraw.maxZ, toDraw.minX, toDraw.maxY, toDraw.maxZ, -1.0, 0.0, 0.0);
-        emitLine(stack, toDraw.minX, toDraw.maxY, toDraw.maxZ, toDraw.minX, toDraw.maxY, toDraw.minZ, 0.0, 0.0, -1.0);
+        emitLine(bufferBuilder, stack, toDraw.minX, toDraw.maxY, toDraw.minZ, toDraw.maxX, toDraw.maxY, toDraw.minZ, 1.0, 0.0, 0.0, lineWidth);
+        emitLine(bufferBuilder, stack, toDraw.maxX, toDraw.maxY, toDraw.minZ, toDraw.maxX, toDraw.maxY, toDraw.maxZ, 0.0, 0.0, 1.0, lineWidth);
+        emitLine(bufferBuilder, stack, toDraw.maxX, toDraw.maxY, toDraw.maxZ, toDraw.minX, toDraw.maxY, toDraw.maxZ, -1.0, 0.0, 0.0, lineWidth);
+        emitLine(bufferBuilder, stack, toDraw.minX, toDraw.maxY, toDraw.maxZ, toDraw.minX, toDraw.maxY, toDraw.minZ, 0.0, 0.0, -1.0, lineWidth);
         // corners
-        emitLine(stack, toDraw.minX, toDraw.minY, toDraw.minZ, toDraw.minX, toDraw.maxY, toDraw.minZ, 0.0, 1.0, 0.0);
-        emitLine(stack, toDraw.maxX, toDraw.minY, toDraw.minZ, toDraw.maxX, toDraw.maxY, toDraw.minZ, 0.0, 1.0, 0.0);
-        emitLine(stack, toDraw.maxX, toDraw.minY, toDraw.maxZ, toDraw.maxX, toDraw.maxY, toDraw.maxZ, 0.0, 1.0, 0.0);
-        emitLine(stack, toDraw.minX, toDraw.minY, toDraw.maxZ, toDraw.minX, toDraw.maxY, toDraw.maxZ, 0.0, 1.0, 0.0);
+        emitLine(bufferBuilder, stack, toDraw.minX, toDraw.minY, toDraw.minZ, toDraw.minX, toDraw.maxY, toDraw.minZ, 0.0, 1.0, 0.0, lineWidth);
+        emitLine(bufferBuilder, stack, toDraw.maxX, toDraw.minY, toDraw.minZ, toDraw.maxX, toDraw.maxY, toDraw.minZ, 0.0, 1.0, 0.0, lineWidth);
+        emitLine(bufferBuilder, stack, toDraw.maxX, toDraw.minY, toDraw.maxZ, toDraw.maxX, toDraw.maxY, toDraw.maxZ, 0.0, 1.0, 0.0, lineWidth);
+        emitLine(bufferBuilder, stack, toDraw.minX, toDraw.minY, toDraw.maxZ, toDraw.minX, toDraw.maxY, toDraw.maxZ, 0.0, 1.0, 0.0, lineWidth);
     }
 
-    static void emitAABB(MatrixStack stack, Box aabb, double expand) {
-        emitAABB(stack, aabb.expand(expand, expand, expand));
+    static void emitAABB(BufferBuilder bufferBuilder, MatrixStack stack, Box aabb, double expand, float lineWidth) {
+        emitAABB(bufferBuilder, stack, aabb.expand(expand, expand, expand), lineWidth);
     }
 
-    static void emitLine(MatrixStack stack, Vec3d start, Vec3d end) {
+    static void emitLine(BufferBuilder bufferBuilder, MatrixStack stack, Vec3d start, Vec3d end, float lineWidth) {
         double vpX = renderManager.renderPosX();
         double vpY = renderManager.renderPosY();
         double vpZ = renderManager.renderPosZ();
-        emitLine(stack, start.x - vpX, start.y - vpY, start.z - vpZ, end.x - vpX, end.y - vpY, end.z - vpZ);
+        emitLine(bufferBuilder, stack,
+                start.x - vpX, start.y - vpY, start.z - vpZ,
+                end.x - vpX, end.y - vpY, end.z - vpZ,
+                lineWidth);
     }
-
 }

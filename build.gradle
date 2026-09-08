@@ -117,8 +117,27 @@ loom {
     // accessWidenerPath = file("src/main/resources/cheesecake.accesswidener")
 }
 
+sourceSets {
+    // Compile-only stubs for the Schematica/Litematica APIs. These MUST NOT end up in the jar: shipping
+    // classes in `fi.dy.masa.litematica` / `com.github.lunatrius` would shadow the real mods on Fabric's
+    // flat mod classpath and break them.
+    schematica_api {
+        compileClasspath += sourceSets.main.compileClasspath
+    }
+    main {
+        compileClasspath += sourceSets.schematica_api.output
+    }
+}
+
 jar {
     from sourceSets.main.output
+}
+
+processResources {
+    inputs.property "version", project.version
+    filesMatching("fabric.mod.json") {
+        expand "version": project.version
+    }
 }
 
 task printClasspath {

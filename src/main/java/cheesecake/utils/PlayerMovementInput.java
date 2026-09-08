@@ -17,7 +17,10 @@
 
 package cheesecake.utils;
 
+import cheesecake.api.event.events.SprintStateEvent;
 import cheesecake.api.utils.input.Input;
+import net.minecraft.util.PlayerInput;
+import net.minecraft.util.math.Vec2f;
 
 public class PlayerMovementInput extends net.minecraft.client.input.Input {
 
@@ -29,22 +32,51 @@ public class PlayerMovementInput extends net.minecraft.client.input.Input {
 
     @Override
     public void tick() {
-        boolean jump = handler.isInputForcedDown(Input.JUMP);
-        boolean forward = handler.isInputForcedDown(Input.MOVE_FORWARD);
-        boolean backward = handler.isInputForcedDown(Input.MOVE_BACK);
-        boolean left = handler.isInputForcedDown(Input.MOVE_LEFT);
-        boolean right = handler.isInputForcedDown(Input.MOVE_RIGHT);
-        boolean sneak = handler.isInputForcedDown(Input.SNEAK);
-        boolean sprint = handler.isInputForcedDown(Input.SPRINT);
+        float leftImpulse = 0.0F;
+        float forwardImpulse = 0.0F;
+        boolean jumping = handler.isInputForcedDown(Input.JUMP); // oppa gangnam style
 
-        this.playerInput = new net.minecraft.util.PlayerInput(forward, backward, left, right, jump, sneak, sprint);
-
-        float forwardImpulse = forward ? 1.0F : (backward ? -1.0F : 0.0F);
-        float leftImpulse = left ? 1.0F : (right ? -1.0F : 0.0F);
-        if (sneak) {
-            forwardImpulse *= 0.3F;
-            leftImpulse *= 0.3F;
+        boolean up = handler.isInputForcedDown(Input.MOVE_FORWARD);
+        if (up) {
+            forwardImpulse++;
         }
-        this.movementVector = new net.minecraft.util.math.Vec2f(leftImpulse, forwardImpulse);
+
+        boolean down = handler.isInputForcedDown(Input.MOVE_BACK);
+        if (down) {
+            forwardImpulse--;
+        }
+
+        boolean left = handler.isInputForcedDown(Input.MOVE_LEFT);
+        if (left) {
+            leftImpulse++;
+        }
+
+        boolean right = handler.isInputForcedDown(Input.MOVE_RIGHT);
+        if (right) {
+            leftImpulse--;
+        }
+
+        boolean sneaking = handler.isInputForcedDown(Input.SNEAK);
+        if (sneaking) {
+            leftImpulse *= 0.3D;
+            forwardImpulse *= 0.3D;
+        }
+        this.movementVector = new Vec2f(leftImpulse, forwardImpulse);
+
+        this.playerInput = new PlayerInput(up, down, left, right, jumping, sneaking, sprinting());
+    }
+
+    /**
+     * While we're driving the player, vanilla never ticks a {@code KeyboardInput}, so the sprint key is never
+     * read and {@link SprintStateEvent} would never be fired. Ask the behaviors here instead, which is what
+     * actually makes Cheesecake sprint along a path.
+     */
+    private boolean sprinting() {
+        SprintStateEvent event = new SprintStateEvent();
+        handler.cheesecake.getGameEventHandler().onPlayerSprintState(event);
+        if (event.getState() != null) {
+            return event.getState();
+        }
+        return handler.isInputForcedDown(Input.SPRINT);
     }
 }

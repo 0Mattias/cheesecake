@@ -15,15 +15,24 @@
  * along with Cheesecake.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package fi.dy.masa.litematica.schematic.placement;
+package cheesecake.launch.mixins;
 
-import java.util.List;
+import cheesecake.utils.accessor.IRenderPipelines;
+import com.mojang.blaze3d.pipeline.RenderPipeline;
+import net.minecraft.client.gl.RenderPipelines;
+import org.spongepowered.asm.mixin.Final;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 
-public class SchematicPlacementManager {
+@Mixin(RenderPipelines.class)
+public class MixinRenderPipelines implements IRenderPipelines {
 
-    //in case of a java.lang.NoSuchMethodError try change the name of this method to getAllSchematicPlacements()
-    //there are inconsistencies in the litematica mod about the naming of this method
-    public List<SchematicPlacement> getAllSchematicsPlacements() {
-        throw new LinkageError();
+    @Final
+    @Shadow
+    private static RenderPipeline.Snippet RENDERTYPE_LINES_SNIPPET;
+
+    @Override
+    public RenderPipeline.Snippet cheesecake$getLinesSnippet() {
+        return RENDERTYPE_LINES_SNIPPET;
     }
 }

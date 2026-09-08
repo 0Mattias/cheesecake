@@ -15,11 +15,16 @@
  * along with Cheesecake.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package com.github.lunatrius.schematica.proxy;
+package cheesecake.utils.accessor;
 
-import com.github.lunatrius.schematica.client.world.SchematicWorld;
+import net.minecraft.client.render.RenderLayer;
+import net.minecraft.client.render.RenderSetup;
 
-public class ClientProxy extends CommonProxy {
+/**
+ * Exposes {@code RenderLayer.of(String, RenderSetup)}, which is not public, so that we can build our own
+ * line render layers instead of poking raw GL state around vanilla draw calls.
+ */
+public interface IRenderLayer {
 
-    public static SchematicWorld schematic;
+    RenderLayer cheesecake$createRenderLayer(String name, RenderSetup setup);
 }
