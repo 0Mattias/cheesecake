@@ -110,6 +110,8 @@ dependencies {
     implementation 'com.google.code.findbugs:jsr305:3.0.2'
     modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+
+    testImplementation 'junit:junit:4.13.2'
 }
 
 loom {
@@ -127,6 +129,14 @@ sourceSets {
     main {
         compileClasspath += sourceSets.schematica_api.output
     }
+    test {
+        compileClasspath += sourceSets.main.compileClasspath
+        runtimeClasspath += sourceSets.main.runtimeClasspath
+    }
+}
+
+test {
+    useJUnit()
 }
 
 jar {

@@ -1,3 +1,8 @@
+> **Cheesecake note:** this document is upstream Baritone's, kept for reference. This fork is a
+> single Fabric mod project: there is no ProGuard step, no `dist` directory and no
+> api/standalone/unoptimized split. Build it with `./gradlew build` and take the jar from
+> `build/libs`. Everything below about artifacts, loaders and version tables describes upstream.
+
 # Installation
 
 The easiest way to install Baritone is to install it as Forge/Neoforge/Fabric mod, but if you know how you can also use it with a custom `version.json`
