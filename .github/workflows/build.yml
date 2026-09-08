@@ -106,7 +106,7 @@ jobs:
         run: |
           set +e
           xvfb-run -a --server-args="-screen 0 1280x720x24" \
-            timeout --signal=INT 600 ./gradlew runClient --no-daemon --stacktrace > client.log 2>&1
+            timeout --signal=INT 300 ./gradlew runClient --no-daemon --stacktrace > client.log 2>&1
           echo "gradle exited $?"
           tail -60 client.log
 
@@ -119,8 +119,12 @@ jobs:
             exit 1
           fi
 
-          if ! grep -q "cheesecake" client.log; then
-            echo "::error::fabric never mentioned the mod; it did not load"
+          # Not a grep for "cheesecake": the repo path contains it, so that matches every Gradle
+          # line whether or not the mod loaded. Assert on the mod's own code having run instead --
+          # this line is printed by the nether-pathfinder native that we bundle and load.
+          if ! grep -q "\[nether-pathfinder\] Loaded shared library" client.log; then
+            echo "::error::the mod never ran: no nether-pathfinder native load in the client log"
+            grep -nE "cheesecake" client.log | head -20 || true
             exit 1
           fi
 
@@ -131,7 +135,7 @@ jobs:
             exit 1
           fi
 
-          echo "client started, mod loaded, no mixin errors"
+          echo "client started, mod code ran, no mixin errors"
 
       - name: Upload client log
         if: always()
