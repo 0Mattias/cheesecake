@@ -87,6 +87,13 @@ public class GuiClick extends Screen implements Helper {
     }
 
     @Override
+    public void renderBackground(net.minecraft.client.gui.DrawContext context, int mouseX, int mouseY,
+            float partialTicks) {
+        // Deliberately empty: vanilla would blur and darken the world behind the screen, which makes it
+        // impossible to see the blocks you are trying to click.
+    }
+
+    @Override
     public boolean mouseReleased(net.minecraft.client.gui.Click click) {
         int mouseButton = click.button();
         if (currentMouseOver != null) { // Catch this, or else a click into void will result in a crash

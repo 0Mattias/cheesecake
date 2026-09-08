@@ -29,13 +29,13 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-// import org.spongepowered.asm.mixin.injection.Redirect;
+import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.Slice;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.util.function.BiFunction;
 import net.minecraft.client.MinecraftClient;
-// import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.world.ClientWorld;
 
@@ -127,22 +127,20 @@ public class MixinMinecraft {
                                                 EventState.POST));
         }
 
-        /*
-         * @Redirect(
-         * method = "tick",
-         * at = @At(
-         * value = "FIELD",
-         * opcode = Opcodes.GETFIELD,
-         * target = "Lnet/minecraft/client/gui/screens/Screen;passEvents:Z"
-         * )
-         * )
-         * private boolean passEvents(Screen screen) {
-         * // allow user chatField is only the primary cheesecake
-         * return
-         * (CheesecakeAPI.getProvider().getPrimaryCheesecake().getPathingBehavior().
-         * isPathing() && player != null) || screen.passEvents;
-         * }
+        /**
+         * While Cheesecake is pathing, pretend no screen is open for the part of the client tick that
+         * handles keybinds and block interaction. Without this the bot stops breaking and placing blocks
+         * the moment any GUI is open, which is exactly what {@code #click} needs to be able to do.
          */
+        @Redirect(method = "tick", at = @At(value = "FIELD", opcode = Opcodes.GETFIELD, target = "Lnet/minecraft/client/MinecraftClient;currentScreen:Lnet/minecraft/client/gui/screen/Screen;"), slice = @Slice(from = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/hud/DebugHud;shouldShowDebugHud()Z"), to = @At(value = "CONSTANT", args = "stringValue=Keybindings")))
+        private Screen passEvents(MinecraftClient instance) {
+                // allow user input is only the primary cheesecake
+                if (CheesecakeAPI.getProvider().getPrimaryCheesecake().getPathingBehavior().isPathing()
+                                && player != null) {
+                        return null;
+                }
+                return instance.currentScreen;
+        }
 
         // TODO
         // FIXME
