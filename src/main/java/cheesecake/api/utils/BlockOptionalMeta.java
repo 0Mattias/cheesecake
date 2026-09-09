@@ -20,51 +20,25 @@ package cheesecake.api.utils;
 import cheesecake.api.utils.accessor.IItemStack;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-// import io.netty.util.concurrent.ThreadPerTaskExecutor;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
-// import net.minecraft.client.MinecraftClient;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
-// import net.minecraft.loot.context.LootContext;
-// import net.minecraft.loot.context.LootContextParameters;
-// import net.minecraft.loot.context.LootContextTypes;
-// import net.minecraft.registry.RegistryKey;
-// import net.minecraft.resource.DefaultResourcePack;
-// import net.minecraft.resource.LifecycledResourceManagerImpl;
-// import net.minecraft.resource.ReloadableResourceManagerImpl;
-// import net.minecraft.resource.ResourceType;
-// import net.minecraft.resource.VanillaDataPackProvider;
-// import net.minecraft.resource.featuretoggle.FeatureSet;
-// import net.minecraft.server.MinecraftServer;
-// import net.minecraft.resource.*;
-// import net.minecraft.server.world.ServerWorld;
+import net.minecraft.loot.LootTable;
+import net.minecraft.registry.Registries;
+import net.minecraft.registry.RegistryKey;
 import net.minecraft.state.property.Property;
-// import net.minecraft.util.Identifier;
-// import net.minecraft.util.Unit;
-// import net.minecraft.util.math.BlockPos;
-// import net.minecraft.util.math.Vec3d;
-// import net.minecraft.world.World;
-// import net.minecraft.world.dimension.DimensionOptions;
-// import net.minecraft.world.level.ServerWorldProperties;
-// import net.minecraft.world.level.storage.LevelStorage;
-// import net.minecraft.world.spawner.SpecialSpawner;
-// import sun.misc.Unsafe;
+import net.minecraft.util.Identifier;
 
 import javax.annotation.Nonnull;
-// import java.lang.reflect.Field;
-// import java.lang.reflect.Method;
-// import java.util.ArrayList;
-// import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-// import java.util.Random;
+import java.util.Optional;
 import java.util.Set;
-// import java.util.concurrent.CompletableFuture;
-// import java.util.concurrent.Executor;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -81,8 +55,7 @@ public final class BlockOptionalMeta {
     private final Set<BlockState> blockstates;
     private final Set<Integer> stateHashes;
     private final Set<Integer> stackHashes;
-//     private static Object lootTables;
-//     private static Object predicate = new Object();
+    private static final LootTableDrops LOOT = new LootTableDrops(LootTableDrops.CLASSPATH);
     private static Map<Block, List<Item>> drops = new HashMap<>();
 
     public BlockOptionalMeta(@Nonnull Block block) {
@@ -205,21 +178,37 @@ public final class BlockOptionalMeta {
     }
 
     /**
-     * KNOWN LIMITATION: upstream Baritone resolves a block's real drops by loading the vanilla loot
-     * tables and rolling them, so it knows that e.g. iron ore drops raw iron and stone drops cobblestone.
-     * That machinery (a faked ServerLevel plus loot table accessor mixins) was dropped in the port to
-     * 1.21.11, so we fall back to "a block drops itself".
-     *
-     * The visible consequence is that {@code #mine <quantity> <block>} cannot recognise the mined item
-     * for any block whose drop differs from its own item form, so the quantity limit never trips, and
-     * {@code mineScanDroppedItems} will not target those drops on the ground.
+     * Every item the block can drop, so that {@code #mine <quantity> <block>} recognises raw iron as
+     * the product of iron ore and cobblestone as the product of stone, and
+     * {@code mineScanDroppedItems} targets those drops on the ground.
+     * <p>
+     * Resolved by walking the block's loot table definition from the game and mod jars (see
+     * {@link LootTableDrops}), which lists every item the table can produce under any tool or
+     * enchantment. Upstream instead rolls the table once through a faked server world; that needs
+     * mixins into loot internals and only sees vanilla tables. Blocks whose table lives solely in a
+     * server-side data pack cannot be resolved on the client and are assumed to drop themselves.
      */
     private static synchronized List<Item> drops(Block b) {
         return drops.computeIfAbsent(b, block -> {
-            Item item = block.asItem();
-            // Blocks with no item form map to AIR; letting that through would make every empty
-            // inventory slot look like a match.
-            return item == Items.AIR ? Collections.emptyList() : Collections.singletonList(item);
+            Optional<RegistryKey<LootTable>> key = block.getLootTableKey();
+            if (key.isEmpty()) {
+                return Collections.emptyList(); // dropsNothing()
+            }
+            Optional<Set<String>> ids = LOOT.itemIds(key.get().getValue().toString());
+            if (ids.isEmpty()) {
+                Item item = block.asItem();
+                // Blocks with no item form map to AIR; letting that through would make every empty
+                // inventory slot look like a match.
+                return item == Items.AIR ? Collections.emptyList() : Collections.singletonList(item);
+            }
+            List<Item> items = new ArrayList<>();
+            for (String id : ids.get()) {
+                Identifier identifier = Identifier.tryParse(id);
+                if (identifier != null && Registries.ITEM.containsId(identifier)) {
+                    items.add(Registries.ITEM.get(identifier));
+                }
+            }
+            return items;
         });
     }
 

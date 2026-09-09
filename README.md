@@ -31,10 +31,11 @@ The mod jar lands in `build/libs`. `./gradlew test` runs the unit tests.
 The port started from 1.19.4, so it is missing everything upstream landed between 1.19.4 and
 1.21.11, and a few things were left as stubs on the way. The ones worth knowing about:
 
-- **Block drops are approximated.** Upstream rolls the real vanilla loot tables to learn that
-  iron ore drops raw iron. This fork assumes a block drops itself, so `#mine <quantity> <block>`
-  never reaches its quantity limit for ores, and `mineScanDroppedItems` will not target their
-  drops on the ground.
+- **Block drops are resolved differently.** Upstream rolls the vanilla loot tables once through a
+  faked server world. This fork reads the loot table definitions shipped in the game and mod jars
+  and lists every item they can produce, so `#mine <quantity> <block>` counts raw iron for iron
+  ore and cobblestone for stone, and modded blocks work too. Loot tables that exist only in a
+  server-side data pack cannot be seen from the client; those blocks are assumed to drop themselves.
 - **`renderGoalXZBeacon` does nothing.** The goal box is drawn either way; the beacon beam
   itself is not implemented here.
 - **No forge, neoforge or tweaker builds**, and no `baritone-api` artifact for other mods to
