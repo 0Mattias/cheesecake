@@ -41,7 +41,7 @@ public enum ItemById implements IDatatypeFor<Item> {
     public Stream<String> tabComplete(IDatatypeContext ctx) throws CommandException {
         return new TabCompleteHelper()
                 .append(
-                        Registries.BLOCK.getIds()
+                        Registries.ITEM.getIds()
                                 .stream()
                                 .map(Identifier::toString))
                 .filterPrefixNamespaced(ctx.getConsumer().getString())
