@@ -40,9 +40,6 @@ The port started from 1.19.4, so it is missing everything upstream landed betwee
   itself is not implemented here.
 - **No forge, neoforge or tweaker builds**, and no `baritone-api` artifact for other mods to
   integrate against.
-- **Elytra** is at 1.19.4 behaviour: no landing search, no `elytraAllowAboveRoof` handling, and
-  the nether-pathfinder native is pinned to 1.4.1 rather than upstream's 1.6.
-- **Climbing** only recognises ladders and vines, not upstream's weeping/twisting vines.
 
 # Baritone
 <p align="center">
