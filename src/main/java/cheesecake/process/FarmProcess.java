@@ -26,6 +26,7 @@ import cheesecake.api.pathing.goals.GoalComposite;
 import cheesecake.api.process.IFarmProcess;
 import cheesecake.api.process.PathingCommand;
 import cheesecake.api.process.PathingCommandType;
+import cheesecake.api.selection.ISelection;
 import cheesecake.api.utils.BetterBlockPos;
 import cheesecake.api.utils.RayTraceUtils;
 import cheesecake.api.utils.Rotation;
@@ -218,6 +219,12 @@ public final class FarmProcess extends CheesecakeProcessHelper implements IFarmP
         }
         if (locations == null) {
             return new PathingCommand(null, PathingCommandType.REQUEST_PAUSE);
+        }
+        if (Cheesecake.settings().farmUsingSelection.value) {
+            ISelection selection = cheesecake.getSelectionManager().getLastSelection();
+            if (selection != null) {
+                locations.removeIf(pos -> !selection.aabb().contains(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5));
+            }
         }
         List<BlockPos> toBreak = new ArrayList<>();
         List<BlockPos> openFarmland = new ArrayList<>();
