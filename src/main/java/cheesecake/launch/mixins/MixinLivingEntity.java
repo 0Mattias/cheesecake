@@ -72,7 +72,7 @@ public abstract class MixinLivingEntity extends Entity {
         return self.getYRot();
     }
 
-    @Inject(method = "travelFallFlying", at = @At(value = "INVOKE", target = "net/minecraft/entity/LivingEntity.calcGlidingVelocity(Lnet/minecraft/util/math/Vec3d;)Lnet/minecraft/util/math/Vec3d;"))
+    @Inject(method = "travelFallFlying", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/LivingEntity;updateFallFlyingMovement(Lnet/minecraft/world/phys/Vec3;)Lnet/minecraft/world/phys/Vec3;"))
     private void onPreElytraMove(Vec3 direction, CallbackInfo ci) {
         this.getCheesecake().ifPresent(cheesecake -> {
             this.elytraRotationEvent = new RotationMoveEvent(RotationMoveEvent.Type.MOTION_UPDATE, this.getYRot(),
@@ -83,7 +83,7 @@ public abstract class MixinLivingEntity extends Entity {
         });
     }
 
-    @Inject(method = "travelFallFlying", at = @At(value = "INVOKE", target = "net/minecraft/entity/LivingEntity.calcGlidingVelocity(Lnet/minecraft/util/math/Vec3d;)Lnet/minecraft/util/math/Vec3d;", shift = At.Shift.AFTER))
+    @Inject(method = "travelFallFlying", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/LivingEntity;updateFallFlyingMovement(Lnet/minecraft/world/phys/Vec3;)Lnet/minecraft/world/phys/Vec3;", shift = At.Shift.AFTER))
     private void onPostElytraMove(Vec3 direction, CallbackInfo ci) {
         if (this.elytraRotationEvent != null) {
             this.setYRot(this.elytraRotationEvent.getOriginal().getYaw());

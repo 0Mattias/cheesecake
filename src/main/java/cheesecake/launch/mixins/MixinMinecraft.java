@@ -57,7 +57,7 @@ public class MixinMinecraft {
                 CheesecakeAPI.getProvider().getPrimaryCheesecake();
         }
 
-        @Inject(method = "tick", at = @At(value = "FIELD", opcode = Opcodes.GETFIELD, target = "net/minecraft/client/MinecraftClient.currentScreen:Lnet/minecraft/client/gui/screen/Screen;", ordinal = 0, shift = At.Shift.BEFORE), slice = @Slice(from = @At(value = "FIELD", opcode = Opcodes.PUTFIELD, target = "net/minecraft/client/MinecraftClient.itemUseCooldown:I")))
+        @Inject(method = "tick", at = @At(value = "FIELD", opcode = Opcodes.GETFIELD, target = "net/minecraft/client/Minecraft.screen:Lnet/minecraft/client/gui/screens/Screen;", ordinal = 0, shift = At.Shift.BEFORE), slice = @Slice(from = @At(value = "FIELD", opcode = Opcodes.PUTFIELD, target = "net/minecraft/client/MinecraftClient.itemUseCooldown:I")))
         private void runTick(CallbackInfo ci) {
                 this.tickProvider = TickEvent.createNextProvider();
 
