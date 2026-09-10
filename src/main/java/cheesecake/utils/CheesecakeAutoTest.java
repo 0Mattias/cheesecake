@@ -27,6 +27,7 @@ import cheesecake.api.pathing.goals.GoalXZ;
 import cheesecake.api.utils.BetterBlockPos;
 import cheesecake.api.utils.IPlayerContext;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gui.screen.AccessibilityOnboardingScreen;
 import net.minecraft.client.gui.screen.GameMenuScreen;
 import net.minecraft.client.gui.screen.TitleScreen;
 import net.minecraft.client.option.CloudRenderMode;
@@ -62,11 +63,13 @@ public final class CheesecakeAutoTest implements AbstractGameEventListener {
     private static final int DISTANCE = 120;
     private static final int WARMUP_TICKS = 100;
     private static final int MAX_TICKS = 4800;
+    private static final int MAX_TICKS_BEFORE_START = 6000;
     private static final int MAX_CALC_FAILURES = 8;
 
     private final Cheesecake cheesecake;
     private boolean started;
     private boolean finished;
+    private int ticksBeforeStart;
     private int ticksInWorld;
     private int calcFailures;
     private Goal goal;
@@ -92,10 +95,26 @@ public final class CheesecakeAutoTest implements AbstractGameEventListener {
     private void tick(TickEvent event) {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (!this.started) {
+            this.ticksBeforeStart++;
+            // A fresh profile shows the accessibility onboarding screen before the title screen, and
+            // nothing would ever dismiss it. Opt out before the client picks its first screen, and if
+            // it is already up, do what its Continue button does.
+            mc.options.onboardAccessibility = false;
+            if (mc.currentScreen instanceof AccessibilityOnboardingScreen) {
+                log("dismissing the accessibility onboarding screen");
+                mc.options.setAccessibilityOnboarded();
+                mc.setScreen(new TitleScreen());
+                return;
+            }
             if (mc.currentScreen instanceof TitleScreen && mc.getOverlay() == null) {
                 this.started = true;
                 configureOptions(mc.options);
                 createWorld(mc);
+            } else if (this.ticksBeforeStart % 100 == 0) {
+                log("waiting for the title screen, tick " + this.ticksBeforeStart + ", screen=" + name(mc.currentScreen) + ", overlay=" + name(mc.getOverlay()));
+            }
+            if (this.ticksBeforeStart > MAX_TICKS_BEFORE_START) {
+                fail("never reached the title screen; screen=" + name(mc.currentScreen) + ", overlay=" + name(mc.getOverlay()), null);
             }
             return;
         }
@@ -208,6 +227,10 @@ public final class CheesecakeAutoTest implements AbstractGameEventListener {
         }
         System.out.flush();
         System.exit(1);
+    }
+
+    private static String name(Object o) {
+        return o == null ? "none" : o.getClass().getSimpleName();
     }
 
     private static void log(String message) {
