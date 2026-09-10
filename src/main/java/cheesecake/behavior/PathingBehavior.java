@@ -356,14 +356,20 @@ public final class PathingBehavior extends Behavior implements IPathingBehavior,
 
     // just cancel the current path
     public void secretInternalSegmentCancel() {
-        queuePathEvent(PathEvent.CANCELED);
         synchronized (pathPlanLock) {
+            // The control manager cancels the segment on every idle tick and whenever a process asks for
+            // CANCEL_AND_SET_GOAL, so only report a cancellation when there was a path or a calculation
+            // to cancel. Otherwise listeners see CANCELED twenty times a second while nothing happens.
+            boolean cancelled = current != null || next != null || getInProgress().isPresent();
             getInProgress().ifPresent(AbstractNodeCostSearch::cancel);
             if (current != null) {
                 current = null;
                 next = null;
                 cheesecake.getInputOverrideHandler().clearAllKeys();
                 cheesecake.getInputOverrideHandler().getBlockBreakHelper().stopBreakingBlock();
+            }
+            if (cancelled) {
+                queuePathEvent(PathEvent.CANCELED);
             }
         }
     }

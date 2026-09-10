@@ -1759,6 +1759,13 @@ public final class Settings {
     public final Setting<Boolean> elytraChatSpam = new Setting<>(false);
 
     /**
+     * Port of the local control socket for programs that drive the bot: newline-delimited JSON over
+     * TCP, bound to 127.0.0.1 only. 0 keeps it off. Anything on this machine can connect, there is no
+     * authentication. The protocol is described in AI_AGENT_README.md.
+     */
+    public final Setting<Integer> agentApiPort = new Setting<>(0);
+
+    /**
      * May reduce memory usage by using a custom allocator for pathfinding
      */
     public final Setting<Boolean> elytraCustomAllocator = new Setting<>(true);

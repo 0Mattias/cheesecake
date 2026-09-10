@@ -1,0 +1,5 @@
+# The upstream Baritone branch this fork tracks, and the last upstream commit whose changes have
+# been reviewed (and backported where they applied). The upstream-watch workflow files an issue
+# listing everything after it. After a review, set commit= to the newest reviewed upstream commit.
+branch=1.21.11
+commit=23723891da460ef15797b02fe5b385b0c5b163cc

@@ -1,0 +1,87 @@
+name: Upstream watch
+
+# Every backport from Baritone needs a translation from Mojang mappings to Yarn, which is cheap in
+# small batches and painful in large ones. This job compares upstream's branch with the last reviewed
+# commit recorded in .github/upstream-baseline and keeps one issue up to date with what is new.
+
+on:
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+    inputs:
+      since:
+        description: Upstream commit to compare from (default is the recorded baseline)
+        required: false
+        default: ''
+      dry_run:
+        description: Print the report instead of filing or updating the issue
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Compare with upstream
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SINCE_INPUT: ${{ inputs.since }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          branch=$(sed -n 's/^branch=//p' .github/upstream-baseline)
+          baseline=$(sed -n 's/^commit=//p' .github/upstream-baseline)
+          since="${SINCE_INPUT:-$baseline}"
+          title="Upstream Baritone changes to review"
+          label="upstream"
+
+          git remote add upstream https://github.com/cabaletta/baritone.git
+          git fetch --quiet --no-tags upstream "$branch"
+          head=$(git rev-parse "upstream/$branch")
+          if ! git cat-file -e "${since}^{commit}" 2>/dev/null; then
+            echo "::error::commit $since is not in upstream/$branch"
+            exit 1
+          fi
+
+          # Only commits that touch src/: loader-specific and packaging commits do not concern this fork.
+          commits=$(git log --no-merges --reverse --date=short --format='- `%h` %ad %s (%an)' "$since..$head" -- src)
+          count=$(printf '%s' "$commits" | grep -c . || true)
+          echo "upstream/$branch is at $head; $count new commit(s) touching src/ since $since"
+
+          existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --label "$label" --state open --search "\"$title\" in:title" --json number --jq '.[0].number // empty')
+
+          if [ "$count" -eq 0 ]; then
+            if [ -n "$existing" ] && [ "$DRY_RUN" != "true" ]; then
+              gh issue close "$existing" --repo "$GITHUB_REPOSITORY" --comment "The baseline now covers upstream/$branch at \`$head\`. Nothing left to review."
+              echo "closed issue #$existing"
+            fi
+            exit 0
+          fi
+
+          {
+            printf 'Upstream Baritone'"'"'s `%s` branch has %s new commit(s) touching `src/` since the reviewed baseline `%s`. The branch is now at `%s`.\n\n' "$branch" "$count" "${since:0:8}" "${head:0:8}"
+            printf '%s\n\n' "$commits"
+            printf 'Full comparison: https://github.com/cabaletta/baritone/compare/%s...%s\n\n' "$since" "$head"
+            printf 'Once these are reviewed, and backported where they apply, set `commit=%s` in `.github/upstream-baseline`. This issue closes on the next run after that.\n' "$head"
+          } > report.md
+
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "dry run; the issue would read:"
+            cat report.md
+            exit 0
+          fi
+
+          gh label create "$label" --repo "$GITHUB_REPOSITORY" --description "Changes in upstream Baritone to look at" --color 0E8A16 --force >/dev/null
+          if [ -n "$existing" ]; then
+            gh issue edit "$existing" --repo "$GITHUB_REPOSITORY" --body-file report.md >/dev/null
+            echo "updated issue #$existing"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --label "$label" --body-file report.md
+          fi
