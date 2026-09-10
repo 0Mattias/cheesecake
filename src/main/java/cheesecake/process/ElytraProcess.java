@@ -664,7 +664,9 @@ public class ElytraProcess extends CheesecakeProcessHelper implements IElytraPro
                     return new BetterBlockPos(mut);
                 }
                 return null;
-            } else if (block != Blocks.AIR) {
+            } else if (!(block instanceof AirBlock)) {
+                // Any air, not just the plain block: carved caves are cave air, and upstream's
+                // search never lands in them.
                 return null;
             }
             mut.set(mut.getX(), mut.getY() - 1, mut.getZ());
@@ -743,7 +745,7 @@ public class ElytraProcess extends CheesecakeProcessHelper implements IElytraPro
         }
 
         private BetterBlockPos advanceUnderground(BetterBlockPos pos) {
-            if (isInBounds(ctx.world(), pos) && ctx.world().getBlockState(pos).getBlock() == Blocks.AIR) {
+            if (isInBounds(ctx.world(), pos) && ctx.world().getBlockState(pos).getBlock() instanceof AirBlock) {
                 BetterBlockPos actualLandingSpot = checkLandingSpot(pos, this.checkedPositions);
                 if (actualLandingSpot != null) {
                     landingColumnHeight = SHORT_LANDING_COLUMN_HEIGHT;
@@ -764,7 +766,7 @@ public class ElytraProcess extends CheesecakeProcessHelper implements IElytraPro
         private BetterBlockPos advanceHeightmap(BetterBlockPos qPos) {
             int height = ctx.world().getTopY(Heightmap.Type.MOTION_BLOCKING, qPos.getX(), qPos.getZ());
             BetterBlockPos pos = new BetterBlockPos(qPos.getX(), height + 1, qPos.getZ());
-            if (isInBounds(ctx.world(), pos) && ctx.world().getBlockState(pos).getBlock() == Blocks.AIR) {
+            if (isInBounds(ctx.world(), pos) && ctx.world().getBlockState(pos).getBlock() instanceof AirBlock) {
                 BetterBlockPos actualLandingSpot = checkLandingSpot(pos, this.checkedPositions);
                 if (actualLandingSpot != null) {
                     landingColumnHeight = ctx.playerFeet().y - actualLandingSpot.y < LONG_LANDING_COLUMN_HEIGHT ? SHORT_LANDING_COLUMN_HEIGHT : LONG_LANDING_COLUMN_HEIGHT;
