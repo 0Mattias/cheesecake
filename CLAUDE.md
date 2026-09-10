@@ -6,7 +6,7 @@ Cheesecake is Baritone for Minecraft 1.21.11 on Fabric: a single Fabric project 
 
 - JDK 21 is required and Gradle fetches everything else. With Homebrew's formula on macOS: `export JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home`.
 - `./gradlew build` compiles, runs the unit tests and writes `build/libs/cheesecake-<version>.jar`; `./gradlew test` runs only the tests. About a minute once dependencies are cached.
-- `CHEESECAKE_AUTO_TEST=true ./gradlew runClient` runs the in-world test locally: a game window opens, a world is created under `run/saves`, the pathfinder walks 120 blocks, and the client exits by itself. Leave the window alone. The routine is `CheesecakeAutoTest`.
+- `CHEESECAKE_AUTO_TEST=true ./gradlew runClient` runs the in-world test locally: a game window opens, a world is created under `run/saves`, the stages in `cheesecake.utils.autotest` run one after another (a walk, the control socket, vine climbs, two `#mine` runs, four elytra flights) and the client exits by itself after several minutes. Leave the window alone. The driver is `CheesecakeAutoTest`; a stage builds its scenario with server commands and fails with a message that names the stage. `CHEESECAKE_AUTO_TEST_ONLY=elytra-nether-below-roof` (comma-separated stage names) runs only those stages after the world is prepared and the platform built, which is the way to iterate on one of them.
 - Unit tests are JUnit 4 under `src/test/java`. The mapped Minecraft jar is on the test classpath, so tests can read game data (`LootTableDropsTest` reads the vanilla loot tables) but cannot bootstrap the registries.
 
 ## Mappings
@@ -54,4 +54,4 @@ Set `mod_version` in `gradle.properties`, commit and push, then `git tag -a vX.Y
 
 ## Open work
 
-Follow-ups are tracked as GitHub issues rather than in this file. The ones that need a person in the game are the elytra flights, the `#mine` item counts and vine climbing, because the in-world test only covers walking.
+Follow-ups are tracked as GitHub issues rather than in this file. The in-world test covers walking, the control socket, vines, `#mine` counts and elytra flights; building, farming and following still have only unit tests.

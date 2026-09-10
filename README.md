@@ -66,7 +66,7 @@ Cheesecake began as a port of Baritone's 1.19.4 branch to Minecraft 1.21.11. Ups
 
 ### Verification
 
-Every push is compiled against Minecraft 1.21.11, the unit tests are run, the jar is checked for correct remapping and packaging, and a client is launched under a virtual display to confirm that every mixin applies. A second client then creates a survival world from a fixed seed and walks a fixed distance with the pathfinder, which exercises world loading, chunk caching, path calculation and movement end to end, and switches the goal from the box to the beacon beam partway so both render paths run. What that does not cover is the rest of the feature set in play: elytra flight and the item counts used by `#mine` are the most recently changed parts, and reports on either are welcome.
+Every push is compiled against Minecraft 1.21.11, the unit tests are run, the jar is checked for correct remapping and packaging, and a client is launched under a virtual display to confirm that every mixin applies. A second client then creates a survival world from a fixed seed and plays through a series of scenarios, building what each needs with server commands: it walks a fixed distance with the goal drawn as the box and then as the beacon beam and photographs the beam; drives a trip over the control socket; climbs free-hanging, twisting and weeping vines; runs `#mine` twice and checks that it stops at the requested count of what the blocks drop; and flies with an elytra above the build limit in the Overworld, through Nether terrain below the roof, and over the roof, landing each time. Building, farming, following and the other processes are only covered by the unit tests, and reports on them are welcome.
 
 ## Building
 

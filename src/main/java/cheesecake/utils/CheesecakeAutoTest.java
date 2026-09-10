@@ -18,20 +18,26 @@
 package cheesecake.utils;
 
 import cheesecake.Cheesecake;
-import cheesecake.agent.AgentStatus;
 import cheesecake.api.event.events.PathEvent;
 import cheesecake.api.event.events.TickEvent;
 import cheesecake.api.event.listener.AbstractGameEventListener;
-import cheesecake.api.pathing.goals.Goal;
-import cheesecake.api.pathing.goals.GoalXZ;
-import cheesecake.api.utils.BetterBlockPos;
-import cheesecake.api.utils.IPlayerContext;
+import cheesecake.utils.autotest.AutoTestContext;
+import cheesecake.utils.autotest.AutoTestFailure;
+import cheesecake.utils.autotest.ElytraStage;
+import cheesecake.utils.autotest.MineStage;
+import cheesecake.utils.autotest.PlatformStage;
+import cheesecake.utils.autotest.PrepareStage;
+import cheesecake.utils.autotest.SocketStage;
+import cheesecake.utils.autotest.Stage;
+import cheesecake.utils.autotest.VineStage;
+import cheesecake.utils.autotest.WalkStage;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.AccessibilityOnboardingScreen;
 import net.minecraft.client.gui.screen.GameMenuScreen;
 import net.minecraft.client.gui.screen.TitleScreen;
 import net.minecraft.client.option.CloudRenderMode;
 import net.minecraft.client.option.GameOptions;
+import net.minecraft.item.Items;
 import net.minecraft.particle.ParticlesMode;
 import net.minecraft.resource.DataConfiguration;
 import net.minecraft.world.Difficulty;
@@ -41,12 +47,24 @@ import net.minecraft.world.gen.WorldPresets;
 import net.minecraft.world.level.LevelInfo;
 import net.minecraft.world.rule.GameRules;
 
+import java.util.ArrayDeque;
+import java.util.Arrays;
+import java.util.Deque;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 /**
  * An end-to-end test of the mod inside a running client, used by CI. With the environment variable
  * {@code CHEESECAKE_AUTO_TEST=true} the client creates a survival world from a fixed seed as soon as
- * it reaches the title screen, asks the pathfinder to walk a fixed distance, and shuts the game down
- * once the goal is reached. Progress is written to standard output with the {@value #TAG} prefix;
- * the final line is either {@code PASS} or {@code FAIL}, and a failure also exits with status 1.
+ * it reaches the title screen and runs the stages in {@link cheesecake.utils.autotest} one after
+ * another: a walk with the goal drawn as the box and then as the beacon beam, a trip driven over the
+ * control socket, climbs up three kinds of vines, two {@code #mine} runs that have to count what
+ * the blocks drop, and four elytra flights. Each stage builds what it needs with server commands,
+ * so the run does not depend on the terrain beyond the first walk. Progress is written to standard
+ * output with the {@value AutoTestContext#TAG} prefix; the final line is either {@code PASS} or
+ * {@code FAIL}, and a failure also exits with status 1.
  * <p>
  * Baritone shipped a test like this until 2021. It went away with the virtual display it needed,
  * which the continuous integration of this fork has since put back.
@@ -54,35 +72,67 @@ import net.minecraft.world.rule.GameRules;
 public final class CheesecakeAutoTest implements AbstractGameEventListener {
 
     public static final boolean ENABLED = "true".equals(System.getenv("CHEESECAKE_AUTO_TEST"));
+    /**
+     * A comma-separated list of stage names to run instead of all of them, for working on one
+     * stage. The world is prepared and the platform built regardless, since the later stages need
+     * them.
+     */
+    private static final String ONLY = System.getenv("CHEESECAKE_AUTO_TEST_ONLY");
 
-    private static final String TAG = "[cheesecake-autotest]";
-    private static final long SEED = -928872506371745L;
-    /**
-     * Blocks to travel along +x from wherever the world puts the player.
-     */
-    private static final int DISTANCE = 120;
+    private static final String TAG = AutoTestContext.TAG;
     private static final int WARMUP_TICKS = 100;
-    /**
-     * Tick in the world at which the goal rendering switches from the box to the beacon beam, so a
-     * single run draws both. The trip takes about 600 ticks on CI.
-     */
-    private static final int BEACON_TICKS = 300;
-    private static final int MAX_TICKS = 4800;
     private static final int MAX_TICKS_BEFORE_START = 6000;
-    private static final int MAX_CALC_FAILURES = 8;
+    /**
+     * A backstop over the stages' own timeouts.
+     */
+    private static final int MAX_TICKS = 30000;
 
     private final Cheesecake cheesecake;
+    private final Deque<Stage> stages = select(List.of(
+            new PrepareStage(),
+            new WalkStage(),
+            new SocketStage(),
+            new PlatformStage(),
+            new VineStage(VineStage.Kind.VINE),
+            new VineStage(VineStage.Kind.TWISTING),
+            new VineStage(VineStage.Kind.WEEPING),
+            new MineStage("iron_ore", 8, Items.RAW_IRON, 3),
+            new MineStage("stone", 16, Items.COBBLESTONE, -5),
+            new ElytraStage(ElytraStage.Trip.OVERWORLD_ABOVE_LIMIT),
+            new ElytraStage(ElytraStage.Trip.OVERWORLD_AUTO_JUMP),
+            new ElytraStage(ElytraStage.Trip.NETHER_BELOW_ROOF),
+            new ElytraStage(ElytraStage.Trip.NETHER_ABOVE_ROOF)
+    ));
+    private final int stageCount = this.stages.size();
     private boolean started;
     private boolean finished;
     private int ticksBeforeStart;
     private int ticksInWorld;
-    private int calcFailures;
-    private Goal goal;
-    private BetterBlockPos start;
+    private AutoTestContext context;
+    private Stage current;
+    private int passed;
 
     public CheesecakeAutoTest(Cheesecake cheesecake) {
         this.cheesecake = cheesecake;
-        log("enabled: will create a world and path " + DISTANCE + " blocks");
+        log("enabled: will create a world and run " + this.stageCount + " stages: "
+                + this.stages.stream().map(Stage::name).collect(Collectors.joining(", ")));
+    }
+
+    private static Deque<Stage> select(List<Stage> all) {
+        if (ONLY == null || ONLY.isBlank()) {
+            return new ArrayDeque<>(all);
+        }
+        Set<String> wanted = new HashSet<>(Arrays.asList(ONLY.split(",")));
+        Deque<Stage> selected = new ArrayDeque<>();
+        for (Stage stage : all) {
+            if (stage instanceof PrepareStage || stage instanceof PlatformStage || wanted.remove(stage.name().trim())) {
+                selected.add(stage);
+            }
+        }
+        if (!wanted.isEmpty()) {
+            throw new IllegalArgumentException("unknown stages in CHEESECAKE_AUTO_TEST_ONLY: " + wanted);
+        }
+        return selected;
     }
 
     @Override
@@ -92,6 +142,8 @@ public final class CheesecakeAutoTest implements AbstractGameEventListener {
         }
         try {
             tick(event);
+        } catch (AutoTestFailure e) {
+            fail(e.getMessage(), e.getCause());
         } catch (Throwable t) {
             fail("unexpected " + t, t);
         }
@@ -137,37 +189,24 @@ public final class CheesecakeAutoTest implements AbstractGameEventListener {
             }
             return;
         }
-
-        IPlayerContext ctx = this.cheesecake.getPlayerContext();
-        if (this.goal == null) {
-            this.start = ctx.playerFeet();
-            this.goal = new GoalXZ(this.start.x + DISTANCE, this.start.z);
-            log("starting at " + this.start + ", goal " + this.goal);
-            this.cheesecake.getCustomGoalProcess().setGoalAndPath(this.goal);
-            return;
+        if (this.context == null) {
+            this.context = new AutoTestContext(this.cheesecake, mc);
         }
-        if (this.ticksInWorld == BEACON_TICKS) {
-            // The goal is a GoalXZ, so from here on every frame draws the beam through the custom
-            // pipelines instead of the box through the line layers.
-            log("switching the goal rendering from the box to the beacon beam");
-            Cheesecake.settings().renderGoalXZBeacon.value = true;
+        if (this.current == null) {
+            this.current = this.stages.poll();
+            if (this.current == null) {
+                pass("all " + this.passed + " stages passed after " + this.ticksInWorld + " ticks in the world");
+                return;
+            }
+            log("stage " + (this.passed + 1) + " of " + this.stageCount + ": " + this.current.name());
         }
-
-        BetterBlockPos feet = ctx.playerFeet();
-        if (this.ticksInWorld % 100 == 0) {
-            log("tick " + this.ticksInWorld + " at " + feet + " " + AgentStatus.snapshot(this.cheesecake));
-        }
-        if (this.goal.isInGoal(feet)) {
-            pass("reached " + feet + " from " + this.start + " after " + this.ticksInWorld + " ticks");
-            return;
-        }
-        if (!this.cheesecake.getCustomGoalProcess().isActive() && this.ticksInWorld % 40 == 0) {
-            // The process gives up after a failed calculation; ask again until the failure budget runs out.
-            log("goal process is idle, re-issuing the goal");
-            this.cheesecake.getCustomGoalProcess().setGoalAndPath(this.goal);
+        if (this.current.run(this.context)) {
+            this.passed++;
+            log("stage " + this.current.name() + " passed");
+            this.current = null;
         }
         if (this.ticksInWorld > MAX_TICKS) {
-            fail("did not reach " + this.goal + " within " + MAX_TICKS + " ticks; at " + feet, null);
+            fail("the stages did not finish within " + MAX_TICKS + " ticks; " + this.passed + " passed, in " + this.current.name(), null);
         }
     }
 
@@ -177,18 +216,19 @@ public final class CheesecakeAutoTest implements AbstractGameEventListener {
             return;
         }
         log("path event " + event);
-        if (event == PathEvent.CALC_FAILED || event == PathEvent.NEXT_CALC_FAILED) {
-            this.calcFailures++;
-            if (this.calcFailures > MAX_CALC_FAILURES) {
-                fail("path calculation failed " + this.calcFailures + " times", null);
+        try {
+            if (this.current != null) {
+                this.current.onPathEvent(event);
             }
+        } catch (AutoTestFailure e) {
+            fail(e.getMessage(), e.getCause());
         }
     }
 
     @Override
     public void onPlayerDeath() {
         if (!this.finished) {
-            fail("the player died", null);
+            fail("the player died" + (this.current != null ? " during " + this.current.name() : ""), null);
         }
     }
 
@@ -205,7 +245,7 @@ public final class CheesecakeAutoTest implements AbstractGameEventListener {
 
     private static void createWorld(MinecraftClient mc) {
         String name = "cheesecake-autotest-" + System.currentTimeMillis();
-        log("creating world " + name + " with seed " + SEED);
+        log("creating world " + name + " with seed " + AutoTestContext.SEED);
         LevelInfo info = new LevelInfo(
                 name,
                 GameMode.SURVIVAL,
@@ -218,7 +258,7 @@ public final class CheesecakeAutoTest implements AbstractGameEventListener {
         mc.createIntegratedServerLoader().createAndStart(
                 name,
                 info,
-                new GeneratorOptions(SEED, true, false),
+                new GeneratorOptions(AutoTestContext.SEED, true, false),
                 WorldPresets::createDemoOptions,
                 mc.currentScreen
         );
