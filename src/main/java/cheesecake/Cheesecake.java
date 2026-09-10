@@ -19,6 +19,7 @@ package cheesecake;
 
 import cheesecake.api.CheesecakeAPI;
 import cheesecake.api.ICheesecake;
+import cheesecake.agent.AgentApiBehavior;
 import cheesecake.api.Settings;
 import cheesecake.api.behavior.IBehavior;
 import cheesecake.api.event.listener.IEventBus;
@@ -31,6 +32,7 @@ import cheesecake.command.manager.CommandManager;
 import cheesecake.event.GameEventHandler;
 import cheesecake.process.*;
 import cheesecake.selection.SelectionManager;
+import cheesecake.utils.CheesecakeAutoTest;
 import cheesecake.utils.BlockStateInterface;
 import cheesecake.utils.GuiClick;
 import cheesecake.utils.InputOverrideHandler;
@@ -128,6 +130,11 @@ public class Cheesecake implements ICheesecake {
         this.worldProvider = new WorldProvider(this);
         this.selectionManager = new SelectionManager(this);
         this.commandManager = new CommandManager(this);
+
+        this.gameEventHandler.registerEventListener(new AgentApiBehavior(this));
+        if (CheesecakeAutoTest.ENABLED) {
+            this.gameEventHandler.registerEventListener(new CheesecakeAutoTest(this));
+        }
     }
 
     public void registerBehavior(IBehavior behavior) {

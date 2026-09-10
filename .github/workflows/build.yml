@@ -166,14 +166,74 @@ jobs:
           path: client.log
           if-no-files-found: ignore
 
-  # A pushed vX.Y.Z tag becomes a GitHub release, but only once the jar has been built, checked
-  # and loaded by a real client above. The tag message's body is the release notes; a tag with
+  # A pushed vX.Y.Z tag becomes a GitHub release, but only once the jar has been built, checked,
+  # loaded by a real client and driven through the pathing test above. The tag message's body is the release notes; a tag with
   # no body gets GitHub's generated notes. A pre-release suffix (v0.3.0-rc.1) publishes a
   # pre-release.
+  # The smoke test proves the mod loads. This proves it works: the client creates a survival world
+  # from a fixed seed, the pathfinder walks a fixed distance, and the game exits when the goal is
+  # reached. See CheesecakeAutoTest for the routine.
+  autotest:
+    name: in-world pathing test
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Install a headless GL stack
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libgl1-mesa-dri libglx-mesa0 mesa-utils libopenal1
+
+      - name: Create a world and path through it
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+          GALLIUM_DRIVER: llvmpipe
+          CHEESECAKE_AUTO_TEST: 'true'
+        run: |
+          set +e
+          xvfb-run -a --server-args="-screen 0 1280x720x24" \
+            timeout --signal=INT 1500 ./gradlew runClient --no-daemon > autotest.log 2>&1
+          code=$?
+          echo "$code" > autotest.exit
+          echo "gradle exited $code"
+          grep -n "\[cheesecake-autotest\]" autotest.log | tail -60 || true
+
+      - name: Assert the goal was reached
+        run: |
+          set -euo pipefail
+          if ! grep -q "\[cheesecake-autotest\] PASS" autotest.log; then
+            echo "::error::the pathing test did not pass - see the autotest lines above and the uploaded log"
+            grep -nE "FAIL|Exception|Caused by" autotest.log | head -40 || true
+            exit 1
+          fi
+          if [ "$(cat autotest.exit)" != "0" ]; then
+            echo "::error::the client exited with status $(cat autotest.exit) after passing"
+            exit 1
+          fi
+          echo "pathing test passed"
+
+      - name: Upload client log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: autotest-log
+          path: autotest.log
+          if-no-files-found: ignore
+
   release:
     name: publish release
     if: github.ref_type == 'tag'
-    needs: [build, smoke]
+    needs: [build, smoke, autotest]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

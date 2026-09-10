@@ -39,6 +39,7 @@ public final class DefaultCommands {
                 new PathCommand(cheesecake),
                 new ProcCommand(cheesecake),
                 new ETACommand(cheesecake),
+                new StatusCommand(cheesecake),
                 new VersionCommand(cheesecake),
                 new RepackCommand(cheesecake),
                 new BuildCommand(cheesecake),
