@@ -86,6 +86,10 @@ public final class ElytraStage extends Stage {
     private static final int LANDING_BUBBLE = 4;
     private static final int START_CAVERN_HEIGHT = 12;
     /**
+     * No landing floor closer to the lava sea than this. The sea is at y 31.
+     */
+    private static final int LOWEST_LANDING_FLOOR = 56;
+    /**
      * How far around an anchor the scans look. The client keeps four chunks around the player
      * loaded, which is just enough.
      */
@@ -174,6 +178,11 @@ public final class ElytraStage extends Stage {
     private void equip() {
         command("item replace entity " + this.t.playerName() + " armor.chest with minecraft:elytra");
         command("give " + this.t.playerName() + " minecraft:firework_rocket 64");
+        if (this.trip == Trip.NETHER_BELOW_ROOF || this.trip == Trip.NETHER_ABOVE_ROOF) {
+            // On a slow runner the flight is imprecise enough to clip lava now and then; the trip
+            // is about routing and landing, so a dip must not end the run.
+            command("effect give " + this.t.playerName() + " minecraft:fire_resistance 1200 0 true");
+        }
     }
 
     @Override
@@ -433,13 +442,19 @@ public final class ElytraStage extends Stage {
         int radius = SCAN_RADIUS;
         int safeFloors = 0;
         int clearColumns = 0;
+        BetterBlockPos best = null;
         BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
         for (int x = anchor.x - radius; x <= anchor.x + radius; x += 2) {
             for (int z = anchor.z - radius; z <= anchor.z + radius; z += 2) {
                 if (!chunksLoaded(world, x - LANDING_BUBBLE, z - LANDING_BUBBLE, x + LANDING_BUBBLE, z + LANDING_BUBBLE)) {
                     continue;
                 }
-                for (int floor = 33; floor <= ROOF_Y - 8 - LANDING_COLUMN - LANDING_BUBBLE; floor++) {
+                // Highest floor first: a route to a low cavern skims the lava sea, and on a slow
+                // runner the flight is not precise enough for that.
+                for (int floor = ROOF_Y - 8 - LANDING_COLUMN - LANDING_BUBBLE; floor >= LOWEST_LANDING_FLOOR; floor--) {
+                    if (best != null && floor <= best.y - LANDING_GOAL_ABOVE_FLOOR) {
+                        break;
+                    }
                     if (!isSafeFloor(world.getBlockState(pos.set(x, floor, z)).getBlock())
                             || !world.getBlockState(pos.set(x, floor + 1, z)).isAir()) {
                         continue;
@@ -460,14 +475,18 @@ public final class ElytraStage extends Stage {
                     clearColumns++;
                     int bubble = floor + LANDING_COLUMN;
                     if (isAirBox(world, x - LANDING_BUBBLE, bubble - LANDING_BUBBLE, z - LANDING_BUBBLE, x + LANDING_BUBBLE, bubble + LANDING_BUBBLE, z + LANDING_BUBBLE)) {
-                        this.t.log("landing column at " + x + "," + floor + "," + z + " after " + safeFloors + " safe floors and " + clearColumns + " clear columns");
-                        return new BetterBlockPos(x, floor + LANDING_GOAL_ABOVE_FLOOR, z);
+                        best = new BetterBlockPos(x, floor + LANDING_GOAL_ABOVE_FLOOR, z);
+                        break;
                     }
                 }
             }
         }
-        this.t.log("no landing column: " + safeFloors + " safe floors, " + clearColumns + " of them with " + LANDING_COLUMN + " blocks of air, none with the bubble");
-        return null;
+        if (best == null) {
+            this.t.log("no landing column: " + safeFloors + " safe floors, " + clearColumns + " of them with " + LANDING_COLUMN + " blocks of air, none with the bubble");
+        } else {
+            this.t.log("landing column with its floor at " + (best.y - LANDING_GOAL_ABOVE_FLOOR) + " under " + best + ", the highest of " + clearColumns + " clear columns");
+        }
+        return best;
     }
 
     /**
