@@ -40,7 +40,6 @@ import net.minecraft.block.Blocks;
 import net.minecraft.block.CarpetBlock;
 import net.minecraft.block.DoorBlock;
 import net.minecraft.block.FenceGateBlock;
-import net.minecraft.block.LadderBlock;
 import net.minecraft.block.SlabBlock;
 import net.minecraft.block.enums.SlabType;
 import net.minecraft.util.math.BlockPos;
@@ -117,13 +116,13 @@ public class MovementTraverse extends Movement {
                 }
                 return WC;
             }
-            if (srcDownBlock == Blocks.LADDER || srcDownBlock == Blocks.VINE) {
+            if (MovementHelper.isClimbable(srcDownBlock)) {
                 hardness1 *= 5;
                 hardness2 *= 5;
             }
             return WC + hardness1 + hardness2;
         } else {//this is a bridge, so we need to place a block
-            if (srcDownBlock == Blocks.LADDER || srcDownBlock == Blocks.VINE) {
+            if (MovementHelper.isClimbable(srcDownBlock)) {
                 return COST_INF;
             }
             if (MovementHelper.isReplaceable(destX, y - 1, destZ, destOn, context.bsi)) {
@@ -217,7 +216,7 @@ public class MovementTraverse extends Movement {
         }
 
         Block fd = BlockStateInterface.get(ctx, src.down()).getBlock();
-        boolean ladder = fd == Blocks.LADDER || fd == Blocks.VINE;
+        boolean ladder = MovementHelper.isClimbable(fd);
 
         //sneak may have been set to true in the PREPPING state while mining an adjacent block, but we still want it to be true if the player is about to go on magma
         state.setInput(Input.SNEAK, Cheesecake.settings().allowWalkOnMagmaBlocks.value && MovementHelper.steppingOnBlocks(ctx).stream().anyMatch(block -> ctx.world().getBlockState(block).isOf(Blocks.MAGMA_BLOCK)));
@@ -264,7 +263,7 @@ public class MovementTraverse extends Movement {
             }
             Block low = BlockStateInterface.get(ctx, src).getBlock();
             Block high = BlockStateInterface.get(ctx, src.up()).getBlock();
-            if (ctx.player().getY() > src.y + 0.1D && !ctx.player().isOnGround() && (low == Blocks.VINE || low == Blocks.LADDER || high == Blocks.VINE || high == Blocks.LADDER)) {
+            if (ctx.player().getY() > src.y + 0.1D && !ctx.player().isOnGround() && (MovementHelper.isClimbable(low) || MovementHelper.isClimbable(high))) {
                 // hitting W could cause us to climb the ladder instead of going forward
                 // wait until we're on the ground
                 return state;
@@ -277,15 +276,10 @@ public class MovementTraverse extends Movement {
             }
 
             BlockState destDown = BlockStateInterface.get(ctx, dest.down());
-            BlockPos against = positionsToBreak[0];
-            if (feet.getY() != dest.getY() && ladder && (destDown.getBlock() == Blocks.VINE || destDown.getBlock() == Blocks.LADDER)) {
-                against = destDown.getBlock() == Blocks.VINE ? MovementPillar.getAgainst(new CalculationContext(cheesecake), dest.down()) : dest.offset(destDown.get(LadderBlock.FACING).getOpposite());
-                if (against == null) {
-                    logDirect("Unable to climb vines. Consider disabling allowVines.");
-                    return state.setStatus(MovementStatus.UNREACHABLE);
-                }
+            if (feet.getY() != dest.getY() && ladder && MovementHelper.isClimbable(destDown.getBlock())) {
+                state.setInput(Input.JUMP, true);
             }
-            MovementHelper.moveTowards(ctx, state, against);
+            MovementHelper.moveTowards(ctx, state, positionsToBreak[0]);
             return state;
         } else {
             wasTheBridgeBlockAlwaysThere = false;
@@ -372,7 +366,7 @@ public class MovementTraverse extends Movement {
     protected boolean prepared(MovementState state) {
         if (ctx.playerFeet().equals(src) || ctx.playerFeet().equals(src.down())) {
             Block block = BlockStateInterface.getBlock(ctx, src.down());
-            if (block == Blocks.LADDER || block == Blocks.VINE) {
+            if (MovementHelper.isClimbable(block)) {
                 state.setInput(Input.SNEAK, true);
             }
         }

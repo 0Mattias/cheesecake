@@ -45,38 +45,66 @@ import cheesecake.utils.CheesecakeProcessHelper;
 import cheesecake.utils.PathingCommandContext;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import java.util.*;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 import net.minecraft.block.AirBlock;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
+import net.minecraft.client.world.ClientWorld;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
+import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
 import net.minecraft.util.collection.DefaultedList;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.Heightmap;
 import net.minecraft.world.World;
+import net.minecraft.world.chunk.ChunkManager;
+import net.minecraft.world.chunk.WorldChunk;
+import net.minecraft.world.dimension.DimensionType;
 
 import static cheesecake.api.pathing.movement.ActionCosts.COST_INF;
 
-public class ElytraProcess extends CheesecakeProcessHelper
-        implements IElytraProcess, AbstractGameEventListener {
+public class ElytraProcess extends CheesecakeProcessHelper implements IElytraProcess, AbstractGameEventListener {
     public State state;
     private boolean goingToLandingSpot;
     private BetterBlockPos landingSpot;
     private boolean reachedGoal; // this basically just prevents potential notification spam
     private Goal goal;
     private ElytraBehavior behavior;
+    private NetherPathfinderContext npfContext;
     private boolean predictingTerrain;
+    private boolean allowTight;
+    private boolean allowAboveBuildLimit;
+    private boolean allowAboveRoof;
+    private final Semaphore npfSema = new Semaphore(1);
+
+    private static final int SHORT_LANDING_COLUMN_HEIGHT = 15;
+    private static final int LONG_LANDING_COLUMN_HEIGHT = 39;
+    private static final long LANDING_SEARCH_BUDGET_NANOS = TimeUnit.MILLISECONDS.toNanos(25); // half a tick
+    private int landingColumnHeight = SHORT_LANDING_COLUMN_HEIGHT;
+    private final Set<BetterBlockPos> badLandingSpots = new HashSet<>();
+    private LandingSearchState landingSearchState;
 
     @Override
     public void onLostControl() {
+        onLostControl(true);
+    }
+
+    public void onLostControl(boolean destroyNpf) {
         this.state = State.START_FLYING; // TODO: null state?
         this.goingToLandingSpot = false;
         this.landingSpot = null;
+        this.landingSearchState = null;
         this.reachedGoal = false;
         this.goal = null;
         destroyBehaviorAsync();
+        if (destroyNpf) {
+            destroyNpfContextAsync();
+        }
     }
 
     private ElytraProcess(Cheesecake cheesecake) {
@@ -109,15 +137,36 @@ public class ElytraProcess extends CheesecakeProcessHelper
 
     @Override
     public PathingCommand onTick(boolean calcFailed, boolean isSafeToCancel) {
-        final long seedSetting = Cheesecake.settings().elytraNetherSeed.value;
-        if (seedSetting != this.behavior.context.getSeed()) {
-            logDirect("Nether seed changed, recalculating path");
-            this.resetState();
-        }
-        if (predictingTerrain != Cheesecake.settings().elytraPredictTerrain.value) {
-            logDirect("elytraPredictTerrain setting changed, recalculating path");
-            predictingTerrain = Cheesecake.settings().elytraPredictTerrain.value;
-            this.resetState();
+        try {
+            final long seedSetting = Cheesecake.settings().elytraNetherSeed.value;
+            if (seedSetting != this.behavior.npfContext.getSeed()) {
+                logDirect("Nether seed changed, recalculating path");
+                this.resetState();
+            }
+            final boolean inNether = ctx.world().getRegistryKey() == World.NETHER;
+            if (predictingTerrain != Cheesecake.settings().elytraPredictTerrain.value && inNether) {
+                logDirect("elytraPredictTerrain setting changed, recalculating path from scratch");
+                predictingTerrain = Cheesecake.settings().elytraPredictTerrain.value;
+                this.resetState();
+            }
+            if (allowTight != Cheesecake.settings().elytraAllowTightSpaces.value) {
+                logDirect("elytraAllowTightSpaces setting changed, recalculating path from scratch");
+                allowTight = Cheesecake.settings().elytraAllowTightSpaces.value;
+                this.resetState();
+            }
+            if (allowAboveBuildLimit != Cheesecake.settings().elytraAllowAboveBuildLimit.value) {
+                logDirect("elytraAllowAboveBuildLimit setting changed, recalculating path from scratch");
+                allowAboveBuildLimit = Cheesecake.settings().elytraAllowAboveBuildLimit.value;
+                this.resetState();
+            }
+            if (allowAboveRoof != Cheesecake.settings().elytraAllowAboveRoof.value && inNether) {
+                logDirect("elytraAllowAboveRoof setting changed, recalculating path from scratch");
+                allowAboveRoof = Cheesecake.settings().elytraAllowAboveRoof.value;
+                this.resetState();
+            }
+        } catch (IllegalArgumentException e) {
+            logDirect(e.getMessage(), Formatting.RED);
+            return new PathingCommand(null, PathingCommandType.CANCEL_AND_SET_GOAL);
         }
 
         this.behavior.onTick();
@@ -134,44 +183,43 @@ public class ElytraProcess extends CheesecakeProcessHelper
                 logDirect("Emergency landing - almost out of elytra durability or fireworks");
                 safetyLanding = true;
             } else {
-                logDirect(
-                        "almost out of elytra durability or fireworks, but I'm going to continue since elytraAllowEmergencyLand is false");
+                logDirect("almost out of elytra durability or fireworks, but I'm going to continue since elytraAllowEmergencyLand is false");
             }
         }
-        if (ctx.player().isGliding() && this.state != State.LANDING
-                && (this.behavior.pathManager.isComplete() || safetyLanding)) {
+        if (ctx.player().isGliding() && this.state != State.LANDING && (this.behavior.pathManager.isComplete() || safetyLanding)) {
             final BetterBlockPos last = this.behavior.pathManager.path.getLast();
-            if (last != null
-                    && (new Vec3d(ctx.player().getX(), ctx.player().getY(), ctx.player().getZ())
-                            .squaredDistanceTo(last.toCenterPos()) < (48 * 48) || safetyLanding)
-                    && (!goingToLandingSpot || (safetyLanding && this.landingSpot == null))) {
-                logDirect("Path complete, picking a nearby safe landing spot...");
+            if (last != null && (playerPos().squaredDistanceTo(last.toCenterPos()) < (48 * 48) || safetyLanding) && (!goingToLandingSpot || (safetyLanding && this.landingSpot == null))) {
+                if (this.landingSearchState == null) {
+                    logDirect("Path complete, searching for safe landing spot...");
+                }
                 BetterBlockPos landingSpot = findSafeLandingSpot(ctx.playerFeet());
-                // if this fails we will just keep orbiting the last node until we run out of
-                // rockets or the user intervenes
+                // if this fails we will just keep orbiting the last node until we run out of rockets or the user intervenes
                 if (landingSpot != null) {
+                    logDirect("Found potential landing spot.");
                     this.pathTo0(landingSpot, true);
                     this.landingSpot = landingSpot;
+                    this.goingToLandingSpot = true;
+                } else {
+                    this.goingToLandingSpot = false;
                 }
-                this.goingToLandingSpot = true;
             }
 
-            if (last != null && new Vec3d(ctx.player().getX(), ctx.player().getY(), ctx.player().getZ())
-                    .squaredDistanceTo(last.toCenterPos()) < 1) {
+            if (last != null && playerPos().squaredDistanceTo(last.toCenterPos()) < 1) {
                 if (Cheesecake.settings().notificationOnPathComplete.value && !reachedGoal) {
                     logNotification("Pathing complete", false);
                 }
                 if (Cheesecake.settings().disconnectOnArrival.value && !reachedGoal) {
                     // don't be active when the user logs back in
                     this.onLostControl();
-                    ctx.player().networkHandler.getConnection()
-                            .disconnect(net.minecraft.text.Text.literal("Disconnected by Baritone"));
+                    if (ctx.world() instanceof ClientWorld clientWorld) {
+                        clientWorld.disconnect(Text.literal("[Cheesecake] Arrived at goal!"));
+                    }
                     return new PathingCommand(null, PathingCommandType.CANCEL_AND_SET_GOAL);
                 }
                 reachedGoal = true;
 
                 // we are goingToLandingSpot and we are in the last node of the path
-                if (this.goingToLandingSpot) {
+                if (this.goingToLandingSpot && landingSpot != null) {
                     this.state = State.LANDING;
                     logDirect("Above the landing spot, landing...");
                 }
@@ -179,18 +227,14 @@ public class ElytraProcess extends CheesecakeProcessHelper
         }
 
         if (this.state == State.LANDING) {
-            final BetterBlockPos endPos = this.landingSpot != null ? this.landingSpot
-                    : behavior.pathManager.path.getLast();
+            final BetterBlockPos endPos = this.landingSpot != null ? this.landingSpot : behavior.pathManager.path.getLast();
             if (ctx.player().isGliding() && endPos != null) {
-                Vec3d from = new Vec3d(ctx.player().getX(), ctx.player().getY(), ctx.player().getZ());
+                Vec3d from = playerPos();
                 Vec3d to = new Vec3d(((double) endPos.x) + 0.5, from.y, ((double) endPos.z) + 0.5);
                 Rotation rotation = RotationUtils.calcRotationFromVec3d(from, to, ctx.playerRotations());
-                cheesecake.getLookBehavior().updateTarget(new Rotation(rotation.getYaw(), 0), false); // this will be
-                                                                                                      // overwritten,
-                                                                                                      // probably, by
-                                                                                                      // behavior tick
+                cheesecake.getLookBehavior().updateTarget(new Rotation(rotation.getYaw(), 0), false); // this will be overwritten, probably, by behavior tick
 
-                if (ctx.player().getY() < endPos.y - LANDING_COLUMN_HEIGHT) {
+                if (ctx.player().getY() < endPos.y - this.landingColumnHeight) {
                     logDirect("bad landing spot, trying again...");
                     landingSpotIsBad(endPos);
                 }
@@ -201,7 +245,13 @@ public class ElytraProcess extends CheesecakeProcessHelper
             behavior.landingMode = this.state == State.LANDING;
             this.goal = null;
             cheesecake.getInputOverrideHandler().clearAllKeys();
-            behavior.tick();
+            if (this.behavior.npfContext.tryAcquireReadLock()) {
+                try {
+                    behavior.tick();
+                } finally {
+                    this.behavior.npfContext.releaseReadLock();
+                }
+            }
             return new PathingCommand(null, PathingCommandType.CANCEL_AND_SET_GOAL);
         } else if (this.state == State.LANDING) {
             if (ctx.playerMotion().multiply(1, 0, 1).length() > 0.001) {
@@ -223,8 +273,7 @@ public class ElytraProcess extends CheesecakeProcessHelper
 
         if (this.state == State.LOCATE_JUMP) {
             if (shouldLandForSafety()) {
-                logDirect(
-                        "Not taking off, because elytra durability or fireworks are so low that I would immediately emergency land anyway.");
+                logDirect("Not taking off, because elytra durability or fireworks are so low that I would immediately emergency land anyway.");
                 onLostControl();
                 return new PathingCommand(null, PathingCommandType.CANCEL_AND_SET_GOAL);
             }
@@ -256,8 +305,7 @@ public class ElytraProcess extends CheesecakeProcessHelper
                     return new PathingCommand(null, PathingCommandType.CANCEL_AND_SET_GOAL);
                 }
             }
-            return new PathingCommandContext(this.goal, PathingCommandType.SET_GOAL_AND_PAUSE,
-                    new WalkOffCalculationContext(cheesecake));
+            return new PathingCommandContext(this.goal, PathingCommandType.SET_GOAL_AND_PAUSE, new WalkOffCalculationContext(cheesecake));
         }
 
         // yucky
@@ -267,7 +315,8 @@ public class ElytraProcess extends CheesecakeProcessHelper
 
         if (this.state == State.GET_TO_JUMP) {
             final IPathExecutor executor = cheesecake.getPathingBehavior().getCurrent();
-            final boolean canStartFlying = ctx.player().fallDistance > 1.0f
+            // TODO 1.21.5: replace `ctx.player().getVelocity().y < -0.377` with `ctx.player().fallDistance > 1.0f`
+            final boolean canStartFlying = ctx.player().getVelocity().y < -0.377
                     && !isSafeToCancel
                     && executor != null
                     && executor.getPath().movements().get(executor.getPosition()) instanceof MovementFall;
@@ -285,17 +334,23 @@ public class ElytraProcess extends CheesecakeProcessHelper
                 cheesecake.getPathingBehavior().secretInternalSegmentCancel();
             }
             cheesecake.getInputOverrideHandler().clearAllKeys();
-            if (ctx.player().fallDistance > 1.0f) {
+            // TODO 1.21.5: replace `ctx.player().getVelocity().y < -0.377` with `ctx.player().fallDistance > 1.0f`
+            if (ctx.player().getVelocity().y < -0.377) {
                 cheesecake.getInputOverrideHandler().setInputForceState(Input.JUMP, true);
             }
         }
         return new PathingCommand(null, PathingCommandType.CANCEL_AND_SET_GOAL);
     }
 
+    private Vec3d playerPos() {
+        return new Vec3d(ctx.player().getX(), ctx.player().getY(), ctx.player().getZ());
+    }
+
     public void landingSpotIsBad(BetterBlockPos endPos) {
         badLandingSpots.add(endPos);
         goingToLandingSpot = false;
         this.landingSpot = null;
+        this.landingSearchState = null;
         this.state = State.FLYING;
     }
 
@@ -319,8 +374,29 @@ public class ElytraProcess extends CheesecakeProcessHelper
 
     @Override
     public void repackChunks() {
-        if (this.behavior != null) {
-            this.behavior.repackChunks();
+        if (this.npfContext == null) {
+            return;
+        }
+
+        ChunkManager chunkProvider = ctx.world().getChunkManager();
+        BetterBlockPos playerPos = ctx.playerFeet();
+
+        int playerChunkX = playerPos.getX() >> 4;
+        int playerChunkZ = playerPos.getZ() >> 4;
+
+        int minX = playerChunkX - 40;
+        int minZ = playerChunkZ - 40;
+        int maxX = playerChunkX + 40;
+        int maxZ = playerChunkZ + 40;
+
+        for (int x = minX; x <= maxX; x++) {
+            for (int z = minZ; z <= maxZ; z++) {
+                WorldChunk chunk = chunkProvider.getWorldChunk(x, z, false);
+
+                if (chunk != null && !chunk.isEmpty()) {
+                    npfContext.queueForPacking(chunk);
+                }
+            }
         }
     }
 
@@ -336,18 +412,30 @@ public class ElytraProcess extends CheesecakeProcessHelper
 
     @Override
     public void pathTo(BlockPos destination) {
+        if (!isSupportedPos(destination)) {
+            throw new IllegalArgumentException("The goal must be within bounds to use elytra flight.");
+        }
+
+        if (ctx.player() != null && !isSupportedPos(ctx.playerFeet())) {
+            throw new IllegalArgumentException("The player must be within bounds to use elytra flight.");
+        }
+
         this.pathTo0(destination, false);
     }
 
     private void pathTo0(BlockPos destination, boolean appendDestination) {
-        if (ctx.player() == null || ctx.player().getEntityWorld().getRegistryKey() != World.NETHER) {
+        if (ctx.player() == null) {
             return;
         }
-        this.onLostControl();
-        this.predictingTerrain = Cheesecake.settings().elytraPredictTerrain.value;
-        this.behavior = new ElytraBehavior(this.cheesecake, this, destination, appendDestination);
+        this.onLostControl(false);
+        this.predictingTerrain = ctx.world().getRegistryKey() == World.NETHER && Cheesecake.settings().elytraPredictTerrain.value;
+        this.allowTight = Cheesecake.settings().elytraAllowTightSpaces.value;
+        this.allowAboveBuildLimit = Cheesecake.settings().elytraAllowAboveBuildLimit.value;
+        this.allowAboveRoof = Cheesecake.settings().elytraAllowAboveRoof.value;
+        this.behavior = new ElytraBehavior(this.cheesecake, this, getNpfContext(), destination, appendDestination);
+
         if (ctx.world() != null) {
-            this.behavior.repackChunks();
+            this.repackChunks();
         }
         this.behavior.pathTo();
     }
@@ -360,6 +448,7 @@ public class ElytraProcess extends CheesecakeProcessHelper
         if (iGoal instanceof GoalXZ) {
             GoalXZ goal = (GoalXZ) iGoal;
             x = goal.getX();
+            // ElytraBehavior will automatically change the destination height depending on if we're above or below the roof
             y = 64;
             z = goal.getZ();
         } else if (iGoal instanceof GoalBlock) {
@@ -370,19 +459,31 @@ public class ElytraProcess extends CheesecakeProcessHelper
         } else {
             throw new IllegalArgumentException("The goal must be a GoalXZ or GoalBlock");
         }
-        if (y <= 0 || y >= 128) {
-            throw new IllegalArgumentException("The y of the goal is not between 0 and 128");
-        }
+
         this.pathTo(new BlockPos(x, y, z));
+    }
+
+    private boolean isSupportedPos(BlockPos pos) {
+        final boolean isNether = ctx.world().getRegistryKey() == World.NETHER;
+        final int minY = ctx.world().getDimension().minY();
+        final int maxY = (isNether && !Cheesecake.settings().elytraAllowAboveRoof.value) ? 127 : Math.min(minY + 384, ctx.world().getDimension().height() + minY);
+
+        final boolean aboveRoof = Cheesecake.settings().elytraAllowAboveRoof.value;
+        final boolean aboveBuild = Cheesecake.settings().elytraAllowAboveBuildLimit.value;
+
+        final boolean enforceMaxY = isNether ? !(aboveRoof && aboveBuild) : !aboveBuild;
+
+        if (pos.getY() < minY) {
+            return false;
+        }
+
+        return !enforceMaxY || pos.getY() < maxY;
     }
 
     private boolean shouldLandForSafety() {
         ItemStack chest = ctx.player().getEquippedStack(EquipmentSlot.CHEST);
-        if (chest.getItem() != Items.ELYTRA
-                || chest.getMaxDamage() - chest.getDamage() < Cheesecake.settings().elytraMinimumDurability.value) {
-            // elytrabehavior replaces when durability <= minimumDurability, so if
-            // durability < minimumDurability then we can reasonably assume that the elytra
-            // will soon be broken without replacement
+        if (chest.getItem() != Items.ELYTRA || chest.getMaxDamage() - chest.getDamage() < Cheesecake.settings().elytraMinimumDurability.value) {
+            // elytrabehavior replaces when durability <= minimumDurability, so if durability < minimumDurability then we can reasonably assume that the elytra will soon be broken without replacement
             return true;
         }
 
@@ -426,41 +527,38 @@ public class ElytraProcess extends CheesecakeProcessHelper
 
     @Override
     public void onRenderPass(RenderEvent event) {
-        if (this.behavior != null)
-            this.behavior.onRenderPass(event);
+        if (this.behavior != null) this.behavior.onRenderPass(event);
     }
 
     @Override
     public void onWorldEvent(WorldEvent event) {
         if (event.getWorld() != null && event.getState() == EventState.POST) {
-            // Exiting the world, just destroy
+            // Exiting the world, just destroy. The pathfinder context is built for one dimension
+            // (height, min y, cache directory), so it must not survive into the next world either.
             destroyBehaviorAsync();
+            destroyNpfContextAsync();
         }
     }
 
     @Override
     public void onChunkEvent(ChunkEvent event) {
-        if (this.behavior != null)
-            this.behavior.onChunkEvent(event);
+        if (this.behavior != null) this.behavior.onChunkEvent(event);
     }
 
     @Override
     public void onBlockChange(BlockChangeEvent event) {
-        if (this.behavior != null)
-            this.behavior.onBlockChange(event);
+        if (this.behavior != null) this.behavior.onBlockChange(event);
     }
 
     @Override
     public void onReceivePacket(PacketEvent event) {
-        if (this.behavior != null)
-            this.behavior.onReceivePacket(event);
+        if (this.behavior != null) this.behavior.onReceivePacket(event);
     }
 
     @Override
     public void onPostTick(TickEvent event) {
         ICheesecakeProcess procThisTick = cheesecake.getPathingControlManager().mostRecentInControl().orElse(null);
-        if (this.behavior != null && procThisTick == this)
-            this.behavior.onPostTick(event);
+        if (this.behavior != null && procThisTick == this) this.behavior.onPostTick(event);
     }
 
     /**
@@ -491,13 +589,20 @@ public class ElytraProcess extends CheesecakeProcessHelper
         }
     }
 
-    private static boolean isInBounds(BlockPos pos) {
-        return pos.getY() >= 0 && pos.getY() < 128;
+    private static boolean isInBounds(World dim, BlockPos pos) {
+        DimensionType dimType = dim.getDimension();
+        int minY = dimType.minY();
+        int maxY = (dim.getRegistryKey() == World.NETHER && !Cheesecake.settings().elytraAllowAboveRoof.value) ? 127 : Math.min(minY + 384, dimType.height() + minY);
+        return pos.getY() >= minY && pos.getY() < maxY;
     }
 
     private boolean isSafeBlock(Block block) {
-        return block == Blocks.NETHERRACK || block == Blocks.GRAVEL
-                || (block == Blocks.NETHER_BRICKS && Cheesecake.settings().elytraAllowLandOnNetherFortress.value);
+        return block == Blocks.NETHERRACK || block == Blocks.GRAVEL || block == Blocks.SOUL_SAND || block == Blocks.SOUL_SOIL || (block == Blocks.NETHER_BRICKS && Cheesecake.settings().elytraAllowLandOnNetherFortress.value)
+                || block == Blocks.STONE || block == Blocks.DEEPSLATE || block == Blocks.GRASS_BLOCK || block == Blocks.SAND || block == Blocks.RED_SAND || block == Blocks.TERRACOTTA
+                || block == Blocks.SNOW || block == Blocks.ICE || block == Blocks.MYCELIUM || block == Blocks.PODZOL
+                || block == Blocks.DARK_OAK_LEAVES || block == Blocks.JUNGLE_LEAVES
+                || block == Blocks.END_STONE || block == Blocks.BEDROCK
+                || block == Blocks.OBSIDIAN || block == Blocks.COBBLESTONE;
     }
 
     private boolean isSafeBlock(BlockPos pos) {
@@ -529,8 +634,7 @@ public class ElytraProcess extends CheesecakeProcessHelper
     }
 
     private boolean hasAirBubble(BlockPos pos) {
-        final int radius = 4; // Half of the full width, rounded down, as we're counting blocks in each
-                              // direction from the center
+        final int radius = 4; // Half of the full width, rounded down, as we're counting blocks in each direction from the center
         BlockPos.Mutable mut = new BlockPos.Mutable();
         for (int x = -radius; x <= radius; x++) {
             for (int y = -radius; y <= radius; y++) {
@@ -548,7 +652,7 @@ public class ElytraProcess extends CheesecakeProcessHelper
 
     private BetterBlockPos checkLandingSpot(BlockPos pos, LongOpenHashSet checkedSpots) {
         BlockPos.Mutable mut = new BlockPos.Mutable(pos.getX(), pos.getY(), pos.getZ());
-        while (mut.getY() >= 0) {
+        while (mut.getY() >= ctx.world().getDimension().minY()) {
             if (checkedSpots.contains(mut.asLong())) {
                 return null;
             }
@@ -568,42 +672,135 @@ public class ElytraProcess extends CheesecakeProcessHelper
         return null; // void
     }
 
-    private static final int LANDING_COLUMN_HEIGHT = 15;
-    private Set<BetterBlockPos> badLandingSpots = new HashSet<>();
-
     private BetterBlockPos findSafeLandingSpot(BetterBlockPos start) {
-        Queue<BetterBlockPos> queue = new PriorityQueue<>(Comparator
-                .<BetterBlockPos>comparingInt(
-                        pos -> (pos.x - start.x) * (pos.x - start.x) + (pos.z - start.z) * (pos.z - start.z))
-                .thenComparingInt(pos -> -pos.y));
-        Set<BetterBlockPos> visited = new HashSet<>();
-        LongOpenHashSet checkedPositions = new LongOpenHashSet();
-        queue.add(start);
+        final boolean useHeightmap = ctx.player().getY() > ctx.world().getTopY(Heightmap.Type.MOTION_BLOCKING, start.getX(), start.getZ());
+        if (this.landingSearchState == null || !this.landingSearchState.isCompatible(start, useHeightmap)) {
+            this.landingSearchState = new LandingSearchState(start, this.behavior.destination, useHeightmap);
+        } else {
+            this.landingSearchState.updateStartPosition(start);
+        }
 
-        while (!queue.isEmpty()) {
-            BetterBlockPos pos = queue.poll();
-            if (ctx.world().isPosLoaded(pos) && isInBounds(pos)
-                    && ctx.world().getBlockState(pos).getBlock() == Blocks.AIR) {
-                BetterBlockPos actualLandingSpot = checkLandingSpot(pos, checkedPositions);
-                if (actualLandingSpot != null && isColumnAir(actualLandingSpot, LANDING_COLUMN_HEIGHT)
-                        && hasAirBubble(actualLandingSpot.up(LANDING_COLUMN_HEIGHT))
-                        && !badLandingSpots.contains(actualLandingSpot.up(LANDING_COLUMN_HEIGHT))) {
-                    return actualLandingSpot.up(LANDING_COLUMN_HEIGHT);
-                }
-                if (visited.add(pos.north()))
-                    queue.add(pos.north());
-                if (visited.add(pos.east()))
-                    queue.add(pos.east());
-                if (visited.add(pos.south()))
-                    queue.add(pos.south());
-                if (visited.add(pos.west()))
-                    queue.add(pos.west());
-                if (visited.add(pos.up()))
-                    queue.add(pos.up());
-                if (visited.add(pos.down()))
-                    queue.add(pos.down());
+        BetterBlockPos landingSpot = this.landingSearchState.advance();
+        if (landingSpot != null || this.landingSearchState.exhausted) {
+            this.landingSearchState = null;
+        }
+        return landingSpot;
+    }
+
+    private boolean isChunkLoaded(BetterBlockPos pos) {
+        return ctx.world().getChunkManager().isChunkLoaded(pos.x >> 4, pos.z >> 4);
+    }
+
+    /**
+     * A landing-spot search that runs in slices of {@link #LANDING_SEARCH_BUDGET_NANOS} per tick
+     * instead of stalling the game thread until it finds one.
+     */
+    private final class LandingSearchState {
+        private final BetterBlockPos origin;
+        private final boolean useHeightmap;
+        private final Queue<BetterBlockPos> queue;
+        private final Set<BetterBlockPos> visited = new HashSet<>();
+        private final LongOpenHashSet checkedPositions = new LongOpenHashSet();
+        private boolean exhausted;
+
+        private LandingSearchState(BetterBlockPos origin, BetterBlockPos dest, boolean useHeightmap) {
+            this.origin = origin;
+            this.useHeightmap = useHeightmap;
+
+            final BetterBlockPos target = isChunkLoaded(dest) ? dest : origin;
+            this.queue = new PriorityQueue<>(Comparator.<BetterBlockPos>comparingInt(pos -> (pos.x - target.x) * (pos.x - target.x) + (pos.z - target.z) * (pos.z - target.z)).thenComparingInt(pos -> -pos.y));
+            this.queue.add(target);
+        }
+
+        private boolean isCompatible(BetterBlockPos start, boolean useHeightmap) {
+            // Restart if we've moved more than a chunk so the priority adjusts and newly loaded chunks get revisited
+            return this.useHeightmap == useHeightmap && this.origin.distanceSq(start) <= (16 * 16);
+        }
+
+        private void updateStartPosition(BetterBlockPos start) {
+            if (this.visited.add(start)) {
+                this.queue.add(start);
             }
         }
-        return null;
+
+        private BetterBlockPos advance() {
+            final long deadline = System.nanoTime() + LANDING_SEARCH_BUDGET_NANOS;
+            while (!this.queue.isEmpty()) {
+                if (System.nanoTime() >= deadline) {
+                    return null;
+                }
+                BetterBlockPos qPos = this.queue.poll();
+                if (!isChunkLoaded(qPos)) {
+                    continue;
+                }
+                BetterBlockPos landing = this.useHeightmap ? this.advanceHeightmap(qPos) : this.advanceUnderground(qPos);
+                if (landing != null) {
+                    return landing;
+                }
+            }
+            this.exhausted = true;
+            return null;
+        }
+
+        private BetterBlockPos advanceUnderground(BetterBlockPos pos) {
+            if (isInBounds(ctx.world(), pos) && ctx.world().getBlockState(pos).getBlock() == Blocks.AIR) {
+                BetterBlockPos actualLandingSpot = checkLandingSpot(pos, this.checkedPositions);
+                if (actualLandingSpot != null) {
+                    landingColumnHeight = SHORT_LANDING_COLUMN_HEIGHT;
+                    if (isColumnAir(actualLandingSpot, landingColumnHeight) && hasAirBubble(actualLandingSpot.up(landingColumnHeight)) && !badLandingSpots.contains(actualLandingSpot.up(landingColumnHeight))) {
+                        return actualLandingSpot.up(landingColumnHeight);
+                    }
+                }
+                if (this.visited.add(pos.north())) this.queue.add(pos.north());
+                if (this.visited.add(pos.east())) this.queue.add(pos.east());
+                if (this.visited.add(pos.south())) this.queue.add(pos.south());
+                if (this.visited.add(pos.west())) this.queue.add(pos.west());
+                if (this.visited.add(pos.up())) this.queue.add(pos.up());
+                if (this.visited.add(pos.down())) this.queue.add(pos.down());
+            }
+            return null;
+        }
+
+        private BetterBlockPos advanceHeightmap(BetterBlockPos qPos) {
+            int height = ctx.world().getTopY(Heightmap.Type.MOTION_BLOCKING, qPos.getX(), qPos.getZ());
+            BetterBlockPos pos = new BetterBlockPos(qPos.getX(), height + 1, qPos.getZ());
+            if (isInBounds(ctx.world(), pos) && ctx.world().getBlockState(pos).getBlock() == Blocks.AIR) {
+                BetterBlockPos actualLandingSpot = checkLandingSpot(pos, this.checkedPositions);
+                if (actualLandingSpot != null) {
+                    landingColumnHeight = ctx.playerFeet().y - actualLandingSpot.y < LONG_LANDING_COLUMN_HEIGHT ? SHORT_LANDING_COLUMN_HEIGHT : LONG_LANDING_COLUMN_HEIGHT;
+                    if (hasAirBubble(actualLandingSpot.up(landingColumnHeight)) && !badLandingSpots.contains(actualLandingSpot.up(landingColumnHeight))) {
+                        return actualLandingSpot.up(landingColumnHeight);
+                    }
+                }
+                if (this.visited.add(pos.north())) this.queue.add(pos.north());
+                if (this.visited.add(pos.east())) this.queue.add(pos.east());
+                if (this.visited.add(pos.south())) this.queue.add(pos.south());
+                if (this.visited.add(pos.west())) this.queue.add(pos.west());
+            }
+            return null;
+        }
+    }
+
+    private NetherPathfinderContext getNpfContext() {
+        if (this.npfContext == null) {
+            npfSema.acquireUninterruptibly();
+            this.npfContext = new NetherPathfinderContext(
+                    Cheesecake.settings().elytraNetherSeed.value,
+                    Cheesecake.settings().elytraUseCache.value ? cheesecake.getWorldProvider().getCurrentWorld().directory.resolve("cache") : null,
+                    ctx.world()
+            );
+        }
+        return this.npfContext;
+    }
+
+    private void destroyNpfContextAsync() {
+        NetherPathfinderContext npf = this.npfContext;
+        if (npf != null) {
+            this.npfContext = null;
+            Cheesecake.getExecutor().execute(() -> {
+                npf.destroy();
+                npfSema.release();
+            });
+        }
     }
 }

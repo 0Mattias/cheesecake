@@ -36,7 +36,6 @@ import net.minecraft.text.HoverEvent;
 import net.minecraft.text.MutableText;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
-import net.minecraft.world.World;
 
 import static cheesecake.api.command.ICheesecakeChatControl.FORCE_COMMAND_PREFIX;
 
@@ -70,9 +69,6 @@ public class ElytraCommand extends Command {
             if (iGoal == null) {
                 throw new CommandInvalidStateException("No goal has been set");
             }
-            if (ctx.world().getRegistryKey() != World.NETHER) {
-                throw new CommandInvalidStateException("Only works in the nether");
-            }
             try {
                 elytra.pathTo(iGoal);
             } catch (IllegalArgumentException ex) {
@@ -84,7 +80,11 @@ public class ElytraCommand extends Command {
         final String action = args.getString();
         switch (action) {
             case "reset": {
-                elytra.resetState();
+                try {
+                    elytra.resetState();
+                } catch (IllegalArgumentException ex) {
+                    throw new CommandInvalidStateException(ex.getMessage());
+                }
                 logDirect("Reset state but still flying to same goal");
                 break;
             }
@@ -140,7 +140,7 @@ public class ElytraCommand extends Command {
         MutableText gatekeep = Text.literal("");
         gatekeep.append("To disable this message, enable the setting elytraTermsAccepted\n");
         gatekeep.append(
-                "Cheesecake Elytra is an experimental feature. It is only intended for long distance travel in the Nether using fireworks for vanilla boost. It will not work with any other mods (\"hacks\") for non-vanilla boost. ");
+                "Cheesecake Elytra is an experimental feature. It is intended for long distance travel in the Nether but will also work in the Overworld, using fireworks for vanilla boost. It will not work with any other mods (\"hacks\") for non-vanilla boost. ");
         MutableText gatekeep2 = Text.literal(
                 "If you want Cheesecake to attempt to take off from the ground for you, you can enable the elytraAutoJump setting (not advisable on laggy servers!). ");
         gatekeep2.setStyle(gatekeep2.getStyle().withHoverEvent(
@@ -153,16 +153,20 @@ public class ElytraCommand extends Command {
                         + "set elytraConserveFireworks true\n" + Cheesecake.settings().prefix.value
                         + "set elytraFireworkSpeed 0.6\n(the 0.6 number is just an example, tweak to your liking)"))));
         gatekeep.append(gatekeep3);
-        MutableText gatekeep4 = Text.literal("Cheesecake Elytra ");
-        MutableText red = Text.literal("wants to know the seed");
-        red.setStyle(red.getStyle().withColor(Formatting.RED).withUnderline(true).withBold(true));
-        gatekeep4.append(red);
+        MutableText gatekeep4 = Text.literal("Cheesecake Elytra for use in the ");
+        MutableText red1 = Text.literal("Nether");
+        red1.setStyle(red1.getStyle().withColor(Formatting.RED).withUnderline(true).withBold(true));
+        gatekeep4.append(red1);
+        gatekeep4.append(", ");
+        MutableText red2 = Text.literal("wants to know the seed");
+        red2.setStyle(red2.getStyle().withColor(Formatting.RED).withUnderline(true).withBold(true));
+        gatekeep4.append(red2);
         gatekeep4.append(
                 " of the world you are in. If it doesn't have the correct seed, it will frequently backtrack. It uses the seed to generate terrain far beyond what you can see, since terrain obstacles in the Nether can be much larger than your render distance. ");
         gatekeep.append(gatekeep4);
         gatekeep.append("\n");
         if (detectOn2b2t()) {
-            MutableText gatekeep5 = Text.literal("It looks like you're on 2b2t. ");
+            MutableText gatekeep5 = Text.literal("It looks like you're on 2b2t. Terrain prediction can be used but new nether terrain can not be predicted on 2b2t. ");
             gatekeep5.append(suggest2b2tSeeds());
             if (!Cheesecake.settings().elytraPredictTerrain.value) {
                 gatekeep5.append(Cheesecake.settings().prefix.value + "elytraPredictTerrain is currently disabled. ");
