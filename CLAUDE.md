@@ -42,7 +42,7 @@ Set `mod_version` in `gradle.properties`, commit and push, then `git tag -a vX.Y
 - Keep upstream's structure and names so future backports diff cleanly; do not reformat files wholesale.
 - `src/schematica_api` is compile-only. CI fails the build if those classes reach the jar.
 - Documentation has one home per audience: README.md and USAGE.md for players, FEATURES.md for what the pathfinder can do, SETUP.md for developers, AI_AGENT_README.md for programs driving the bot through chat or the control socket.
-- Deliberate differences from upstream are recorded in the README's status section. Two to know about: block drops come from the loot-table JSON in the jars (`LootTableDrops`) rather than from rolling tables through a faked server, and the `CANCELED` path event fires only when a path or calculation was actually cancelled.
+- Deliberate differences from upstream are recorded in the README's status section. Three to know about: block drops come from the loot-table JSON in the jars (`LootTableDrops`) rather than from rolling tables through a faked server; the `CANCELED` path event fires only when a path or calculation was actually cancelled; and `CustomGoalProcess` lets a finishing path report `AT_GOAL` instead of cancelling it in the same tick, which is what upstream does.
 
 ## Things that cost time once
 
