@@ -23,7 +23,10 @@ import cheesecake.api.event.events.TickEvent;
 import cheesecake.api.event.listener.AbstractGameEventListener;
 import cheesecake.utils.autotest.AutoTestContext;
 import cheesecake.utils.autotest.AutoTestFailure;
+import cheesecake.utils.autotest.BuildStage;
 import cheesecake.utils.autotest.ElytraStage;
+import cheesecake.utils.autotest.FarmStage;
+import cheesecake.utils.autotest.FollowStage;
 import cheesecake.utils.autotest.MineStage;
 import cheesecake.utils.autotest.PlatformStage;
 import cheesecake.utils.autotest.PrepareStage;
@@ -59,7 +62,8 @@ import java.util.stream.Collectors;
  * it reaches the title screen and runs the stages in {@link cheesecake.utils.autotest} one after
  * another: a walk with the goal drawn as the box and then as the beacon beam, a trip driven over the
  * control socket, climbs up three kinds of vines, two {@code #mine} runs that have to count what
- * the blocks drop, and four elytra flights. Each stage builds what it needs with server commands,
+ * the blocks drop, a box built from a selection, a walk after an animal, a field harvested and
+ * replanted, and four elytra flights. Each stage builds what it needs with server commands,
  * so the run does not depend on the terrain beyond the first walk. Progress is written to standard
  * output with the {@value AutoTestContext#TAG} prefix; the final line is either {@code PASS} or
  * {@code FAIL}, and a failure also exits with status 1.
@@ -96,6 +100,9 @@ public final class CheesecakeAutoTest implements AbstractGameEventListener {
             new VineStage(VineStage.Kind.WEEPING),
             new MineStage("iron_ore", 8, Items.RAW_IRON, 3),
             new MineStage("stone", 16, Items.COBBLESTONE, -5),
+            new BuildStage(),
+            new FollowStage(),
+            new FarmStage(),
             new ElytraStage(ElytraStage.Trip.OVERWORLD_ABOVE_LIMIT),
             new ElytraStage(ElytraStage.Trip.OVERWORLD_AUTO_JUMP),
             new ElytraStage(ElytraStage.Trip.NETHER_BELOW_ROOF),
