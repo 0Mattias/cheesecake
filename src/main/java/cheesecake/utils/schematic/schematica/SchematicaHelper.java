@@ -21,8 +21,8 @@ import cheesecake.api.schematic.IStaticSchematic;
 import com.github.lunatrius.schematica.Schematica;
 import com.github.lunatrius.schematica.proxy.ClientProxy;
 import java.util.Optional;
-import net.minecraft.util.Pair;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.core.BlockPos;
+import cheesecake.api.utils.Pair;
 
 public enum SchematicaHelper {
     ;

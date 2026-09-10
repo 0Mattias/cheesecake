@@ -29,7 +29,7 @@ import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.stream.Stream;
-import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.Minecraft;
 
 public enum RelativeFile implements IDatatypePost<File, File> {
     INSTANCE;
@@ -97,8 +97,8 @@ public enum RelativeFile implements IDatatypePost<File, File> {
         return gameDir(Helper.mc);
     }
 
-    public static File gameDir(MinecraftClient mc) {
-        File gameDir = mc.runDirectory.getAbsoluteFile();
+    public static File gameDir(Minecraft mc) {
+        File gameDir = mc.gameDirectory.getAbsoluteFile();
         if (gameDir.getName().equals(".")) {
             return gameDir.getParentFile();
         }

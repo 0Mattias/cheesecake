@@ -20,7 +20,7 @@ package cheesecake.pathing.movement;
 import cheesecake.api.utils.BetterBlockPos;
 import cheesecake.pathing.movement.movements.*;
 import cheesecake.utils.pathing.MutableMoveResult;
-import net.minecraft.util.math.Direction;
+import net.minecraft.core.Direction;
 
 /**
  * An enum of all possible movements attached to all possible directions they could be taken in
@@ -31,7 +31,7 @@ public enum Moves {
     DOWNWARD(0, -1, 0) {
         @Override
         public Movement apply0(CalculationContext context, BetterBlockPos src) {
-            return new MovementDownward(context.getCheesecake(), src, src.down());
+            return new MovementDownward(context.getCheesecake(), src, src.below());
         }
 
         @Override
@@ -43,7 +43,7 @@ public enum Moves {
     PILLAR(0, +1, 0) {
         @Override
         public Movement apply0(CalculationContext context, BetterBlockPos src) {
-            return new MovementPillar(context.getCheesecake(), src, src.up());
+            return new MovementPillar(context.getCheesecake(), src, src.above());
         }
 
         @Override

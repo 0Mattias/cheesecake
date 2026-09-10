@@ -23,18 +23,6 @@ import cheesecake.utils.accessor.IPalettedContainer;
 import dev.babbaj.pathfinder.NetherPathfinder;
 import dev.babbaj.pathfinder.Octree;
 import dev.babbaj.pathfinder.PathSegment;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.Blocks;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.util.collection.PaletteStorage;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.ChunkPos;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.World;
-import net.minecraft.world.chunk.ChunkSection;
-import net.minecraft.world.chunk.Palette;
-import net.minecraft.world.chunk.PalettedContainer;
-import net.minecraft.world.chunk.WorldChunk;
 import sun.misc.Unsafe;
 
 import java.lang.ref.SoftReference;
@@ -46,6 +34,18 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+import net.minecraft.core.BlockPos;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.util.BitStorage;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.chunk.LevelChunkSection;
+import net.minecraft.world.level.chunk.Palette;
+import net.minecraft.world.level.chunk.PalettedContainer;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * @author Brady
@@ -65,7 +65,7 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
         }
     }
 
-    private static final BlockState AIR_BLOCK_STATE = Blocks.AIR.getDefaultState();
+    private static final BlockState AIR_BLOCK_STATE = Blocks.AIR.defaultBlockState();
     /**
      * Blocks in one 16x16x16 chunk section. The pathfinder stores each as a single bit.
      */
@@ -85,22 +85,22 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
     private final ExecutorService writeExecutor = Executors.newSingleThreadExecutor();
     // operations that don't make changes to the chunk cache. could use multiple threads but i'm not sure if it would cause problems.
     private final ExecutorService readExecutor = Executors.newSingleThreadExecutor();
-    private final RegistryKey<World> dimension;
+    private final ResourceKey<Level> dimension;
     final int minY;
     private final BlockStateOctreeInterface boi;
 
-    public NetherPathfinderContext(long seed, Path cache, World world) {
-        this.dimension = world.getRegistryKey();
-        this.minY = world.getDimension().minY();
+    public NetherPathfinderContext(long seed, Path cache, Level world) {
+        this.dimension = world.dimension();
+        this.minY = world.dimensionType().minY();
         final int dim;
-        if (this.dimension == World.NETHER) {
+        if (this.dimension == Level.NETHER) {
             dim = NetherPathfinder.DIMENSION_NETHER;
-        } else if (this.dimension == World.END) {
+        } else if (this.dimension == Level.END) {
             dim = NetherPathfinder.DIMENSION_END;
         } else {
             dim = NetherPathfinder.DIMENSION_OVERWORLD;
         }
-        int height = Math.min(world.getDimension().height(), 384);
+        int height = Math.min(world.dimensionType().height(), 384);
         if (!Cheesecake.settings().elytraAllowAboveRoof.value && dim == NetherPathfinder.DIMENSION_NETHER) {
             height = Math.min(height, 128);
         }
@@ -111,7 +111,7 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
     }
 
     public boolean hasChunk(ChunkPos pos) {
-        return NetherPathfinder.hasChunkFromJava(this.context, pos.x, pos.z);
+        return NetherPathfinder.hasChunkFromJava(this.context, pos.x(), pos.z());
     }
 
     public void queueCacheCulling(int chunkX, int chunkZ, int maxDistanceBlocks) {
@@ -126,18 +126,18 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
         });
     }
 
-    public void queueForPacking(final WorldChunk chunkIn) {
-        final SoftReference<WorldChunk> ref = new SoftReference<>(chunkIn);
+    public void queueForPacking(final LevelChunk chunkIn) {
+        final SoftReference<LevelChunk> ref = new SoftReference<>(chunkIn);
         this.writeExecutor.execute(() -> {
             // TODO: Prioritize packing recent chunks and/or ones that the path goes through,
             //       and prune the oldest chunks per chunkPackerQueueMaxSize
-            final WorldChunk chunk = ref.get();
+            final LevelChunk chunk = ref.get();
             if (chunk != null) {
                 writeLock.lock();
                 try {
                     // we might free this chunk
                     this.boi.chunkPtr = 0L;
-                    long ptr = NetherPathfinder.allocateAndInsertChunk(this.context, chunk.getPos().x, chunk.getPos().z);
+                    long ptr = NetherPathfinder.allocateAndInsertChunk(this.context, chunk.getPos().x(), chunk.getPos().z());
                     writeChunkData(chunk, ptr);
                 } finally {
                     writeLock.unlock();
@@ -152,12 +152,12 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
             // not inserting or deleting from the cache hashmap but it would still be bad for this function to race with itself
             writeLock.lock();
             try {
-                long ptr = NetherPathfinder.getChunk(this.context, chunkPos.x, chunkPos.z);
+                long ptr = NetherPathfinder.getChunk(this.context, chunkPos.x(), chunkPos.z());
                 if (ptr == 0) {
                     return; // this shouldn't ever happen
                 }
                 event.getBlocks().forEach(pair -> {
-                    BlockPos pos = pair.first().down(minY);
+                    BlockPos pos = pair.first().below(minY);
                     if (pos.getY() < 0 || pos.getY() >= 384) {
                         return;
                     }
@@ -172,9 +172,9 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
 
     @Override
     public CompletableFuture<UnpackedSegment> pathFindAsync(final BlockPos src, final BlockPos dst) {
-        final BlockPos adjustedSrc = src.down(minY);
-        final BlockPos adjustedDst = dst.down(minY);
-        boolean generate = Cheesecake.settings().elytraPredictTerrain.value && this.dimension == World.NETHER;
+        final BlockPos adjustedSrc = src.below(minY);
+        final BlockPos adjustedDst = dst.below(minY);
+        boolean generate = Cheesecake.settings().elytraPredictTerrain.value && this.dimension == Level.NETHER;
         Lock l = generate ? writeLock : readLock;
         ExecutorService exec = generate ? writeExecutor : readExecutor;
         return CompletableFuture.supplyAsync(() -> {
@@ -195,7 +195,7 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
                     throw new PathCalculationException("Path calculation failed");
                 }
 
-                return new UnpackedSegment(UnpackedSegment.from(segment).collect().stream().map(pos -> pos.up(minY)), segment.finished);
+                return new UnpackedSegment(UnpackedSegment.from(segment).collect().stream().map(pos -> pos.above(minY)), segment.finished);
             } finally {
                 l.unlock();
             }
@@ -229,9 +229,9 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
      * @param end   The ending point
      * @return {@code true} if there is visibility between the points
      */
-    public boolean raytrace(final Vec3d start, final Vec3d end) {
-        final Vec3d adjustedStart = start.subtract(0, this.minY, 0);
-        final Vec3d adjustedEnd = end.subtract(0, this.minY, 0);
+    public boolean raytrace(final Vec3 start, final Vec3 end) {
+        final Vec3 adjustedStart = start.subtract(0, this.minY, 0);
+        final Vec3 adjustedEnd = end.subtract(0, this.minY, 0);
         return NetherPathfinder.isVisible(this.context, NetherPathfinder.CACHE_MISS_SOLID, adjustedStart.x, adjustedStart.y, adjustedStart.z, adjustedEnd.x, adjustedEnd.y, adjustedEnd.z);
     }
 
@@ -314,16 +314,16 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
         return this.maxHeight;
     }
 
-    private static void writeChunkData(WorldChunk chunk, long chunkPtr) {
+    private static void writeChunkData(LevelChunk chunk, long chunkPtr) {
         try {
-            ChunkSection[] sections = chunk.getSectionArray();
+            LevelChunkSection[] sections = chunk.getSections();
             final int maxSections = Math.min(sections.length, 24); // pathfinder support stops at 384/16 sections
             for (int y0 = 0; y0 < maxSections; y0++) {
-                final ChunkSection section = sections[y0];
-                if (section == null || section.isEmpty()) {
+                final LevelChunkSection section = sections[y0];
+                if (section == null || section.hasOnlyAir()) {
                     continue;
                 }
-                final PalettedContainer<BlockState> bsc = section.getBlockStateContainer();
+                final PalettedContainer<BlockState> bsc = section.getStates();
                 IPalettedContainer<BlockState> accessor = (IPalettedContainer<BlockState>) bsc;
                 Palette<BlockState> palette = accessor.getPalette();
                 // Mushrooms spawn on the roof and writing them as solid will cause pages to be unnecessarily allocated.
@@ -333,14 +333,14 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
                 int redMushroomId = -1;
                 int brownMushroomId = -1;
                 for (int i = 0; i < palette.getSize(); i++) {
-                    BlockState bs = palette.get(i);
-                    if (bs == Blocks.AIR.getDefaultState()) {
+                    BlockState bs = palette.valueFor(i);
+                    if (bs == Blocks.AIR.defaultBlockState()) {
                         airId = i;
-                    } else if (bs == Blocks.CAVE_AIR.getDefaultState()) {
+                    } else if (bs == Blocks.CAVE_AIR.defaultBlockState()) {
                         caveAirId = i;
-                    } else if (bs == Blocks.RED_MUSHROOM.getDefaultState()) {
+                    } else if (bs == Blocks.RED_MUSHROOM.defaultBlockState()) {
                         redMushroomId = i;
-                    } else if (bs == Blocks.BROWN_MUSHROOM.getDefaultState()) {
+                    } else if (bs == Blocks.BROWN_MUSHROOM.defaultBlockState()) {
                         brownMushroomId = i;
                     }
                 }
@@ -350,13 +350,13 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
                     continue;
                 }
                 // pasted from FasterWorldScanner
-                final PaletteStorage array = accessor.getStorage();
+                final BitStorage array = accessor.getStorage();
                 if (array == null) {
                     continue;
                 }
-                final long[] longArray = array.getData();
+                final long[] longArray = array.getRaw();
                 final int arraySize = array.getSize();
-                int bitsPerEntry = array.getElementBits();
+                int bitsPerEntry = array.getBits();
                 long maxEntryValue = (1L << bitsPerEntry) - 1L;
 
                 final int yReal = y0 << 4;

@@ -23,16 +23,16 @@ import cheesecake.cache.CachedRegion;
 import cheesecake.cache.WorldData;
 import cheesecake.utils.accessor.IClientChunkProvider;
 import cheesecake.utils.pathing.BetterWorldBorder;
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.Blocks;
-import net.minecraft.client.world.ClientChunkManager;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.BlockView;
-import net.minecraft.world.World;
-import net.minecraft.world.chunk.ChunkSection;
-import net.minecraft.world.chunk.ChunkStatus;
-import net.minecraft.world.chunk.WorldChunk;
+import net.minecraft.client.multiplayer.ClientChunkCache;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.chunk.LevelChunkSection;
+import net.minecraft.world.level.chunk.status.ChunkStatus;
 
 /**
  * Wraps get for chuck caching capability
@@ -41,19 +41,19 @@ import net.minecraft.world.chunk.WorldChunk;
  */
 public class BlockStateInterface {
 
-    private final ClientChunkManager provider;
+    private final ClientChunkCache provider;
     private final WorldData worldData;
-    protected final World world;
-    public final BlockPos.Mutable isPassableBlockPos;
-    public final BlockView access;
+    protected final Level world;
+    public final BlockPos.MutableBlockPos isPassableBlockPos;
+    public final BlockGetter access;
     public final BetterWorldBorder worldBorder;
 
-    private WorldChunk prev = null;
+    private LevelChunk prev = null;
     private CachedRegion prevCached = null;
 
     private final boolean useTheRealWorld;
 
-    private static final BlockState AIR = Blocks.AIR.getDefaultState();
+    private static final BlockState AIR = Blocks.AIR.defaultBlockState();
 
     public BlockStateInterface(IPlayerContext ctx) {
         this(ctx, false);
@@ -64,20 +64,20 @@ public class BlockStateInterface {
         this.worldBorder = new BetterWorldBorder(world.getWorldBorder());
         this.worldData = (WorldData) ctx.worldData();
         if (copyLoadedChunks) {
-            this.provider = ((IClientChunkProvider) world.getChunkManager()).createThreadSafeCopy();
+            this.provider = ((IClientChunkProvider) world.getChunkSource()).createThreadSafeCopy();
         } else {
-            this.provider = (ClientChunkManager) world.getChunkManager();
+            this.provider = (ClientChunkCache) world.getChunkSource();
         }
         this.useTheRealWorld = !Cheesecake.settings().pathThroughCachedOnly.value;
-        if (!ctx.minecraft().isOnThread()) {
+        if (!ctx.minecraft().isSameThread()) {
             throw new IllegalStateException("BlockStateInterface must be constructed on the main thread");
         }
-        this.isPassableBlockPos = new BlockPos.Mutable();
+        this.isPassableBlockPos = new BlockPos.MutableBlockPos();
         this.access = new BlockStateInterfaceAccessWrapper(this);
     }
 
     public boolean worldContainsLoadedChunk(int blockX, int blockZ) {
-        return provider.isChunkLoaded(blockX >> 4, blockZ >> 4);
+        return provider.hasChunk(blockX >> 4, blockZ >> 4);
     }
 
     public static Block getBlock(IPlayerContext ctx, BlockPos pos) { // won't be called from the pathing thread because
@@ -98,24 +98,24 @@ public class BlockStateInterface {
     }
 
     public BlockState get0(int x, int y, int z) { // Mickey resigned
-        y -= world.getDimension().minY();
+        y -= world.dimensionType().minY();
         // Invalid vertical position
-        if (y < 0 || y >= world.getDimension().height()) {
+        if (y < 0 || y >= world.dimensionType().height()) {
             return AIR;
         }
 
         if (useTheRealWorld) {
-            WorldChunk cached = prev;
+            LevelChunk cached = prev;
             // there's great cache locality in block state lookups
             // generally it's within each movement
             // if it's the same chunk as last time
             // we can just skip the mc.world.getChunk lookup
             // which is a Long2ObjectOpenHashMap.get
             // see issue #113
-            if (cached != null && cached.getPos().x == x >> 4 && cached.getPos().z == z >> 4) {
+            if (cached != null && cached.getPos().x() == x >> 4 && cached.getPos().z() == z >> 4) {
                 return getFromChunk(cached, x, y, z);
             }
-            WorldChunk chunk = provider.getChunk(x >> 4, z >> 4, ChunkStatus.FULL, false);
+            LevelChunk chunk = provider.getChunk(x >> 4, z >> 4, ChunkStatus.FULL, false);
             if (chunk != null && !chunk.isEmpty()) {
                 prev = chunk;
                 return getFromChunk(chunk, x, y, z);
@@ -135,7 +135,7 @@ public class BlockStateInterface {
             prevCached = region;
             cached = region;
         }
-        BlockState type = cached.getBlock(x & 511, y + world.getDimension().minY(), z & 511);
+        BlockState type = cached.getBlock(x & 511, y + world.dimensionType().minY(), z & 511);
         if (type == null) {
             return AIR;
         }
@@ -143,8 +143,8 @@ public class BlockStateInterface {
     }
 
     public boolean isLoaded(int x, int z) {
-        WorldChunk prevChunk = prev;
-        if (prevChunk != null && prevChunk.getPos().x == x >> 4 && prevChunk.getPos().z == z >> 4) {
+        LevelChunk prevChunk = prev;
+        if (prevChunk != null && prevChunk.getPos().x() == x >> 4 && prevChunk.getPos().z() == z >> 4) {
             return true;
         }
         prevChunk = provider.getChunk(x >> 4, z >> 4, ChunkStatus.FULL, false);
@@ -169,9 +169,9 @@ public class BlockStateInterface {
 
     // get the block at x,y,z from this chunk WITHOUT creating a single blockpos
     // object
-    public static BlockState getFromChunk(WorldChunk chunk, int x, int y, int z) {
-        ChunkSection section = chunk.getSectionArray()[y >> 4];
-        if (section.isEmpty()) {
+    public static BlockState getFromChunk(LevelChunk chunk, int x, int y, int z) {
+        LevelChunkSection section = chunk.getSections()[y >> 4];
+        if (section.hasOnlyAir()) {
             return AIR;
         }
         return section.getBlockState(x & 15, y & 15, z & 15);

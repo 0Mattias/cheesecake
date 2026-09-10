@@ -25,7 +25,7 @@ import cheesecake.api.utils.BetterBlockPos;
 import cheesecake.utils.CheesecakeProcessHelper;
 import java.util.Collections;
 import java.util.List;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.core.BlockPos;
 
 /**
  * @author Brady

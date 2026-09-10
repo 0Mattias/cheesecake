@@ -20,7 +20,7 @@ package cheesecake.api.command.exception;
 import cheesecake.api.command.ICommand;
 import cheesecake.api.command.argument.ICommandArgument;
 import java.util.List;
-import net.minecraft.util.Formatting;
+import net.minecraft.ChatFormatting;
 
 import static cheesecake.api.utils.Helper.HELPER;
 
@@ -49,6 +49,6 @@ public interface ICommandException {
      * @param args    The arguments the command was called with.
      */
     default void handle(ICommand command, List<ICommandArgument> args) {
-        HELPER.logDirect(this.getMessage(), Formatting.RED);
+        HELPER.logDirect(this.getMessage(), ChatFormatting.RED);
     }
 }

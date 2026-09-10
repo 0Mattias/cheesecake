@@ -6,7 +6,7 @@ import cheesecake.api.selection.ISelectionManager;
 import cheesecake.api.utils.BetterBlockPos;
 import java.util.LinkedList;
 import java.util.ListIterator;
-import net.minecraft.util.math.Direction;
+import net.minecraft.core.Direction;
 
 public class SelectionManager implements ISelectionManager {
 

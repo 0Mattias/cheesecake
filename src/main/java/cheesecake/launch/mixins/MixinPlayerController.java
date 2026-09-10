@@ -18,32 +18,32 @@
 package cheesecake.launch.mixins;
 
 import cheesecake.utils.accessor.IPlayerControllerMP;
-import net.minecraft.client.network.ClientPlayerInteractionManager;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.client.multiplayer.MultiPlayerGameMode;
+import net.minecraft.core.BlockPos;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
 import org.spongepowered.asm.mixin.gen.Invoker;
 
-@Mixin(ClientPlayerInteractionManager.class)
+@Mixin(MultiPlayerGameMode.class)
 public abstract class MixinPlayerController implements IPlayerControllerMP {
 
-    @Accessor("breakingBlock")
+    @Accessor("isDestroying")
     @Override
     public abstract void setIsHittingBlock(boolean isHittingBlock);
 
-    @Accessor("breakingBlock")
+    @Accessor("isDestroying")
     @Override
     public abstract boolean isHittingBlock();
 
-    @Accessor("currentBreakingPos")
+    @Accessor("destroyBlockPos")
     @Override
     public abstract BlockPos getCurrentBlock();
 
-    @Invoker("syncSelectedSlot")
+    @Invoker("ensureHasSentCarriedItem")
     @Override
     public abstract void callSyncCurrentPlayItem();
 
-    @Accessor("blockBreakingCooldown")
+    @Accessor("destroyDelay")
     @Override
     public abstract void setDestroyDelay(int blockBreakingCooldown);
 }

@@ -20,7 +20,7 @@ package cheesecake.api.pathing.goals;
 import cheesecake.api.utils.BetterBlockPos;
 import cheesecake.api.utils.SettingsUtil;
 import cheesecake.api.utils.interfaces.IGoalRenderPos;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.core.BlockPos;
 
 /**
  * Useful if the goal is just to mine a block. This goal will be satisfied if the specified

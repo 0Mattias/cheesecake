@@ -93,7 +93,7 @@ public final class VineStage extends Stage {
         int z = p.z + DZ;
         this.bottom = new BetterBlockPos(x, p.y + 1, z);
         this.top = new BetterBlockPos(x, p.y + HEIGHT, z);
-        this.summit = this.kind == Kind.WEEPING ? this.top.down() : this.top;
+        this.summit = this.kind == Kind.WEEPING ? this.top.below() : this.top;
         switch (this.kind) {
             case VINE:
                 // The anchor sits north of the top vine only; everything below hangs free. Anchors
@@ -128,7 +128,7 @@ public final class VineStage extends Stage {
     protected boolean tick() {
         logProgress();
         if (this.goal == null) {
-            if (!commandsDone() || ticks() < 20 || !this.t.player().isOnGround()) {
+            if (!commandsDone() || ticks() < 20 || !this.t.player().onGround()) {
                 return false;
             }
             this.goal = new GoalBlock(this.summit.x, this.summit.y, this.summit.z);

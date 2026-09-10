@@ -18,9 +18,9 @@
 package cheesecake.utils.accessor;
 
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
-import net.minecraft.world.chunk.WorldChunk;
+import net.minecraft.world.level.chunk.LevelChunk;
 
 public interface IChunkProviderClient {
 
-    Long2ObjectMap<WorldChunk> loadedChunks();
+    Long2ObjectMap<LevelChunk> loadedChunks();
 }

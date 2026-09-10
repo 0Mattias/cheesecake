@@ -18,7 +18,7 @@
 package cheesecake.api.pathing.movement;
 
 import cheesecake.api.utils.BetterBlockPos;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.core.BlockPos;
 
 /**
  * @author Brady

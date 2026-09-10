@@ -22,7 +22,7 @@ import cheesecake.api.schematic.format.ISchematicFormat;
 import cheesecake.utils.schematic.format.defaults.LitematicaSchematic;
 import cheesecake.utils.schematic.format.defaults.MCEditSchematic;
 import cheesecake.utils.schematic.format.defaults.SpongeSchematic;
-import net.minecraft.nbt.NbtCompound;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtIo;
 import org.apache.commons.io.FilenameUtils;
 
@@ -48,7 +48,7 @@ public enum DefaultSchematicFormats implements ISchematicFormat {
         @Override
         public IStaticSchematic parse(InputStream input) throws IOException {
             return new MCEditSchematic(
-                    NbtIo.readCompressed(input, net.minecraft.nbt.NbtSizeTracker.ofUnlimitedBytes()));
+                    NbtIo.readCompressed(input, net.minecraft.nbt.NbtAccounter.unlimitedHeap()));
         }
     },
 
@@ -63,7 +63,7 @@ public enum DefaultSchematicFormats implements ISchematicFormat {
     SPONGE("schem") {
         @Override
         public IStaticSchematic parse(InputStream input) throws IOException {
-            NbtCompound nbt = NbtIo.readCompressed(input, net.minecraft.nbt.NbtSizeTracker.ofUnlimitedBytes());
+            CompoundTag nbt = NbtIo.readCompressed(input, net.minecraft.nbt.NbtAccounter.unlimitedHeap());
             int version = nbt.getInt("Version").orElse(0);
             switch (version) {
                 case 1:
@@ -82,7 +82,7 @@ public enum DefaultSchematicFormats implements ISchematicFormat {
     LITEMATICA("litematic") {
         @Override
         public IStaticSchematic parse(InputStream input) throws IOException {
-            NbtCompound nbt = NbtIo.readCompressed(input, net.minecraft.nbt.NbtSizeTracker.ofUnlimitedBytes());
+            CompoundTag nbt = NbtIo.readCompressed(input, net.minecraft.nbt.NbtAccounter.unlimitedHeap());
             int version = nbt.getInt("Version").orElse(0);
             switch (version) {
                 case 4: // 1.12

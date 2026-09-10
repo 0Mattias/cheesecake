@@ -17,14 +17,14 @@
 
 package cheesecake.api.utils;
 
-import net.minecraft.block.AbstractFireBlock;
-import net.minecraft.block.BlockState;
-import net.minecraft.entity.Entity;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.util.shape.VoxelShape;
-import net.minecraft.world.World;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.BaseFireBlock;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.VoxelShape;
 
 /**
  * @author Brady
@@ -42,22 +42,22 @@ public final class VecUtils {
      * @return The center of the block's bounding box
      * @see #getBlockPosCenter(BlockPos)
      */
-    public static Vec3d calculateBlockCenter(World world, BlockPos pos) {
+    public static Vec3 calculateBlockCenter(Level world, BlockPos pos) {
         BlockState b = world.getBlockState(pos);
         VoxelShape shape = b.getCollisionShape(world, pos);
         if (shape.isEmpty()) {
             return getBlockPosCenter(pos);
         }
-        double xDiff = (shape.getMin(Direction.Axis.X) + shape.getMax(Direction.Axis.X)) / 2;
-        double yDiff = (shape.getMin(Direction.Axis.Y) + shape.getMax(Direction.Axis.Y)) / 2;
-        double zDiff = (shape.getMin(Direction.Axis.Z) + shape.getMax(Direction.Axis.Z)) / 2;
+        double xDiff = (shape.min(Direction.Axis.X) + shape.max(Direction.Axis.X)) / 2;
+        double yDiff = (shape.min(Direction.Axis.Y) + shape.max(Direction.Axis.Y)) / 2;
+        double zDiff = (shape.min(Direction.Axis.Z) + shape.max(Direction.Axis.Z)) / 2;
         if (Double.isNaN(xDiff) || Double.isNaN(yDiff) || Double.isNaN(zDiff)) {
             throw new IllegalStateException(b + " " + pos + " " + shape);
         }
-        if (b.getBlock() instanceof AbstractFireBlock) {//look at bottom of fire when putting it out
+        if (b.getBlock() instanceof BaseFireBlock) {//look at bottom of fire when putting it out
             yDiff = 0;
         }
-        return new Vec3d(
+        return new Vec3(
                 pos.getX() + xDiff,
                 pos.getY() + yDiff,
                 pos.getZ() + zDiff
@@ -72,10 +72,10 @@ public final class VecUtils {
      *
      * @param pos The block position
      * @return The assumed center of the position
-     * @see #calculateBlockCenter(World, BlockPos)
+     * @see #calculateBlockCenter(Level, BlockPos)
      */
-    public static Vec3d getBlockPosCenter(BlockPos pos) {
-        return new Vec3d(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
+    public static Vec3 getBlockPosCenter(BlockPos pos) {
+        return new Vec3(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
     }
 
     /**

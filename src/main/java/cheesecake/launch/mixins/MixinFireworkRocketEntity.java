@@ -23,40 +23,40 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 
 import java.util.OptionalInt;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.EntityType;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.data.TrackedData;
-import net.minecraft.entity.projectile.FireworkRocketEntity;
-import net.minecraft.world.World;
+import net.minecraft.network.syncher.EntityDataAccessor;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityTypes;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.projectile.FireworkRocketEntity;
+import net.minecraft.world.level.Level;
 
 @Mixin(FireworkRocketEntity.class)
 public abstract class MixinFireworkRocketEntity extends Entity implements IFireworkRocketEntity {
 
     @Shadow
     @Final
-    private static TrackedData<OptionalInt> SHOOTER_ENTITY_ID;
+    private static EntityDataAccessor<OptionalInt> DATA_ATTACHED_TO_TARGET;
 
     @Shadow
-    private LivingEntity shooter;
+    private LivingEntity attachedToEntity;
 
     @Shadow
-    public abstract boolean wasShotByEntity();
+    public abstract boolean isAttachedToEntity();
 
-    private MixinFireworkRocketEntity(World world) {
-        super(EntityType.FIREWORK_ROCKET, world);
+    private MixinFireworkRocketEntity(Level world) {
+        super(EntityTypes.FIREWORK_ROCKET, world);
     }
 
     @Override
     public LivingEntity getBoostedEntity() {
-        if (this.wasShotByEntity() && this.shooter == null) { // wasShotByEntity checks if the optional
+        if (this.isAttachedToEntity() && this.attachedToEntity == null) { // wasShotByEntity checks if the optional
                                                                           // is present
-            final Entity entity = ((Entity) (Object) this).getEntityWorld()
-                    .getEntityById(this.dataTracker.get(SHOOTER_ENTITY_ID).getAsInt());
+            final Entity entity = ((Entity) (Object) this).level()
+                    .getEntity(this.entityData.get(DATA_ATTACHED_TO_TARGET).getAsInt());
             if (entity instanceof LivingEntity) {
-                this.shooter = (LivingEntity) entity;
+                this.attachedToEntity = (LivingEntity) entity;
             }
         }
-        return this.shooter;
+        return this.attachedToEntity;
     }
 }

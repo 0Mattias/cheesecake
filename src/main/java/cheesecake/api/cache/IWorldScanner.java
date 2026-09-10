@@ -20,9 +20,9 @@ package cheesecake.api.cache;
 import cheesecake.api.utils.BlockOptionalMetaLookup;
 import cheesecake.api.utils.IPlayerContext;
 import java.util.List;
-import net.minecraft.block.Block;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.ChunkPos;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.block.Block;
 
 /**
  * @author Brady

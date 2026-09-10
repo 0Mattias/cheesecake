@@ -33,17 +33,17 @@ import cheesecake.utils.BlockStateInterface;
 import com.google.common.collect.ImmutableSet;
 import java.util.Optional;
 import java.util.Set;
-import net.minecraft.block.AirBlock;
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.Blocks;
-import net.minecraft.block.CarpetBlock;
-import net.minecraft.block.DoorBlock;
-import net.minecraft.block.FenceGateBlock;
-import net.minecraft.block.SlabBlock;
-import net.minecraft.block.enums.SlabType;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.block.AirBlock;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.CarpetBlock;
+import net.minecraft.world.level.block.DoorBlock;
+import net.minecraft.world.level.block.FenceGateBlock;
+import net.minecraft.world.level.block.SlabBlock;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.SlabType;
+import net.minecraft.world.phys.Vec3;
 
 public class MovementTraverse extends Movement {
 
@@ -53,7 +53,7 @@ public class MovementTraverse extends Movement {
     private boolean wasTheBridgeBlockAlwaysThere = true;
 
     public MovementTraverse(ICheesecake cheesecake, BetterBlockPos from, BetterBlockPos to) {
-        super(cheesecake, from, to, new BetterBlockPos[]{to.up(), to}, to.down());
+        super(cheesecake, from, to, new BetterBlockPos[]{to.above(), to}, to.below());
     }
 
     @Override
@@ -142,9 +142,9 @@ public class MovementTraverse extends Movement {
                 double hardness2 = MovementHelper.getMiningDurationTicks(context, destX, y + 1, destZ, pb0, true); // only include falling on the upper block to break
                 double WC = throughWater ? context.waterWalkSpeed : WALK_ONE_BLOCK_COST;
                 for (int i = 0; i < 5; i++) {
-                    int againstX = destX + HORIZONTALS_BUT_ALSO_DOWN_____SO_EVERY_DIRECTION_EXCEPT_UP[i].getOffsetX();
-                    int againstY = y - 1 + HORIZONTALS_BUT_ALSO_DOWN_____SO_EVERY_DIRECTION_EXCEPT_UP[i].getOffsetY();
-                    int againstZ = destZ + HORIZONTALS_BUT_ALSO_DOWN_____SO_EVERY_DIRECTION_EXCEPT_UP[i].getOffsetZ();
+                    int againstX = destX + HORIZONTALS_BUT_ALSO_DOWN_____SO_EVERY_DIRECTION_EXCEPT_UP[i].getStepX();
+                    int againstY = y - 1 + HORIZONTALS_BUT_ALSO_DOWN_____SO_EVERY_DIRECTION_EXCEPT_UP[i].getStepY();
+                    int againstZ = destZ + HORIZONTALS_BUT_ALSO_DOWN_____SO_EVERY_DIRECTION_EXCEPT_UP[i].getStepZ();
                     if (againstX == x && againstZ == z) { // this would be a backplace
                         continue;
                     }
@@ -153,7 +153,7 @@ public class MovementTraverse extends Movement {
                     }
                 }
                 // now that we've checked all possible directions to side place, we actually need to backplace
-                if (srcDownBlock == Blocks.SOUL_SAND || (srcDownBlock instanceof SlabBlock && srcDown.get(SlabBlock.TYPE) != SlabType.DOUBLE)) {
+                if (srcDownBlock == Blocks.SOUL_SAND || (srcDownBlock instanceof SlabBlock && srcDown.getValue(SlabBlock.TYPE) != SlabType.DOUBLE)) {
                     return COST_INF; // can't sneak and backplace against soul sand or half slabs (regardless of whether it's top half or bottom half) =/
                 }
                 if (!standingOnABlock) { // standing on water / swimming
@@ -215,11 +215,11 @@ public class MovementTraverse extends Movement {
                     .setInput(Input.SPRINT, true);
         }
 
-        Block fd = BlockStateInterface.get(ctx, src.down()).getBlock();
+        Block fd = BlockStateInterface.get(ctx, src.below()).getBlock();
         boolean ladder = MovementHelper.isClimbable(fd);
 
         //sneak may have been set to true in the PREPPING state while mining an adjacent block, but we still want it to be true if the player is about to go on magma
-        state.setInput(Input.SNEAK, Cheesecake.settings().allowWalkOnMagmaBlocks.value && MovementHelper.steppingOnBlocks(ctx).stream().anyMatch(block -> ctx.world().getBlockState(block).isOf(Blocks.MAGMA_BLOCK)));
+        state.setInput(Input.SNEAK, Cheesecake.settings().allowWalkOnMagmaBlocks.value && MovementHelper.steppingOnBlocks(ctx).stream().anyMatch(block -> ctx.world().getBlockState(block).is(Blocks.MAGMA_BLOCK)));
 
         if (pb0.getBlock() instanceof DoorBlock || pb1.getBlock() instanceof DoorBlock) {
             boolean notPassable = pb0.getBlock() instanceof DoorBlock && !MovementHelper.isDoorPassable(ctx, src, dest) || pb1.getBlock() instanceof DoorBlock && !MovementHelper.isDoorPassable(ctx, dest, src);
@@ -232,7 +232,7 @@ public class MovementTraverse extends Movement {
         }
 
         if (pb0.getBlock() instanceof FenceGateBlock || pb1.getBlock() instanceof FenceGateBlock) {
-            BlockPos blocked = !MovementHelper.isGatePassable(ctx, positionsToBreak[0], src.up()) ? positionsToBreak[0]
+            BlockPos blocked = !MovementHelper.isGatePassable(ctx, positionsToBreak[0], src.above()) ? positionsToBreak[0]
                     : !MovementHelper.isGatePassable(ctx, positionsToBreak[1], src) ? positionsToBreak[1]
                     : null;
             if (blocked != null) {
@@ -258,24 +258,24 @@ public class MovementTraverse extends Movement {
             if (feet.equals(dest)) {
                 return state.setStatus(MovementStatus.SUCCESS);
             }
-            if (Cheesecake.settings().overshootTraverse.value && (feet.equals(dest.add(getDirection())) || feet.equals(dest.add(getDirection()).add(getDirection())))) {
+            if (Cheesecake.settings().overshootTraverse.value && (feet.equals(dest.offset(getDirection())) || feet.equals(dest.offset(getDirection()).offset(getDirection())))) {
                 return state.setStatus(MovementStatus.SUCCESS);
             }
             Block low = BlockStateInterface.get(ctx, src).getBlock();
-            Block high = BlockStateInterface.get(ctx, src.up()).getBlock();
-            if (ctx.player().getY() > src.y + 0.1D && !ctx.player().isOnGround() && (MovementHelper.isClimbable(low) || MovementHelper.isClimbable(high))) {
+            Block high = BlockStateInterface.get(ctx, src.above()).getBlock();
+            if (ctx.player().getY() > src.y + 0.1D && !ctx.player().onGround() && (MovementHelper.isClimbable(low) || MovementHelper.isClimbable(high))) {
                 // hitting W could cause us to climb the ladder instead of going forward
                 // wait until we're on the ground
                 return state;
             }
-            BlockPos into = dest.subtract(src).add(dest);
+            BlockPos into = dest.subtract(src).offset(dest);
             BlockState intoBelow = BlockStateInterface.get(ctx, into);
-            BlockState intoAbove = BlockStateInterface.get(ctx, into.up());
+            BlockState intoAbove = BlockStateInterface.get(ctx, into.above());
             if (wasTheBridgeBlockAlwaysThere && (!MovementHelper.isLiquid(ctx, feet) || Cheesecake.settings().sprintInWater.value) && (!MovementHelper.avoidWalkingInto(intoBelow) || MovementHelper.isWater(intoBelow)) && !MovementHelper.avoidWalkingInto(intoAbove)) {
                 state.setInput(Input.SPRINT, true);
             }
 
-            BlockState destDown = BlockStateInterface.get(ctx, dest.down());
+            BlockState destDown = BlockStateInterface.get(ctx, dest.below());
             if (feet.getY() != dest.getY() && ladder && MovementHelper.isClimbable(destDown.getBlock())) {
                 state.setInput(Input.JUMP, true);
             }
@@ -283,7 +283,7 @@ public class MovementTraverse extends Movement {
             return state;
         } else {
             wasTheBridgeBlockAlwaysThere = false;
-            Block standingOn = BlockStateInterface.get(ctx, feet.down()).getBlock();
+            Block standingOn = BlockStateInterface.get(ctx, feet.below()).getBlock();
             if (standingOn.equals(Blocks.SOUL_SAND) || standingOn instanceof SlabBlock) { // see issue #118
                 double dist = Math.max(Math.abs(dest.getX() + 0.5 - ctx.player().getX()), Math.abs(dest.getZ() + 0.5 - ctx.player().getZ()));
                 if (dist < 0.85) { // 0.5 + 0.3 + epsilon
@@ -293,13 +293,13 @@ public class MovementTraverse extends Movement {
                 }
             }
             double dist1 = Math.max(Math.abs(ctx.player().getX() - (dest.getX() + 0.5D)), Math.abs(ctx.player().getZ() - (dest.getZ() + 0.5D)));
-            PlaceResult p = MovementHelper.attemptToPlaceABlock(state, cheesecake, dest.down(), false, !Cheesecake.settings().assumeSafeWalk.value);
+            PlaceResult p = MovementHelper.attemptToPlaceABlock(state, cheesecake, dest.below(), false, !Cheesecake.settings().assumeSafeWalk.value);
             if ((p == PlaceResult.READY_TO_PLACE || dist1 < 0.6) && !Cheesecake.settings().assumeSafeWalk.value) {
                 state.setInput(Input.SNEAK, true);
             }
             switch (p) {
                 case READY_TO_PLACE: {
-                    if (ctx.player().isInSneakingPose() || Cheesecake.settings().assumeSafeWalk.value) {
+                    if (ctx.player().isCrouching() || Cheesecake.settings().assumeSafeWalk.value) {
                         state.setInput(Input.CLICK_RIGHT, true);
                     }
                     return state;
@@ -328,9 +328,9 @@ public class MovementTraverse extends Movement {
                 double faceY = (dest.getY() + src.getY() - 1.0D) * 0.5D;
                 double faceZ = (dest.getZ() + src.getZ() + 1.0D) * 0.5D;
                 // faceX, faceY, faceZ is the middle of the face between from and to
-                BlockPos goalLook = src.down(); // this is the block we were just standing on, and the one we want to place against
+                BlockPos goalLook = src.below(); // this is the block we were just standing on, and the one we want to place against
 
-                Rotation backToFace = RotationUtils.calcRotationFromVec3d(ctx.playerHead(), new Vec3d(faceX, faceY, faceZ), ctx.playerRotations());
+                Rotation backToFace = RotationUtils.calcRotationFromVec3d(ctx.playerHead(), new Vec3(faceX, faceY, faceZ), ctx.playerRotations());
                 float pitch = backToFace.getPitch();
                 double dist2 = Math.max(Math.abs(ctx.player().getX() - faceX), Math.abs(ctx.player().getZ() - faceZ));
                 if (dist2 < 0.29) { // see issue #208
@@ -359,13 +359,13 @@ public class MovementTraverse extends Movement {
         // if we're in the process of breaking blocks before walking forwards
         // or if this isn't a sneak place (the block is already there)
         // then it's safe to cancel this
-        return state.getStatus() != MovementStatus.RUNNING || MovementHelper.canWalkOn(ctx, dest.down());
+        return state.getStatus() != MovementStatus.RUNNING || MovementHelper.canWalkOn(ctx, dest.below());
     }
 
     @Override
     protected boolean prepared(MovementState state) {
-        if (ctx.playerFeet().equals(src) || ctx.playerFeet().equals(src.down())) {
-            Block block = BlockStateInterface.getBlock(ctx, src.down());
+        if (ctx.playerFeet().equals(src) || ctx.playerFeet().equals(src.below())) {
+            Block block = BlockStateInterface.getBlock(ctx, src.below());
             if (MovementHelper.isClimbable(block)) {
                 state.setInput(Input.SNEAK, true);
             }

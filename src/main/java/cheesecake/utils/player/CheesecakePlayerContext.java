@@ -20,11 +20,11 @@ package cheesecake.utils.player;
 import cheesecake.Cheesecake;
 import cheesecake.api.cache.IWorldData;
 import cheesecake.api.utils.*;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.entity.Entity;
-import net.minecraft.util.hit.HitResult;
-import net.minecraft.world.World;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.HitResult;
 
 /**
  * Implementation of {@link IPlayerContext} that provides information about the primary player.
@@ -35,22 +35,22 @@ import net.minecraft.world.World;
 public final class CheesecakePlayerContext implements IPlayerContext {
 
     private final Cheesecake cheesecake;
-    private final MinecraftClient mc;
+    private final Minecraft mc;
     private final IPlayerController playerController;
 
-    public CheesecakePlayerContext(Cheesecake cheesecake, MinecraftClient mc) {
+    public CheesecakePlayerContext(Cheesecake cheesecake, Minecraft mc) {
         this.cheesecake = cheesecake;
         this.mc = mc;
         this.playerController = new CheesecakePlayerController(mc);
     }
 
     @Override
-    public MinecraftClient minecraft() {
+    public Minecraft minecraft() {
         return this.mc;
     }
 
     @Override
-    public ClientPlayerEntity player() {
+    public LocalPlayer player() {
         return this.mc.player;
     }
 
@@ -60,8 +60,8 @@ public final class CheesecakePlayerContext implements IPlayerContext {
     }
 
     @Override
-    public World world() {
-        return this.mc.world;
+    public Level world() {
+        return this.mc.level;
     }
 
     @Override
@@ -72,7 +72,7 @@ public final class CheesecakePlayerContext implements IPlayerContext {
     @Override
     public BetterBlockPos viewerPos() {
         final Entity entity = this.mc.getCameraEntity();
-        return entity == null ? this.playerFeet() : BetterBlockPos.from(entity.getBlockPos());
+        return entity == null ? this.playerFeet() : BetterBlockPos.from(entity.blockPosition());
     }
 
     @Override

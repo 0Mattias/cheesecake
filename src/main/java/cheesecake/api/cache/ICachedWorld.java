@@ -18,8 +18,8 @@
 package cheesecake.api.cache;
 
 import java.util.ArrayList;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.chunk.WorldChunk;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.chunk.LevelChunk;
 
 /**
  * @author Brady
@@ -43,7 +43,7 @@ public interface ICachedWorld {
      *
      * @param chunk The chunk to pack and store
      */
-    void queueForPacking(WorldChunk chunk);
+    void queueForPacking(LevelChunk chunk);
 
     /**
      * Returns whether or not the block at the specified X and Z coordinates

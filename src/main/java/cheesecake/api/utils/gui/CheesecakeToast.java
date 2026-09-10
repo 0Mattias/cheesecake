@@ -17,15 +17,15 @@
 
 package cheesecake.api.utils.gui;
 
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.toast.SystemToast;
-import net.minecraft.text.Text;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.components.toasts.SystemToast;
+import net.minecraft.network.chat.Component;
 
 public class CheesecakeToast {
 
-    private static final SystemToast.Type CHEESECAKE_TOAST_TYPE = new SystemToast.Type(5000L);
+    private static final SystemToast.SystemToastId CHEESECAKE_TOAST_TYPE = new SystemToast.SystemToastId(5000L);
 
-    public static void addOrUpdate(Text title, Text subtitle) {
-        SystemToast.add(MinecraftClient.getInstance().getToastManager(), CHEESECAKE_TOAST_TYPE, title, subtitle);
+    public static void addOrUpdate(Component title, Component subtitle) {
+        SystemToast.add(Minecraft.getInstance().gui.toastManager(), CHEESECAKE_TOAST_TYPE, title, subtitle);
     }
 }

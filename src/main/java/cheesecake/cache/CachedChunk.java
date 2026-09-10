@@ -25,11 +25,11 @@ import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.List;
 import java.util.Map;
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.Blocks;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.dimension.DimensionType;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.dimension.DimensionType;
 
 /**
  * @author Brady
@@ -37,7 +37,8 @@ import net.minecraft.world.dimension.DimensionType;
  */
 public final class CachedChunk {
 
-    public static final ImmutableSet<Block> BLOCKS_TO_KEEP_TRACK_OF = ImmutableSet.of(
+    public static final ImmutableSet<Block> BLOCKS_TO_KEEP_TRACK_OF = new ImmutableSet.Builder<Block>()
+        .add(
             Blocks.ENDER_CHEST,
             Blocks.FURNACE,
             Blocks.CHEST,
@@ -47,22 +48,6 @@ public final class CachedChunk {
             Blocks.SPAWNER,
             Blocks.BARRIER,
             Blocks.OBSERVER,
-            Blocks.WHITE_SHULKER_BOX,
-            Blocks.ORANGE_SHULKER_BOX,
-            Blocks.MAGENTA_SHULKER_BOX,
-            Blocks.LIGHT_BLUE_SHULKER_BOX,
-            Blocks.YELLOW_SHULKER_BOX,
-            Blocks.LIME_SHULKER_BOX,
-            Blocks.PINK_SHULKER_BOX,
-            Blocks.GRAY_SHULKER_BOX,
-            Blocks.LIGHT_GRAY_SHULKER_BOX,
-            Blocks.CYAN_SHULKER_BOX,
-            Blocks.PURPLE_SHULKER_BOX,
-            Blocks.BLUE_SHULKER_BOX,
-            Blocks.BROWN_SHULKER_BOX,
-            Blocks.GREEN_SHULKER_BOX,
-            Blocks.RED_SHULKER_BOX,
-            Blocks.BLACK_SHULKER_BOX,
             Blocks.NETHER_PORTAL,
             Blocks.HOPPER,
             Blocks.BEACON,
@@ -84,29 +69,16 @@ public final class CachedChunk {
             Blocks.WITHER_SKELETON_WALL_SKULL,
             Blocks.ENCHANTING_TABLE,
             Blocks.ANVIL,
-            Blocks.WHITE_BED,
-            Blocks.ORANGE_BED,
-            Blocks.MAGENTA_BED,
-            Blocks.LIGHT_BLUE_BED,
-            Blocks.YELLOW_BED,
-            Blocks.LIME_BED,
-            Blocks.PINK_BED,
-            Blocks.GRAY_BED,
-            Blocks.LIGHT_GRAY_BED,
-            Blocks.CYAN_BED,
-            Blocks.PURPLE_BED,
-            Blocks.BLUE_BED,
-            Blocks.BROWN_BED,
-            Blocks.GREEN_BED,
-            Blocks.RED_BED,
-            Blocks.BLACK_BED,
             Blocks.DRAGON_EGG,
             Blocks.JUKEBOX,
             Blocks.END_GATEWAY,
             Blocks.COBWEB,
             Blocks.NETHER_WART,
             Blocks.LADDER,
-            Blocks.VINE);
+            Blocks.VINE
+        ).addAll(Blocks.DYED_SHULKER_BOX.asList())
+        .addAll(Blocks.BED.asList())
+        .build();
 
     public final int height;
 
@@ -216,14 +188,14 @@ public final class CachedChunk {
         if (special != null) {
             String str = special.get(index);
             if (str != null) {
-                return BlockUtils.stringToBlockRequired(str).getDefaultState();
+                return BlockUtils.stringToBlockRequired(str).defaultBlockState();
             }
         }
 
         if (type == PathingBlockType.SOLID) {
             if (y == dimension.logicalHeight() - 1 && dimension.hasCeiling()) {
                 // nether roof is always unbreakable
-                return Blocks.BEDROCK.getDefaultState();
+                return Blocks.BEDROCK.defaultBlockState();
             }
             if (y < -59 && dimension.hasSkyLight()) {
                 // solid blocks below 5 are commonly bedrock
@@ -231,7 +203,7 @@ public final class CachedChunk {
                 // discourage paths that include breaking blocks below 5 a little more heavily
                 // just so that it takes paths breaking what's known to be stone (at 5 or above)
                 // instead of what could maybe be bedrock (below 5)
-                return Blocks.OBSIDIAN.getDefaultState();
+                return Blocks.OBSIDIAN.defaultBlockState();
             }
         }
         return ChunkPacker.pathingTypeToBlock(type, dimension);

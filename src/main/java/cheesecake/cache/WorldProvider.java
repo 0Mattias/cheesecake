@@ -29,11 +29,11 @@ import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
-import net.minecraft.client.network.ServerInfo;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.Pair;
-import net.minecraft.util.WorldSavePath;
-import net.minecraft.world.World;
+import cheesecake.api.utils.Pair;
+import net.minecraft.client.multiplayer.ServerData;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.storage.LevelResource;
 
 /**
  * @author Brady
@@ -52,7 +52,7 @@ public class WorldProvider implements IWorldProvider {
      * 
      * @see #detectAndHandleBrokenLoading()
      */
-    private World mcWorld;
+    private Level mcWorld;
 
     public WorldProvider(Cheesecake cheesecake) {
         this.cheesecake = cheesecake;
@@ -70,10 +70,10 @@ public class WorldProvider implements IWorldProvider {
      *
      * @param world The new world
      */
-    public final void initWorld(World world) {
+    public final void initWorld(Level world) {
         this.getSaveDirectories(world).ifPresent(dirs -> {
-            final Path worldDir = dirs.getLeft();
-            final Path readmeDir = dirs.getRight();
+            final Path worldDir = dirs.first();
+            final Path readmeDir = dirs.second();
 
             try {
                 // lol wtf is this cheesecake folder in my minecraft save?
@@ -95,7 +95,7 @@ public class WorldProvider implements IWorldProvider {
             System.out.println("Cheesecake world data dir: " + worldDataDir);
             synchronized (worldCache) {
                 this.currentWorld = worldCache.computeIfAbsent(worldDataDir,
-                        d -> new WorldData(d, world.getDimension()));
+                        d -> new WorldData(d, world.dimensionType()));
             }
             this.mcWorld = ctx.world();
         });
@@ -111,9 +111,9 @@ public class WorldProvider implements IWorldProvider {
         world.onClose();
     }
 
-    private Path getWorldDataDirectory(Path parent, World world) {
-        Identifier dimId = world.getRegistryKey().getValue();
-        int height = world.getDimension().logicalHeight();
+    private Path getWorldDataDirectory(Path parent, Level world) {
+        Identifier dimId = world.dimension().identifier();
+        int height = world.dimensionType().logicalHeight();
         return parent.resolve(dimId.getNamespace()).resolve(dimId.getPath() + "_" + height);
     }
 
@@ -123,18 +123,18 @@ public class WorldProvider implements IWorldProvider {
      *         dir, or {@link Optional#empty()} if
      *         the world isn't valid for caching.
      */
-    private Optional<Pair<Path, Path>> getSaveDirectories(World world) {
+    private Optional<Pair<Path, Path>> getSaveDirectories(Level world) {
         Path worldDir;
         Path readmeDir;
 
         // If there is an integrated server running (Aka Singleplayer) then do magic to
         // find the world save file
-        if (ctx.minecraft().isIntegratedServerRunning()) {
-            worldDir = ctx.minecraft().getServer().getSavePath(WorldSavePath.ROOT);
+        if (ctx.minecraft().hasSingleplayerServer()) {
+            worldDir = ctx.minecraft().getSingleplayerServer().getWorldPath(LevelResource.ROOT);
 
             // Gets the "depth" of this directory relative to the game's run directory, 2 is
             // the location of the world
-            if (worldDir.relativize(ctx.minecraft().runDirectory.toPath()).getNameCount() != 2) {
+            if (worldDir.relativize(ctx.minecraft().gameDirectory.toPath()).getNameCount() != 2) {
                 // subdirectory of the main save directory for this world
                 worldDir = worldDir.getParent();
             }
@@ -143,9 +143,9 @@ public class WorldProvider implements IWorldProvider {
             readmeDir = worldDir;
         } else { // Otherwise, the server must be remote...
             String folderName;
-            final ServerInfo serverData = ctx.minecraft().getCurrentServerEntry();
+            final ServerData serverData = ctx.minecraft().getCurrentServer();
             if (serverData != null) {
-                folderName = serverData.isRealm() ? "realms" : serverData.address;
+                folderName = serverData.isRealm() ? "realms" : serverData.ip;
             } else {
                 // replaymod causes null currentServer and false singleplayer.
                 System.out.println("World seems to be a replay. Not loading Cheesecake cache.");
@@ -181,7 +181,7 @@ public class WorldProvider implements IWorldProvider {
                 initWorld(ctx.world());
             }
         } else if (this.currentWorld == null && ctx.world() != null
-                && (ctx.minecraft().isIntegratedServerRunning() || ctx.minecraft().getCurrentServerEntry() != null)) {
+                && (ctx.minecraft().hasSingleplayerServer() || ctx.minecraft().getCurrentServer() != null)) {
             System.out.println("Retrying to load Cheesecake cache");
             initWorld(ctx.world());
         }

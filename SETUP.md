@@ -5,7 +5,7 @@ This page is for building the mod from source and working on it. Installing a bu
 ## Prerequisites
 
 - Git.
-- A JDK 21. Gradle downloads everything else: Minecraft, the mappings, Fabric Loader and the libraries.
+- A JDK 25. Gradle downloads everything else: Minecraft, Fabric Loader and the libraries.
 
 ## Building
 
@@ -30,15 +30,15 @@ Everything lives in one Fabric project.
 - `src/schematica_api` holds compile-only stubs of the Litematica and Schematica APIs. They must never end up in the jar, and CI checks that they do not.
 - `src/test/java` holds the unit tests.
 
-## Mappings
+## Names
 
-The code uses Yarn mappings. Baritone uses Mojang's official names with Parchment, so a change taken from upstream needs its Minecraft symbols translated. When a name is not obvious, the mapped Minecraft jar in the Gradle cache answers it:
+Minecraft has shipped with Mojang's names since 26.1, so there are no mappings: the classes in the code are the ones in the game jar, and they are the names Baritone uses, so a change taken from upstream applies as it is apart from the package name. When a signature is not obvious, the game jar in the Gradle cache answers it:
 
 ```
-javap -cp ~/.gradle/caches/fabric-loom/minecraftMaven/net/minecraft/minecraft-merged/1.21.11-*/minecraft-merged-1.21.11-*.jar net.minecraft.world.World
+$JAVA_HOME/bin/javap -cp ~/.gradle/caches/fabric-loom/26.2/minecraft-merged.jar net.minecraft.world.level.Level
 ```
 
-The similarly named jar directly under `fabric-loom/1.21.11/` is unmapped and not useful for this.
+Up to 0.4.0 the code used Yarn mappings; the `1.21.11` branch keeps that state.
 
 ## Continuous integration
 

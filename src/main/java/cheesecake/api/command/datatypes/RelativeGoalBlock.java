@@ -22,7 +22,7 @@ import cheesecake.api.command.exception.CommandException;
 import cheesecake.api.pathing.goals.GoalBlock;
 import cheesecake.api.utils.BetterBlockPos;
 import java.util.stream.Stream;
-import net.minecraft.util.math.MathHelper;
+import net.minecraft.util.Mth;
 
 public enum RelativeGoalBlock implements IDatatypePost<GoalBlock, BetterBlockPos> {
     INSTANCE;
@@ -35,9 +35,9 @@ public enum RelativeGoalBlock implements IDatatypePost<GoalBlock, BetterBlockPos
 
         final IArgConsumer consumer = ctx.getConsumer();
         return new GoalBlock(
-                MathHelper.floor(consumer.getDatatypePost(RelativeCoordinate.INSTANCE, (double) origin.x)),
-                MathHelper.floor(consumer.getDatatypePost(RelativeCoordinate.INSTANCE, (double) origin.y)),
-                MathHelper.floor(consumer.getDatatypePost(RelativeCoordinate.INSTANCE, (double) origin.z))
+                Mth.floor(consumer.getDatatypePost(RelativeCoordinate.INSTANCE, (double) origin.x)),
+                Mth.floor(consumer.getDatatypePost(RelativeCoordinate.INSTANCE, (double) origin.y)),
+                Mth.floor(consumer.getDatatypePost(RelativeCoordinate.INSTANCE, (double) origin.z))
         );
     }
 

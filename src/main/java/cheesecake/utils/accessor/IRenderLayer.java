@@ -17,8 +17,8 @@
 
 package cheesecake.utils.accessor;
 
-import net.minecraft.client.render.RenderLayer;
-import net.minecraft.client.render.RenderSetup;
+import net.minecraft.client.renderer.rendertype.RenderSetup;
+import net.minecraft.client.renderer.rendertype.RenderType;
 
 /**
  * Exposes {@code RenderLayer.of(String, RenderSetup)}, which is not public, so that we can build our own
@@ -26,5 +26,5 @@ import net.minecraft.client.render.RenderSetup;
  */
 public interface IRenderLayer {
 
-    RenderLayer cheesecake$createRenderLayer(String name, RenderSetup setup);
+    RenderType cheesecake$createRenderLayer(String name, RenderSetup setup);
 }

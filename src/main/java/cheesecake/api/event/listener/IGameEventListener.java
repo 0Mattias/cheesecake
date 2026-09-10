@@ -18,13 +18,13 @@
 package cheesecake.api.event.listener;
 
 import cheesecake.api.event.events.*;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.DeathScreen;
-import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.client.world.ClientWorld;
-import net.minecraft.entity.Entity;
-import net.minecraft.network.packet.Packet;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.DeathScreen;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * @author Brady
@@ -36,7 +36,7 @@ public interface IGameEventListener {
      * Run once per game tick before screen input is handled.
      *
      * @param event The event
-     * @see MinecraftClient#tick()
+     * @see Minecraft#tick()
      */
     void onTick(TickEvent event);
 
@@ -44,7 +44,7 @@ public interface IGameEventListener {
      * Run once per game tick after the tick is completed
      *
      * @param event The event
-     * @see MinecraftClient#render()
+     * @see Minecraft#runTick()
      */
     void onPostTick(TickEvent event);
 
@@ -52,7 +52,7 @@ public interface IGameEventListener {
      * Run once per game tick from before and after the player rotation is sent to the server.
      *
      * @param event The event
-     * @see ClientPlayerEntity#tick()
+     * @see LocalPlayer#tick()
      */
     void onPlayerUpdate(PlayerUpdateEvent event);
 
@@ -60,7 +60,7 @@ public interface IGameEventListener {
      * Runs whenever the client player sends a message to the server.
      *
      * @param event The event
-     * @see ClientPlayerEntity#chat(String)
+     * @see LocalPlayer#chat(String)
      */
     void onSendChatMessage(ChatEvent event);
 
@@ -96,7 +96,7 @@ public interface IGameEventListener {
      * Runs before and after whenever a new world is loaded
      *
      * @param event The event
-     * @see MinecraftClient#joinWorld(ClientWorld)
+     * @see Minecraft#setLevel(ClientLevel)
      */
     void onWorldEvent(WorldEvent event);
 
@@ -121,15 +121,15 @@ public interface IGameEventListener {
      * and before and after the player jumps.
      *
      * @param event The event
-     * @see Entity#updateVelocity(float, Vec3d)
+     * @see Entity#moveRelative(float, Vec3)
      */
     void onPlayerRotationMove(RotationMoveEvent event);
 
     /**
-     * Called whenever the sprint keybind state is checked in {@link ClientPlayerEntity#tickMovement}
+     * Called whenever the sprint keybind state is checked in {@link LocalPlayer#aiStep}
      *
      * @param event The event
-     * @see ClientPlayerEntity#tickMovement()
+     * @see LocalPlayer#aiStep()
      */
     void onPlayerSprintState(SprintStateEvent event);
 

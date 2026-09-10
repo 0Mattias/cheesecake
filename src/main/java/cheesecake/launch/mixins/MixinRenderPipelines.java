@@ -19,7 +19,7 @@ package cheesecake.launch.mixins;
 
 import cheesecake.utils.accessor.IRenderPipelines;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
-import net.minecraft.client.gl.RenderPipelines;
+import net.minecraft.client.renderer.RenderPipelines;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -29,11 +29,11 @@ public class MixinRenderPipelines implements IRenderPipelines {
 
     @Final
     @Shadow
-    private static RenderPipeline.Snippet RENDERTYPE_LINES_SNIPPET;
+    private static RenderPipeline.Snippet LINES_SNIPPET;
 
     @Final
     @Shadow
-    private static RenderPipeline.Snippet TRANSFORMS_PROJECTION_FOG_SNIPPET;
+    private static RenderPipeline.Snippet MATRICES_FOG_SNIPPET;
 
     @Shadow
     private static RenderPipeline register(RenderPipeline pipeline) {
@@ -42,12 +42,12 @@ public class MixinRenderPipelines implements IRenderPipelines {
 
     @Override
     public RenderPipeline.Snippet cheesecake$getLinesSnippet() {
-        return RENDERTYPE_LINES_SNIPPET;
+        return LINES_SNIPPET;
     }
 
     @Override
-    public RenderPipeline.Snippet cheesecake$getTransformsProjectionFogSnippet() {
-        return TRANSFORMS_PROJECTION_FOG_SNIPPET;
+    public RenderPipeline.Snippet cheesecake$getMatricesFogSnippet() {
+        return MATRICES_FOG_SNIPPET;
     }
 
     @Override

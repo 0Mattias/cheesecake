@@ -29,7 +29,7 @@ import cheesecake.utils.schematic.SchematicSystem;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
-import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.Minecraft;
 
 /**
  * @author Brady
@@ -45,7 +45,7 @@ public final class CheesecakeProvider implements ICheesecakeProvider {
         this.allView = Collections.unmodifiableList(this.all);
 
         // Setup chat control, just for the primary instance
-        final Cheesecake primary = (Cheesecake) this.createCheesecake(MinecraftClient.getInstance());
+        final Cheesecake primary = (Cheesecake) this.createCheesecake(Minecraft.getInstance());
         primary.registerBehavior(ExampleCheesecakeControl::new);
     }
 
@@ -60,7 +60,7 @@ public final class CheesecakeProvider implements ICheesecakeProvider {
     }
 
     @Override
-    public synchronized ICheesecake createCheesecake(MinecraftClient minecraft) {
+    public synchronized ICheesecake createCheesecake(Minecraft minecraft) {
         ICheesecake cheesecake = this.getCheesecakeForMinecraft(minecraft);
         if (cheesecake == null) {
             this.all.add(cheesecake = new Cheesecake(minecraft));

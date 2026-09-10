@@ -21,10 +21,10 @@ import cheesecake.api.schematic.ISchematic;
 import java.io.File;
 import java.util.List;
 import java.util.Optional;
-import net.minecraft.block.BlockState;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3i;
+import net.minecraft.client.Minecraft;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Vec3i;
+import net.minecraft.world.level.block.state.BlockState;
 
 /**
  * @author Brady
@@ -53,7 +53,7 @@ public interface IBuilderProcess extends ICheesecakeProcess {
 
     @Deprecated
     default boolean build(String schematicFile, BlockPos origin) {
-        File file = new File(new File(MinecraftClient.getInstance().runDirectory, "schematics"), schematicFile);
+        File file = new File(new File(Minecraft.getInstance().gameDirectory, "schematics"), schematicFile);
         return build(schematicFile, file, origin);
     }
 

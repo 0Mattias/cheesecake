@@ -30,7 +30,7 @@ import cheesecake.api.utils.Helper;
 import java.util.Deque;
 import java.util.LinkedList;
 import java.util.stream.Stream;
-import net.minecraft.util.math.Direction;
+import net.minecraft.core.Direction;
 
 /**
  * The {@link IArgConsumer} is how {@link ICommand}s read the arguments passed to them. This class has many benefits:

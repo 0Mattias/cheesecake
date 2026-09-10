@@ -21,7 +21,7 @@ import cheesecake.api.schematic.mask.AbstractMask;
 import cheesecake.api.schematic.mask.Mask;
 import cheesecake.api.schematic.mask.StaticMask;
 import cheesecake.api.utils.BooleanBinaryOperator;
-import net.minecraft.block.BlockState;
+import net.minecraft.world.level.block.state.BlockState;
 
 /**
  * @author Brady

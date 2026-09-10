@@ -29,13 +29,13 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Stream;
-import net.minecraft.block.Block;
-import net.minecraft.registry.Registries;
-import net.minecraft.text.ClickEvent;
-import net.minecraft.text.HoverEvent;
-import net.minecraft.text.MutableText;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
+import net.minecraft.ChatFormatting;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.ClickEvent;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.HoverEvent;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.world.level.block.Block;
 
 import static cheesecake.api.command.ICheesecakeChatControl.FORCE_COMMAND_PREFIX;
 
@@ -53,16 +53,16 @@ public class FindCommand extends Command {
             toFind.add(args.getDatatypeFor(BlockById.INSTANCE));
         }
         BetterBlockPos origin = ctx.playerFeet();
-        Text[] components = toFind.stream()
+        Component[] components = toFind.stream()
                 .flatMap(block -> ctx.worldData().getCachedWorld().getLocationsOf(
-                        Registries.BLOCK.getId(block).getPath(),
+                        BuiltInRegistries.BLOCK.getKey(block).getPath(),
                         Integer.MAX_VALUE,
                         origin.x,
                         origin.y,
                         4).stream())
                 .map(BetterBlockPos::new)
                 .map(this::positionToComponent)
-                .toArray(Text[]::new);
+                .toArray(Component[]::new);
         if (components.length > 0) {
             Arrays.asList(components).forEach(this::logDirect);
         } else {
@@ -70,13 +70,13 @@ public class FindCommand extends Command {
         }
     }
 
-    private Text positionToComponent(BetterBlockPos pos) {
+    private Component positionToComponent(BetterBlockPos pos) {
         String positionText = String.format("%s %s %s", pos.x, pos.y, pos.z);
         String command = String.format("%sgoal %s", FORCE_COMMAND_PREFIX, positionText);
-        MutableText baseComponent = Text.literal(pos.toString());
-        MutableText hoverComponent = Text.literal("Click to set goal to this position");
+        MutableComponent baseComponent = Component.literal(pos.toString());
+        MutableComponent hoverComponent = Component.literal("Click to set goal to this position");
         baseComponent.setStyle(baseComponent.getStyle()
-                .withColor(Formatting.GRAY)
+                .withColor(ChatFormatting.GRAY)
                 .withInsertion(positionText)
                 .withClickEvent(new ClickEvent.RunCommand(command))
                 .withHoverEvent(new HoverEvent.ShowText(hoverComponent)));
@@ -88,7 +88,7 @@ public class FindCommand extends Command {
         return new TabCompleteHelper()
                 .append(
                         CachedChunk.BLOCKS_TO_KEEP_TRACK_OF.stream()
-                                .map(Registries.BLOCK::getId)
+                                .map(BuiltInRegistries.BLOCK::getKey)
                                 .map(Object::toString))
                 .filterPrefixNamespaced(args.getString())
                 .sortAlphabetically()

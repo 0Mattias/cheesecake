@@ -19,7 +19,7 @@ package cheesecake.api.schematic;
 
 import java.util.ArrayList;
 import java.util.List;
-import net.minecraft.block.BlockState;
+import net.minecraft.world.level.block.state.BlockState;
 
 public class CompositeSchematic extends AbstractSchematic {
 

@@ -20,18 +20,18 @@ package cheesecake.api.utils;
 import cheesecake.api.CheesecakeAPI;
 import cheesecake.api.ICheesecake;
 import java.util.Optional;
-import net.minecraft.block.AbstractFireBlock;
-import net.minecraft.block.BlockState;
-import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.entity.Entity;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.hit.HitResult;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
-import net.minecraft.util.math.MathHelper;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.util.shape.VoxelShape;
-import net.minecraft.util.shape.VoxelShapes;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.util.Mth;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.block.BaseFireBlock;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.Shapes;
+import net.minecraft.world.phys.shapes.VoxelShape;
 
 /**
  * @author Brady
@@ -56,13 +56,13 @@ public final class RotationUtils {
     /**
      * Offsets from the root block position to the center of each side.
      */
-    private static final Vec3d[] BLOCK_SIDE_MULTIPLIERS = new Vec3d[] {
-            new Vec3d(0.5, 0, 0.5), // Down
-            new Vec3d(0.5, 1, 0.5), // Up
-            new Vec3d(0.5, 0.5, 0), // North
-            new Vec3d(0.5, 0.5, 1), // South
-            new Vec3d(0, 0.5, 0.5), // West
-            new Vec3d(1, 0.5, 0.5) // East
+    private static final Vec3[] BLOCK_SIDE_MULTIPLIERS = new Vec3[] {
+            new Vec3(0.5, 0, 0.5), // Down
+            new Vec3(0.5, 1, 0.5), // Up
+            new Vec3(0.5, 0.5, 0), // North
+            new Vec3(0.5, 0.5, 1), // South
+            new Vec3(0, 0.5, 0.5), // West
+            new Vec3(1, 0.5, 0.5) // East
     };
 
     private RotationUtils() {
@@ -77,8 +77,8 @@ public final class RotationUtils {
      * @return The rotation from the origin to the destination
      */
     public static Rotation calcRotationFromCoords(BlockPos orig, BlockPos dest) {
-        return calcRotationFromVec3d(new Vec3d(orig.getX(), orig.getY(), orig.getZ()),
-                new Vec3d(dest.getX(), dest.getY(), dest.getZ()));
+        return calcRotationFromVec3d(new Vec3(orig.getX(), orig.getY(), orig.getZ()),
+                new Vec3(dest.getX(), dest.getY(), dest.getZ()));
     }
 
     /**
@@ -110,7 +110,7 @@ public final class RotationUtils {
      * @return The rotation from the origin to the destination
      * @see #wrapAnglesToRelative(Rotation, Rotation)
      */
-    public static Rotation calcRotationFromVec3d(Vec3d orig, Vec3d dest, Rotation current) {
+    public static Rotation calcRotationFromVec3d(Vec3 orig, Vec3 dest, Rotation current) {
         return wrapAnglesToRelative(current, calcRotationFromVec3d(orig, dest));
     }
 
@@ -121,11 +121,11 @@ public final class RotationUtils {
      * @param dest The destination position
      * @return The rotation from the origin to the destination
      */
-    private static Rotation calcRotationFromVec3d(Vec3d orig, Vec3d dest) {
+    private static Rotation calcRotationFromVec3d(Vec3 orig, Vec3 dest) {
         double[] delta = { orig.x - dest.x, orig.y - dest.y, orig.z - dest.z };
-        double yaw = MathHelper.atan2(delta[0], -delta[2]);
+        double yaw = Mth.atan2(delta[0], -delta[2]);
         double dist = Math.sqrt(delta[0] * delta[0] + delta[2] * delta[2]);
-        double pitch = MathHelper.atan2(delta[1], dist);
+        double pitch = Mth.atan2(delta[1], dist);
         return new Rotation(
                 (float) (yaw * RAD_TO_DEG),
                 (float) (pitch * RAD_TO_DEG));
@@ -137,16 +137,16 @@ public final class RotationUtils {
      * @param rotation The input rotation
      * @return Look vector for the rotation
      */
-    public static Vec3d calcLookDirectionFromRotation(Rotation rotation) {
-        float flatZ = MathHelper.cos((-rotation.getYaw() * DEG_TO_RAD_F) - (float) Math.PI);
-        float flatX = MathHelper.sin((-rotation.getYaw() * DEG_TO_RAD_F) - (float) Math.PI);
-        float pitchBase = -MathHelper.cos(-rotation.getPitch() * DEG_TO_RAD_F);
-        float pitchHeight = MathHelper.sin(-rotation.getPitch() * DEG_TO_RAD_F);
-        return new Vec3d(flatX * pitchBase, pitchHeight, flatZ * pitchBase);
+    public static Vec3 calcLookDirectionFromRotation(Rotation rotation) {
+        float flatZ = Mth.cos((-rotation.getYaw() * DEG_TO_RAD_F) - (float) Math.PI);
+        float flatX = Mth.sin((-rotation.getYaw() * DEG_TO_RAD_F) - (float) Math.PI);
+        float pitchBase = -Mth.cos(-rotation.getPitch() * DEG_TO_RAD_F);
+        float pitchHeight = Mth.sin(-rotation.getPitch() * DEG_TO_RAD_F);
+        return new Vec3(flatX * pitchBase, pitchHeight, flatZ * pitchBase);
     }
 
     @Deprecated
-    public static Vec3d calcVec3dFromRotation(Rotation rotation) {
+    public static Vec3 calcVec3dFromRotation(Rotation rotation) {
         return calcLookDirectionFromRotation(rotation);
     }
 
@@ -225,19 +225,19 @@ public final class RotationUtils {
         }
 
         BlockState state = ctx.world().getBlockState(pos);
-        VoxelShape shape = state.getOutlineShape(ctx.world(), pos);
+        VoxelShape shape = state.getShape(ctx.world(), pos);
         if (shape.isEmpty()) {
-            shape = VoxelShapes.fullCube();
+            shape = Shapes.block();
         }
-        for (Vec3d sideOffset : BLOCK_SIDE_MULTIPLIERS) {
-            double xDiff = shape.getMin(Direction.Axis.X) * sideOffset.x
-                    + shape.getMax(Direction.Axis.X) * (1 - sideOffset.x);
-            double yDiff = shape.getMin(Direction.Axis.Y) * sideOffset.y
-                    + shape.getMax(Direction.Axis.Y) * (1 - sideOffset.y);
-            double zDiff = shape.getMin(Direction.Axis.Z) * sideOffset.z
-                    + shape.getMax(Direction.Axis.Z) * (1 - sideOffset.z);
+        for (Vec3 sideOffset : BLOCK_SIDE_MULTIPLIERS) {
+            double xDiff = shape.min(Direction.Axis.X) * sideOffset.x
+                    + shape.max(Direction.Axis.X) * (1 - sideOffset.x);
+            double yDiff = shape.min(Direction.Axis.Y) * sideOffset.y
+                    + shape.max(Direction.Axis.Y) * (1 - sideOffset.y);
+            double zDiff = shape.min(Direction.Axis.Z) * sideOffset.z
+                    + shape.max(Direction.Axis.Z) * (1 - sideOffset.z);
             possibleRotation = reachableOffset(ctx, pos,
-                    new Vec3d(pos.getX(), pos.getY(), pos.getZ()).add(xDiff, yDiff, zDiff), blockReachDistance,
+                    new Vec3(pos.getX(), pos.getY(), pos.getZ()).add(xDiff, yDiff, zDiff), blockReachDistance,
                     wouldSneak);
             if (possibleRotation.isPresent()) {
                 return possibleRotation;
@@ -258,10 +258,10 @@ public final class RotationUtils {
      * @param blockReachDistance The block reach distance of the entity
      * @return The optional rotation
      */
-    public static Optional<Rotation> reachableOffset(IPlayerContext ctx, BlockPos pos, Vec3d offsetPos,
+    public static Optional<Rotation> reachableOffset(IPlayerContext ctx, BlockPos pos, Vec3 offsetPos,
             double blockReachDistance, boolean wouldSneak) {
-        Vec3d eyes = wouldSneak ? RayTraceUtils.inferSneakingEyePosition(ctx.player())
-                : ctx.player().getCameraPosVec(1.0F);
+        Vec3 eyes = wouldSneak ? RayTraceUtils.inferSneakingEyePosition(ctx.player())
+                : ctx.player().getEyePosition(1.0F);
         Rotation rotation = calcRotationFromVec3d(eyes, offsetPos, ctx.playerRotations());
         Rotation actualRotation = CheesecakeAPI.getProvider().getCheesecakeForPlayer(ctx.player()).getLookBehavior()
                 .getAimProcessor().peekRotation(rotation);
@@ -271,8 +271,8 @@ public final class RotationUtils {
             if (((BlockHitResult) result).getBlockPos().equals(pos)) {
                 return Optional.of(rotation);
             }
-            if (ctx.world().getBlockState(pos).getBlock() instanceof AbstractFireBlock
-                    && ((BlockHitResult) result).getBlockPos().equals(pos.down())) {
+            if (ctx.world().getBlockState(pos).getBlock() instanceof BaseFireBlock
+                    && ((BlockHitResult) result).getBlockPos().equals(pos.below())) {
                 return Optional.of(rotation);
             }
         }
@@ -296,12 +296,12 @@ public final class RotationUtils {
     }
 
     @Deprecated
-    public static Optional<Rotation> reachable(ClientPlayerEntity entity, BlockPos pos, double blockReachDistance) {
+    public static Optional<Rotation> reachable(LocalPlayer entity, BlockPos pos, double blockReachDistance) {
         return reachable(entity, pos, blockReachDistance, false);
     }
 
     @Deprecated
-    public static Optional<Rotation> reachable(ClientPlayerEntity entity, BlockPos pos, double blockReachDistance,
+    public static Optional<Rotation> reachable(LocalPlayer entity, BlockPos pos, double blockReachDistance,
             boolean wouldSneak) {
         ICheesecake cheesecake = CheesecakeAPI.getProvider().getCheesecakeForPlayer(entity);
         IPlayerContext ctx = cheesecake.getPlayerContext();
@@ -309,18 +309,18 @@ public final class RotationUtils {
     }
 
     @Deprecated
-    public static Optional<Rotation> reachableOffset(Entity entity, BlockPos pos, Vec3d offsetPos,
+    public static Optional<Rotation> reachableOffset(Entity entity, BlockPos pos, Vec3 offsetPos,
             double blockReachDistance, boolean wouldSneak) {
-        Vec3d eyes = wouldSneak ? RayTraceUtils.inferSneakingEyePosition(entity) : entity.getCameraPosVec(1.0F);
-        Rotation rotation = calcRotationFromVec3d(eyes, offsetPos, new Rotation(entity.getYaw(), entity.getPitch()));
+        Vec3 eyes = wouldSneak ? RayTraceUtils.inferSneakingEyePosition(entity) : entity.getEyePosition(1.0F);
+        Rotation rotation = calcRotationFromVec3d(eyes, offsetPos, new Rotation(entity.getYRot(), entity.getXRot()));
         HitResult result = RayTraceUtils.rayTraceTowards(entity, rotation, blockReachDistance, wouldSneak);
         // System.out.println(result);
         if (result != null && result.getType() == HitResult.Type.BLOCK) {
             if (((BlockHitResult) result).getBlockPos().equals(pos)) {
                 return Optional.of(rotation);
             }
-            if (entity.getEntityWorld().getBlockState(pos).getBlock() instanceof AbstractFireBlock
-                    && ((BlockHitResult) result).getBlockPos().equals(pos.down())) {
+            if (entity.level().getBlockState(pos).getBlock() instanceof BaseFireBlock
+                    && ((BlockHitResult) result).getBlockPos().equals(pos.below())) {
                 return Optional.of(rotation);
             }
         }
@@ -330,7 +330,7 @@ public final class RotationUtils {
     @Deprecated
     public static Optional<Rotation> reachableCenter(Entity entity, BlockPos pos, double blockReachDistance,
             boolean wouldSneak) {
-        return reachableOffset(entity, pos, VecUtils.calculateBlockCenter(entity.getEntityWorld(), pos),
+        return reachableOffset(entity, pos, VecUtils.calculateBlockCenter(entity.level(), pos),
                 blockReachDistance,
                 wouldSneak);
     }

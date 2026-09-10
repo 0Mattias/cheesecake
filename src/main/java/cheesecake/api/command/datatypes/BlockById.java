@@ -20,18 +20,18 @@ package cheesecake.api.command.datatypes;
 import cheesecake.api.command.exception.CommandException;
 import cheesecake.api.command.helpers.TabCompleteHelper;
 import java.util.stream.Stream;
-import net.minecraft.block.Block;
-import net.minecraft.registry.Registries;
-import net.minecraft.util.Identifier;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.level.block.Block;
 
 public enum BlockById implements IDatatypeFor<Block> {
     INSTANCE;
 
     @Override
     public Block get(IDatatypeContext ctx) throws CommandException {
-        Identifier id = Identifier.of(ctx.getConsumer().getString());
+        Identifier id = Identifier.parse(ctx.getConsumer().getString());
         Block block;
-        if ((block = Registries.BLOCK.getOptionalValue(id).orElse(null)) == null) {
+        if ((block = BuiltInRegistries.BLOCK.getOptional(id).orElse(null)) == null) {
             throw new IllegalArgumentException("no block found by that id");
         }
         return block;
@@ -43,7 +43,7 @@ public enum BlockById implements IDatatypeFor<Block> {
 
         return new TabCompleteHelper()
                 .append(
-                        Registries.BLOCK.getIds()
+                        BuiltInRegistries.BLOCK.keySet()
                                 .stream()
                                 .map(Object::toString))
                 .filterPrefixNamespaced(arg)

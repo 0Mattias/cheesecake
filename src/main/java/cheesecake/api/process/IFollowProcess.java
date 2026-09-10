@@ -19,8 +19,8 @@ package cheesecake.api.process;
 
 import java.util.List;
 import java.util.function.Predicate;
-import net.minecraft.entity.Entity;
-import net.minecraft.item.ItemStack;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.item.ItemStack;
 
 /**
  * @author Brady

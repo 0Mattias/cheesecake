@@ -18,10 +18,11 @@
 
 package cheesecake.process.elytra;
 
-import net.minecraft.util.math.Box;
 import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
+
+import net.minecraft.world.phys.AABB;
 
 /**
  * Tests for Box collision volume behavior in elytra flight simulation.
@@ -37,8 +38,8 @@ public class ElytraHitboxTest {
      */
     @Test
     public void testPositiveMotionVectors() {
-        Box hitbox = new Box(0, 0, 0, 0.6, 1.8, 0.6);
-        Box expanded = hitbox.stretch(2, 0, 3);
+        AABB hitbox = new AABB(0, 0, 0, 0.6, 1.8, 0.6);
+        AABB expanded = hitbox.expandTowards(2, 0, 3);
 
         // Expanded box should cover start and end positions
         assertTrue("minX should be at or below start", expanded.minX <= hitbox.minX);
@@ -62,8 +63,8 @@ public class ElytraHitboxTest {
      */
     @Test
     public void testZeroMotionAxis() {
-        Box hitbox = new Box(0, 0, 0, 0.6, 1.8, 0.6);
-        Box expanded = hitbox.stretch(2, 0, 0);
+        AABB hitbox = new AABB(0, 0, 0, 0.6, 1.8, 0.6);
+        AABB expanded = hitbox.expandTowards(2, 0, 0);
 
         // X should extend
         assertTrue("maxX should extend", expanded.maxX >= hitbox.maxX + 2);
@@ -87,8 +88,8 @@ public class ElytraHitboxTest {
      */
     @Test
     public void testNegativeMotionVectors() {
-        Box hitbox = new Box(5, 10, 5, 5.6, 11.8, 5.6);
-        Box expanded = hitbox.stretch(-2, -1, -3);
+        AABB hitbox = new AABB(5, 10, 5, 5.6, 11.8, 5.6);
+        AABB expanded = hitbox.expandTowards(-2, -1, -3);
 
         // Should extend toward negative
         assertTrue("minX should decrease", expanded.minX < hitbox.minX);
@@ -107,8 +108,8 @@ public class ElytraHitboxTest {
      */
     @Test
     public void testMixedMotionVectors() {
-        Box hitbox = new Box(0, 5, 0, 0.6, 6.8, 0.6);
-        Box expanded = hitbox.stretch(2, -1, 0);
+        AABB hitbox = new AABB(0, 5, 0, 0.6, 6.8, 0.6);
+        AABB expanded = hitbox.expandTowards(2, -1, 0);
 
         // X extends positive
         assertTrue("maxX extends positive", expanded.maxX >= hitbox.maxX + 2);
@@ -133,22 +134,22 @@ public class ElytraHitboxTest {
      */
     @Test
     public void testExpandTowardsWithSafetyPadding() {
-        Box hitbox = new Box(0, 0, 0, 0.6, 1.8, 0.6);
+        AABB hitbox = new AABB(0, 0, 0, 0.6, 1.8, 0.6);
 
         // Positive motion
-        Box posMotion = hitbox.stretch(2, 0, 3).expand(0.01);
+        AABB posMotion = hitbox.expandTowards(2, 0, 3).inflate(0.01);
         assertTrue("Positive: minX < maxX", posMotion.minX < posMotion.maxX);
         assertTrue("Positive: minY < maxY", posMotion.minY < posMotion.maxY);
         assertTrue("Positive: minZ < maxZ", posMotion.minZ < posMotion.maxZ);
 
         // Negative motion
-        Box negMotion = hitbox.stretch(-2, -1, -3).expand(0.01);
+        AABB negMotion = hitbox.expandTowards(-2, -1, -3).inflate(0.01);
         assertTrue("Negative: minX < maxX", negMotion.minX < negMotion.maxX);
         assertTrue("Negative: minY < maxY", negMotion.minY < negMotion.maxY);
         assertTrue("Negative: minZ < maxZ", negMotion.minZ < negMotion.maxZ);
 
         // Zero motion
-        Box zeroMotion = hitbox.stretch(0, 0, 0).expand(0.01);
+        AABB zeroMotion = hitbox.expandTowards(0, 0, 0).inflate(0.01);
         assertTrue("Zero: minX < maxX", zeroMotion.minX < zeroMotion.maxX);
         assertTrue("Zero: minY < maxY", zeroMotion.minY < zeroMotion.maxY);
         assertTrue("Zero: minZ < maxZ", zeroMotion.minZ < zeroMotion.maxZ);

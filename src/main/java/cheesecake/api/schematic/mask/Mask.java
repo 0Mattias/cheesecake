@@ -20,7 +20,7 @@ package cheesecake.api.schematic.mask;
 import cheesecake.api.schematic.mask.operator.BinaryOperatorMask;
 import cheesecake.api.schematic.mask.operator.NotMask;
 import cheesecake.api.utils.BooleanBinaryOperators;
-import net.minecraft.block.BlockState;
+import net.minecraft.world.level.block.state.BlockState;
 
 /**
  * @author Brady

@@ -33,7 +33,7 @@ import cheesecake.command.defaults.DefaultCommands;
 import java.util.List;
 import java.util.Locale;
 import java.util.stream.Stream;
-import net.minecraft.util.Pair;
+import cheesecake.api.utils.Pair;
 
 
 /**
@@ -95,8 +95,8 @@ public class CommandManager implements ICommandManager {
     @Override
     public Stream<String> tabComplete(String prefix) {
         Pair<String, List<ICommandArgument>> pair = expand(prefix, true);
-        String label = pair.getLeft();
-        List<ICommandArgument> args = pair.getRight();
+        String label = pair.first();
+        List<ICommandArgument> args = pair.second();
         if (args.isEmpty()) {
             return new TabCompleteHelper()
                     .addCommands(this.cheesecake.getCommandManager())
@@ -108,8 +108,8 @@ public class CommandManager implements ICommandManager {
     }
 
     private ExecutionWrapper from(Pair<String, List<ICommandArgument>> expanded) {
-        String label = expanded.getLeft();
-        ArgConsumer args = new ArgConsumer(this, expanded.getRight());
+        String label = expanded.first();
+        ArgConsumer args = new ArgConsumer(this, expanded.second());
 
         ICommand command = this.getCommand(label);
         return command == null ? null : new ExecutionWrapper(command, label, args);

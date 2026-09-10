@@ -19,13 +19,13 @@ package cheesecake.pathing.precompute;
 
 import cheesecake.pathing.movement.MovementHelper;
 import cheesecake.utils.BlockStateInterface;
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockState;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
 
 @SuppressWarnings({"incomplete-switch"})
 public class PrecomputedData {
 
-    private final byte[] data = new byte[Block.STATE_IDS.size()];
+    private final byte[] data = new byte[Block.BLOCK_STATE_REGISTRY.size()];
 
     /**
      * byte layout
@@ -71,7 +71,7 @@ public class PrecomputedData {
     }
 
     public boolean canWalkOn(BlockStateInterface bsi, int x, int y, int z, BlockState state) {
-        int id = Block.STATE_IDS.getRawId(state);
+        int id = Block.BLOCK_STATE_REGISTRY.getId(state);
         int blockData = data[id];
 
         if ((blockData & COMPLETED_MASK) == 0) { // we need to fill in the data
@@ -86,7 +86,7 @@ public class PrecomputedData {
     }
 
     public boolean canWalkThrough(BlockStateInterface bsi, int x, int y, int z, BlockState state) {
-        int id = Block.STATE_IDS.getRawId(state);
+        int id = Block.BLOCK_STATE_REGISTRY.getId(state);
         int blockData = data[id];
 
         if ((blockData & COMPLETED_MASK) == 0) { // we need to fill in the data
@@ -101,7 +101,7 @@ public class PrecomputedData {
     }
 
     public boolean fullyPassable(BlockStateInterface bsi, int x, int y, int z, BlockState state) {
-        int id = Block.STATE_IDS.getRawId(state);
+        int id = Block.BLOCK_STATE_REGISTRY.getId(state);
         int blockData = data[id];
 
         if ((blockData & COMPLETED_MASK) == 0) { // we need to fill in the data

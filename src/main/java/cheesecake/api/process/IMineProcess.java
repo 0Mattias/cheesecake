@@ -20,7 +20,7 @@ package cheesecake.api.process;
 import cheesecake.api.utils.BlockOptionalMeta;
 import cheesecake.api.utils.BlockOptionalMetaLookup;
 import java.util.stream.Stream;
-import net.minecraft.block.Block;
+import net.minecraft.world.level.block.Block;
 
 /**
  * @author Brady

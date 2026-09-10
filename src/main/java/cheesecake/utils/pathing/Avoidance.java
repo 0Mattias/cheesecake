@@ -24,11 +24,11 @@ import it.unimi.dsi.fastutil.longs.Long2DoubleOpenHashMap;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import net.minecraft.entity.mob.EndermanEntity;
-import net.minecraft.entity.mob.MobEntity;
-import net.minecraft.entity.mob.SpiderEntity;
-import net.minecraft.entity.mob.ZombifiedPiglinEntity;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.monster.EnderMan;
+import net.minecraft.world.entity.monster.spider.Spider;
+import net.minecraft.world.entity.monster.zombie.ZombifiedPiglin;
 
 @SuppressWarnings({"deprecation"})
 public class Avoidance {
@@ -73,11 +73,11 @@ public class Avoidance {
         }
         if (mobCoeff != 1.0D) {
             ctx.entitiesStream()
-                    .filter(entity -> entity instanceof MobEntity)
-                    .filter(entity -> (!(entity instanceof SpiderEntity)) || ctx.player().getBrightnessAtEyes() < 0.5)
-                    .filter(entity -> !(entity instanceof ZombifiedPiglinEntity) || ((ZombifiedPiglinEntity) entity).getAttacker() != null)
-                    .filter(entity -> !(entity instanceof EndermanEntity) || ((EndermanEntity) entity).isAngry())
-                    .forEach(entity -> res.add(new Avoidance(entity.getBlockPos(), mobCoeff, Cheesecake.settings().mobAvoidanceRadius.value)));
+                    .filter(entity -> entity instanceof Mob)
+                    .filter(entity -> (!(entity instanceof Spider)) || ctx.player().getLightLevelDependentMagicValue() < 0.5)
+                    .filter(entity -> !(entity instanceof ZombifiedPiglin) || ((ZombifiedPiglin) entity).getLastHurtByMob() != null)
+                    .filter(entity -> !(entity instanceof EnderMan) || ((EnderMan) entity).isCreepy())
+                    .forEach(entity -> res.add(new Avoidance(entity.blockPosition(), mobCoeff, Cheesecake.settings().mobAvoidanceRadius.value)));
         }
         return res;
     }

@@ -26,8 +26,8 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 
 import java.net.URI;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.text.ClickEvent;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.ClickEvent;
 
 import static cheesecake.api.command.ICheesecakeChatControl.FORCE_COMMAND_PREFIX;
 
@@ -36,11 +36,11 @@ public abstract class MixinScreen implements IGuiScreen {
 
     @Override
     public void openLinkInvoker(URI url) {
-        net.minecraft.util.Util.getOperatingSystem().open(url);
+        net.minecraft.util.Util.getPlatform().openUri(url);
     }
 
-    @Inject(method = "handleClickEvent", at = @At("HEAD"), cancellable = true)
-    private static void handleCustomClickEvent(ClickEvent clickEvent, net.minecraft.client.MinecraftClient client,
+    @Inject(method = "defaultHandleGameClickEvent", at = @At("HEAD"), cancellable = true)
+    private static void handleCustomClickEvent(ClickEvent clickEvent, net.minecraft.client.Minecraft client,
             Screen screen, org.spongepowered.asm.mixin.injection.callback.CallbackInfo ci) {
         if (clickEvent == null) {
             return;

@@ -21,27 +21,27 @@ import cheesecake.Cheesecake;
 import cheesecake.api.event.events.TickEvent;
 import cheesecake.api.utils.Helper;
 import cheesecake.utils.ToolSet;
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.Blocks;
-import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.item.BlockItem;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemPlacementContext;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.ItemUsageContext;
-import net.minecraft.screen.slot.SlotActionType;
-import net.minecraft.util.Hand;
-import net.minecraft.util.collection.DefaultedList;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.math.Direction;
-import net.minecraft.util.math.Vec3d;
 // import net.minecraft.item.Item;
 // import net.minecraft.item.Item;
 import java.util.ArrayList;
 import java.util.OptionalInt;
 import java.util.Random;
 import java.util.function.Predicate;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.core.Direction;
+import net.minecraft.core.NonNullList;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.context.BlockPlaceContext;
+import net.minecraft.world.item.context.UseOnContext;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.Vec3;
 
 public final class InventoryBehavior extends Behavior implements Helper {
 
@@ -61,7 +61,7 @@ public final class InventoryBehavior extends Behavior implements Helper {
         if (event.getType() == TickEvent.Type.OUT) {
             return;
         }
-        if (ctx.player().currentScreenHandler != ctx.player().playerScreenHandler) {
+        if (ctx.player().containerMenu != ctx.player().inventoryMenu) {
             // we have a crafting table or a chest or something open
             return;
         }
@@ -94,7 +94,7 @@ public final class InventoryBehavior extends Behavior implements Helper {
         // we're using 0 and 8 for pickaxe and throwaway
         ArrayList<Integer> candidates = new ArrayList<>();
         for (int i = 1; i < 8; i++) {
-            if (ctx.player().getInventory().getMainStacks().get(i).isEmpty() && !disallowedHotbar.test(i)) {
+            if (ctx.player().getInventory().getNonEquipmentItems().get(i).isEmpty() && !disallowedHotbar.test(i)) {
                 candidates.add(i);
             }
         }
@@ -123,15 +123,15 @@ public final class InventoryBehavior extends Behavior implements Helper {
             logDebug("Inventory move requested but delaying until stationary");
             return false;
         }
-        ctx.playerController().windowClick(ctx.player().playerScreenHandler.syncId,
-                inInventory < 9 ? inInventory + 36 : inInventory, inHotbar, SlotActionType.SWAP, ctx.player());
+        ctx.playerController().windowClick(ctx.player().inventoryMenu.containerId,
+                inInventory < 9 ? inInventory + 36 : inInventory, inHotbar, ContainerInput.SWAP, ctx.player());
         ticksSinceLastInventoryMove = 0;
         lastTickRequestedMove = null;
         return true;
     }
 
     private int firstValidThrowaway() { // TODO offhand idk
-        DefaultedList<ItemStack> invy = ctx.player().getInventory().getMainStacks();
+        NonNullList<ItemStack> invy = ctx.player().getInventory().getNonEquipmentItems();
         for (int i = 0; i < invy.size(); i++) {
             if (Cheesecake.settings().acceptableThrowawayItems.value.contains(invy.get(i).getItem())) {
                 return i;
@@ -141,7 +141,7 @@ public final class InventoryBehavior extends Behavior implements Helper {
     }
 
     private int bestToolAgainst(Block against, Class<? extends Item> cla$$) {
-        DefaultedList<ItemStack> invy = ctx.player().getInventory().getMainStacks();
+        NonNullList<ItemStack> invy = ctx.player().getInventory().getNonEquipmentItems();
         int bestInd = -1;
         double bestSpeed = -1;
         for (int i = 0; i < invy.size(); i++) {
@@ -150,12 +150,12 @@ public final class InventoryBehavior extends Behavior implements Helper {
                 continue;
             }
             if (Cheesecake.settings().itemSaver.value
-                    && (stack.getDamage() + Cheesecake.settings().itemSaverThreshold.value) >= stack.getMaxDamage()
+                    && (stack.getDamageValue() + Cheesecake.settings().itemSaverThreshold.value) >= stack.getMaxDamage()
                     && stack.getMaxDamage() > 1) {
                 continue;
             }
             if (cla$$.isInstance(stack.getItem())) {
-                double speed = ToolSet.calculateSpeedVsBlock(stack, against.getDefaultState()); // takes into account
+                double speed = ToolSet.calculateSpeedVsBlock(stack, against.defaultBlockState()); // takes into account
                                                                                                 // enchants
                 if (speed > bestSpeed) {
                     bestSpeed = speed;
@@ -179,10 +179,10 @@ public final class InventoryBehavior extends Behavior implements Helper {
         BlockState maybe = cheesecake.getBuilderProcess().placeAt(x, y, z, cheesecake.bsi.get0(x, y, z));
         if (maybe != null && throwaway(select,
                 stack -> stack.getItem() instanceof BlockItem && maybe.equals(((BlockItem) stack.getItem()).getBlock()
-                        .getPlacementState(new ItemPlacementContext(new ItemUsageContext(ctx.world(), ctx.player(),
-                                Hand.MAIN_HAND, stack,
+                        .getStateForPlacement(new BlockPlaceContext(new UseOnContext(ctx.world(), ctx.player(),
+                                InteractionHand.MAIN_HAND, stack,
                                 new BlockHitResult(
-                                        new Vec3d(ctx.player().getX(), ctx.player().getY(), ctx.player().getZ()),
+                                        new Vec3(ctx.player().getX(), ctx.player().getY(), ctx.player().getZ()),
                                         Direction.UP, ctx.playerFeet(), false)) {
                         }))))) {
             return true; // gotem
@@ -204,8 +204,8 @@ public final class InventoryBehavior extends Behavior implements Helper {
     }
 
     public boolean throwaway(boolean select, Predicate<? super ItemStack> desired, boolean allowInventory) {
-        ClientPlayerEntity p = ctx.player();
-        DefaultedList<ItemStack> inv = p.getInventory().getMainStacks();
+        LocalPlayer p = ctx.player();
+        NonNullList<ItemStack> inv = p.getInventory().getNonEquipmentItems();
         for (int i = 0; i < 9; i++) {
             ItemStack item = inv.get(i);
             // this usage of settings() is okay because it's only called once during pathing
@@ -221,7 +221,7 @@ public final class InventoryBehavior extends Behavior implements Helper {
                 return true;
             }
         }
-        if (desired.test(p.getOffHandStack())) {
+        if (desired.test(p.getOffhandItem())) {
             // main hand takes precedence over off hand
             // that means that if we have block A selected in main hand and block B in off
             // hand, right clicking places block B

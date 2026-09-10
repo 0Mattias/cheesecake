@@ -18,12 +18,12 @@
 package cheesecake.utils.schematic.format.defaults;
 
 import cheesecake.utils.schematic.StaticSchematic;
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockState;
-import net.minecraft.datafixer.fix.ItemIdFix;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.registry.Registries;
-import net.minecraft.util.Identifier;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.resources.Identifier;
+import net.minecraft.util.datafix.fixes.ItemIdFix;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
 
 /**
  * @author Brady
@@ -31,7 +31,7 @@ import net.minecraft.util.Identifier;
  */
 public final class MCEditSchematic extends StaticSchematic {
 
-    public MCEditSchematic(NbtCompound schematic) {
+    public MCEditSchematic(CompoundTag schematic) {
         String type = schematic.getString("Materials").orElse("");
         if (!type.equals("Alpha")) {
             throw new IllegalStateException("bad schematic " + type);
@@ -62,11 +62,11 @@ public final class MCEditSchematic extends StaticSchematic {
                         // additional is 0 through 15 inclusive since it's & 0xF above
                         blockID |= additional[blockInd] << 8;
                     }
-                    Block block = Registries.BLOCK.getEntry(Identifier.tryParse(ItemIdFix.fromId(blockID)))
-                            .map(ref -> ref.value()).orElse(net.minecraft.block.Blocks.AIR);
+                    Block block = BuiltInRegistries.BLOCK.get(Identifier.tryParse(ItemIdFix.getItem(blockID)))
+                            .map(ref -> ref.value()).orElse(net.minecraft.world.level.block.Blocks.AIR);
                     // int meta = metadata[blockInd] & 0xFF;
                     // this.states[x][z][y] = block.getStateFromMeta(meta);
-                    this.states[x][z][y] = block.getDefaultState();
+                    this.states[x][z][y] = block.defaultBlockState();
                 }
             }
         }

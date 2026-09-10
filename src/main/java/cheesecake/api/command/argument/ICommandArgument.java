@@ -19,7 +19,7 @@ package cheesecake.api.command.argument;
 
 import cheesecake.api.command.argparser.IArgParser;
 import cheesecake.api.command.exception.CommandInvalidTypeException;
-import net.minecraft.util.math.Direction;
+import net.minecraft.core.Direction;
 
 /**
  * A {@link ICommandArgument} is an immutable object representing one command argument. It contains data on the index of

@@ -42,7 +42,7 @@ import java.util.Comparator;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.LinkedBlockingQueue;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.core.BlockPos;
 
 public final class PathingBehavior extends Behavior implements IPathingBehavior, Helper {
 
@@ -158,7 +158,7 @@ public final class PathingBehavior extends Behavior implements IPathingBehavior,
                     queuePathEvent(PathEvent.AT_GOAL);
                     next = null;
                     if (Cheesecake.settings().disconnectOnArrival.value) {
-                        ctx.player().networkHandler.getConnection().disconnect(net.minecraft.text.Text.literal("Disconnected by Baritone"));
+                        ctx.player().connection.getConnection().disconnect(net.minecraft.network.chat.Component.literal("Disconnected by Baritone"));
                     }
                     return;
                 }
@@ -239,11 +239,11 @@ public final class PathingBehavior extends Behavior implements IPathingBehavior,
         if (current != null) {
             switch (event.getState()) {
                 case PRE:
-                    lastAutoJump = ctx.minecraft().options.getAutoJump().getValue();
-                    ctx.minecraft().options.getAutoJump().setValue(false);
+                    lastAutoJump = ctx.minecraft().options.autoJump().get();
+                    ctx.minecraft().options.autoJump().set(false);
                     break;
                 case POST:
-                    ctx.minecraft().options.getAutoJump().setValue(lastAutoJump);
+                    ctx.minecraft().options.autoJump().set(lastAutoJump);
                     break;
                 default:
                     break;
@@ -428,8 +428,8 @@ public final class PathingBehavior extends Behavior implements IPathingBehavior,
      */
     public BetterBlockPos pathStart() { // TODO move to a helper or util class
         BetterBlockPos feet = ctx.playerFeet();
-        if (!MovementHelper.canWalkOn(ctx, feet.down())) {
-            if (ctx.player().isOnGround()) {
+        if (!MovementHelper.canWalkOn(ctx, feet.below())) {
+            if (ctx.player().onGround()) {
                 double playerX = ctx.player().getX();
                 double playerZ = ctx.player().getZ();
                 ArrayList<BetterBlockPos> closest = new ArrayList<>();
@@ -447,7 +447,7 @@ public final class PathingBehavior extends Behavior implements IPathingBehavior,
                         // can't possibly be sneaking off of this one, we're too far away
                         continue;
                     }
-                    if (MovementHelper.canWalkOn(ctx, possibleSupport.down()) && MovementHelper.canWalkThrough(ctx, possibleSupport) && MovementHelper.canWalkThrough(ctx, possibleSupport.up())) {
+                    if (MovementHelper.canWalkOn(ctx, possibleSupport.below()) && MovementHelper.canWalkThrough(ctx, possibleSupport) && MovementHelper.canWalkThrough(ctx, possibleSupport.above())) {
                         // this is plausible
                         //logDebug("Faking path start assuming player is standing off the edge of a block");
                         return possibleSupport;
@@ -457,9 +457,9 @@ public final class PathingBehavior extends Behavior implements IPathingBehavior,
             } else {
                 // !onGround
                 // we're in the middle of a jump
-                if (MovementHelper.canWalkOn(ctx, feet.down().down())) {
+                if (MovementHelper.canWalkOn(ctx, feet.below().below())) {
                     //logDebug("Faking path start assuming player is midair and falling");
-                    return feet.down();
+                    return feet.below();
                 }
             }
         }

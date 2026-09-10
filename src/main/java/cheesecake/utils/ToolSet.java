@@ -18,22 +18,22 @@
 package cheesecake.utils;
 
 import cheesecake.Cheesecake;
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockState;
-import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.component.type.ItemEnchantmentsComponent;
-import net.minecraft.enchantment.Enchantment;
-import net.minecraft.enchantment.Enchantments;
-import net.minecraft.entity.effect.StatusEffects;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.registry.entry.RegistryEntry;
-import net.minecraft.registry.tag.ItemTags;
-import net.minecraft.registry.tag.TagKey;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.core.Holder;
+import net.minecraft.tags.ItemTags;
+import net.minecraft.tags.TagKey;
+import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.world.item.enchantment.Enchantments;
+import net.minecraft.world.item.enchantment.ItemEnchantments;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
 
 /**
  * A cached list of the best tools on the hotbar for any block
@@ -54,7 +54,7 @@ public class ToolSet {
      */
     private final Function<Block, Double> backendCalculation;
 
-    private final ClientPlayerEntity player;
+    private final LocalPlayer player;
 
     /**
      * Used for evaluating the material cost of a tool.
@@ -69,7 +69,7 @@ public class ToolSet {
             ItemTags.DIAMOND_TOOL_MATERIALS,
             ItemTags.NETHERITE_TOOL_MATERIALS);
 
-    public ToolSet(ClientPlayerEntity player) {
+    public ToolSet(LocalPlayer player) {
         breakStrengthCache = new HashMap<>();
         this.player = player;
 
@@ -103,7 +103,7 @@ public class ToolSet {
     private int getMaterialCost(ItemStack itemStack) {
         for (int i = 0; i < materialTagsPriorityList.size(); i++) {
             final TagKey<Item> tag = materialTagsPriorityList.get(i);
-            if (itemStack.isIn(tag)) {
+            if (itemStack.is(tag)) {
                 return i;
             }
         }
@@ -111,11 +111,11 @@ public class ToolSet {
     }
 
     public boolean hasSilkTouch(ItemStack stack) {
-        ItemEnchantmentsComponent enchantments = stack.getEnchantments();
-        for (RegistryEntry<Enchantment> enchant : enchantments.getEnchantments()) {
+        ItemEnchantments enchantments = stack.getEnchantments();
+        for (Holder<Enchantment> enchant : enchantments.keySet()) {
             // silk touch enchantment is still special cased as affecting block drops
             // not possible to add custom attribute via datapack
-            if (enchant.matchesKey(Enchantments.SILK_TOUCH) && enchantments.getLevel(enchant) > 0) {
+            if (enchant.is(Enchantments.SILK_TOUCH) && enchantments.getLevel(enchant) > 0) {
                 return true;
             }
         }
@@ -152,15 +152,15 @@ public class ToolSet {
         double highestSpeed = Double.NEGATIVE_INFINITY;
         int lowestCost = Integer.MIN_VALUE;
         boolean bestSilkTouch = false;
-        BlockState blockState = b.getDefaultState();
+        BlockState blockState = b.defaultBlockState();
         for (int i = 0; i < 9; i++) {
-            ItemStack itemStack = player.getInventory().getStack(i);
-            if (!Cheesecake.settings().useSwordToMine.value && itemStack.isIn(ItemTags.SWORDS)) {
+            ItemStack itemStack = player.getInventory().getItem(i);
+            if (!Cheesecake.settings().useSwordToMine.value && itemStack.is(ItemTags.SWORDS)) {
                 continue;
             }
 
             if (Cheesecake.settings().itemSaver.value
-                    && (itemStack.getDamage() + Cheesecake.settings().itemSaverThreshold.value) >= itemStack
+                    && (itemStack.getDamageValue() + Cheesecake.settings().itemSaverThreshold.value) >= itemStack
                             .getMaxDamage()
                     && itemStack.getMaxDamage() > 1) {
                 continue;
@@ -193,8 +193,8 @@ public class ToolSet {
      * @return A double containing the destruction ticks with the best tool
      */
     private double getBestDestructionTime(Block b) {
-        ItemStack stack = player.getInventory().getStack(getBestSlot(b, false, true));
-        return calculateSpeedVsBlock(stack, b.getDefaultState()) * avoidanceMultiplier(b);
+        ItemStack stack = player.getInventory().getItem(getBestSlot(b, false, true));
+        return calculateSpeedVsBlock(stack, b.defaultBlockState()) * avoidanceMultiplier(b);
     }
 
     private double avoidanceMultiplier(Block b) {
@@ -216,7 +216,7 @@ public class ToolSet {
     public static double calculateSpeedVsBlock(ItemStack item, BlockState state) {
         float hardness;
         try {
-            hardness = state.getHardness(null, null);
+            hardness = state.getDestroySpeed(null, null);
         } catch (NullPointerException npe) {
             // can't easily determine the hardness so treat it as unbreakable
             return -1;
@@ -225,7 +225,7 @@ public class ToolSet {
             return -1;
         }
 
-        float speed = item.getMiningSpeedMultiplier(state);
+        float speed = item.getDestroySpeed(state);
         if (speed > 1) {
             // Vanilla's efficiency bonus. Upstream reads this off the enchantment's mining_efficiency
             // attribute effect so that datapack enchantments count too; this only covers vanilla
@@ -237,7 +237,7 @@ public class ToolSet {
         }
 
         speed /= hardness;
-        if (!state.isToolRequired() || (!item.isEmpty() && item.isSuitableFor(state))) {
+        if (!state.requiresCorrectToolForDrops() || (!item.isEmpty() && item.isCorrectToolForDrops(state))) {
             return speed / 30;
         } else {
             return speed / 100;
@@ -245,9 +245,9 @@ public class ToolSet {
     }
 
     private static int getEfficiencyLevel(ItemStack stack) {
-        ItemEnchantmentsComponent enchantments = stack.getEnchantments();
-        for (RegistryEntry<Enchantment> enchant : enchantments.getEnchantments()) {
-            if (enchant.matchesKey(Enchantments.EFFICIENCY)) {
+        ItemEnchantments enchantments = stack.getEnchantments();
+        for (Holder<Enchantment> enchant : enchantments.keySet()) {
+            if (enchant.is(Enchantments.EFFICIENCY)) {
                 return enchantments.getLevel(enchant);
             }
         }
@@ -261,11 +261,11 @@ public class ToolSet {
      */
     private double potionAmplifier() {
         double speed = 1;
-        if (player.hasStatusEffect(StatusEffects.HASTE)) {
-            speed *= 1 + (player.getStatusEffect(StatusEffects.HASTE).getAmplifier() + 1) * 0.2;
+        if (player.hasEffect(MobEffects.HASTE)) {
+            speed *= 1 + (player.getEffect(MobEffects.HASTE).getAmplifier() + 1) * 0.2;
         }
-        if (player.hasStatusEffect(StatusEffects.MINING_FATIGUE)) {
-            switch (player.getStatusEffect(StatusEffects.MINING_FATIGUE).getAmplifier()) {
+        if (player.hasEffect(MobEffects.MINING_FATIGUE)) {
+            switch (player.getEffect(MobEffects.MINING_FATIGUE).getAmplifier()) {
                 case 0:
                     speed *= 0.3;
                     break;

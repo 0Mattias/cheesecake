@@ -27,9 +27,9 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
-import net.minecraft.util.collection.PaletteStorage;
-import net.minecraft.world.chunk.Palette;
-import net.minecraft.world.chunk.PalettedContainer;
+import net.minecraft.util.BitStorage;
+import net.minecraft.world.level.chunk.Palette;
+import net.minecraft.world.level.chunk.PalettedContainer;
 
 @Mixin(PalettedContainer.class)
 @SuppressWarnings({"unchecked"})
@@ -80,7 +80,7 @@ public abstract class MixinPalettedContainer<T> implements IPalettedContainer<T>
     }
 
     @Override
-    public PaletteStorage getStorage() {
+    public BitStorage getStorage() {
         return data().getStorage();
     }
 

@@ -23,7 +23,7 @@ import cheesecake.api.command.argument.ICommandArgument;
 import cheesecake.api.command.registry.Registry;
 import java.util.List;
 import java.util.stream.Stream;
-import net.minecraft.util.Pair;
+import cheesecake.api.utils.Pair;
 
 /**
  * @author Brady

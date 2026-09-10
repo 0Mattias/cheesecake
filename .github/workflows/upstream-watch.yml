@@ -1,7 +1,7 @@
 name: Upstream watch
 
-# Every backport from Baritone needs a translation from Mojang mappings to Yarn, which is cheap in
-# small batches and painful in large ones. This job compares upstream's branch with the last reviewed
+# Backports from Baritone are cheap in small batches and painful in large ones, even now that the
+# code shares upstream's names. This job compares upstream's branch with the last reviewed
 # commit recorded in .github/upstream-baseline and keeps one issue up to date with what is new.
 
 on:

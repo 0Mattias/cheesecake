@@ -18,16 +18,16 @@
 package cheesecake.api.utils;
 
 import cheesecake.api.CheesecakeAPI;
-import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.screen.slot.SlotActionType;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.Hand;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
-import net.minecraft.world.GameMode;
-import net.minecraft.world.World;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.BlockHitResult;
 
 /**
  * @author Brady
@@ -43,13 +43,13 @@ public interface IPlayerController {
 
     void resetBlockRemoving();
 
-    void windowClick(int windowId, int slotId, int mouseButton, SlotActionType type, PlayerEntity player);
+    void windowClick(int windowId, int slotId, int mouseButton, ContainerInput type, Player player);
 
-    GameMode getGameType();
+    GameType getGameType();
 
-    ActionResult processRightClickBlock(ClientPlayerEntity player, World world, Hand hand, BlockHitResult result);
+    InteractionResult processRightClickBlock(LocalPlayer player, Level world, InteractionHand hand, BlockHitResult result);
 
-    ActionResult processRightClick(ClientPlayerEntity player, World world, Hand hand);
+    InteractionResult processRightClick(LocalPlayer player, Level world, InteractionHand hand);
 
     boolean clickBlock(BlockPos loc, Direction face);
 

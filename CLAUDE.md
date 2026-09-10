@@ -1,32 +1,32 @@
 # Working on Cheesecake
 
-Cheesecake is Baritone for Minecraft 1.21.11 on Fabric: a single Fabric project on Yarn mappings, ported from upstream Baritone's 1.19.4 branch and since brought to parity with upstream's own 1.21.11 branch. The package `cheesecake.*` mirrors upstream's `baritone.*`. README.md says what the mod does and SETUP.md describes the layout; this file is for changing the code.
+Cheesecake is Baritone for Minecraft 26.2 on Fabric: a single Fabric project ported from upstream Baritone's 1.19.4 branch, brought to parity with upstream's 1.21.11 branch, migrated from Yarn to Mojang's names and moved to 26.2 with the delta of upstream's 26.2 branch. The package `cheesecake.*` mirrors upstream's `baritone.*`. README.md says what the mod does and SETUP.md describes the layout; this file is for changing the code.
 
 ## Build and test
 
-- JDK 21 is required and Gradle fetches everything else. With Homebrew's formula on macOS: `export JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home`.
+- JDK 25 is required and Gradle fetches everything else. With Homebrew's formula on macOS: `export JAVA_HOME=/opt/homebrew/opt/openjdk@25/libexec/openjdk.jdk/Contents/Home`.
 - `./gradlew build` compiles, runs the unit tests and writes `build/libs/cheesecake-<version>.jar`; `./gradlew test` runs only the tests. About a minute once dependencies are cached.
 - `CHEESECAKE_AUTO_TEST=true ./gradlew runClient` runs the in-world test locally: a game window opens, a world is created under `run/saves`, the stages in `cheesecake.utils.autotest` run one after another (a walk, the control socket, vine climbs, two `#mine` runs, four elytra flights) and the client exits by itself after several minutes. Leave the window alone. The driver is `CheesecakeAutoTest`; a stage builds its scenario with server commands and fails with a message that names the stage. `CHEESECAKE_AUTO_TEST_ONLY=elytra-nether-below-roof` (comma-separated stage names) runs only those stages after the world is prepared and the platform built, which is the way to iterate on one of them.
 - Unit tests are JUnit 4 under `src/test/java`. The mapped Minecraft jar is on the test classpath, so tests can read game data (`LootTableDropsTest` reads the vanilla loot tables) but cannot bootstrap the registries.
 
-## Mappings
+## Names
 
-The code uses Yarn. Upstream uses Mojang mappings with Parchment, so every change taken from upstream needs its Minecraft symbols translated. To find a Yarn name, inspect the mapped jar in the Gradle cache:
+Minecraft ships with Mojang's names since 26.1 and Yarn ended at 1.21.11, so there are no mappings and the code uses the same names as upstream: a change taken from upstream applies as it is, apart from the package name and this fork's own differences. To check a signature, inspect the game jar in the Gradle cache:
 
 ```
-javap -cp ~/.gradle/caches/fabric-loom/minecraftMaven/net/minecraft/minecraft-merged/1.21.11-*/minecraft-merged-1.21.11-*.jar net.minecraft.world.World
+$JAVA_HOME/bin/javap -cp ~/.gradle/caches/fabric-loom/26.2/minecraft-merged.jar net.minecraft.world.level.Level
 ```
 
-The jar directly under `fabric-loom/1.21.11/` is obfuscated and not useful. `./gradlew genSources` has not produced sources here.
+The `1.21.11` branch keeps the last Yarn-based state, for fixes to 0.4.0.
 
 ## Upstream
 
 ```
 git remote add upstream https://github.com/cabaletta/baritone.git
-git fetch upstream 1.21.11
+git fetch upstream 26.2
 ```
 
-The fork's base is upstream commit `d3c170af`. Everything upstream did after it on the 1.21.11 branch has been backported or deliberately left out (the `renderGoalXZBeacon` beam and the Forge, NeoForge and tweaker builds). Upstream paths map as `src/api/java/baritone/api` to `src/main/java/cheesecake/api`, `src/launch/java/baritone/launch/mixins` to `src/main/java/cheesecake/launch/mixins`, and `src/main/java/baritone` to `src/main/java/cheesecake`. `.github/upstream-baseline` records the last reviewed upstream commit; the weekly upstream-watch workflow files an issue when upstream moves, and the baseline is bumped after a review.
+The fork's base is upstream commit `d3c170af`. Everything upstream did after it on the 1.21.11 branch and then on the 26.2 branch has been backported or deliberately left out (the Forge, NeoForge and tweaker builds, and upstream's version of the `renderGoalXZBeacon` beam). Upstream paths map as `src/api/java/baritone/api` to `src/main/java/cheesecake/api`, `src/launch/java/baritone/launch/mixins` to `src/main/java/cheesecake/launch/mixins`, and `src/main/java/baritone` to `src/main/java/cheesecake`. `.github/upstream-baseline` records the last reviewed upstream commit; the weekly upstream-watch workflow files an issue when upstream moves, and the baseline is bumped after a review.
 
 ## Continuous integration
 

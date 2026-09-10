@@ -23,9 +23,9 @@ import cheesecake.api.command.ICommandSystem;
 import cheesecake.api.schematic.ISchematicSystem;
 import java.util.List;
 import java.util.Objects;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.network.ClientPlayNetworkHandler;
-import net.minecraft.client.network.ClientPlayerEntity;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientPacketListener;
+import net.minecraft.client.player.LocalPlayer;
 
 /**
  * Provides the present {@link ICheesecake} instances, as well as non-cheesecake instance related APIs.
@@ -48,17 +48,17 @@ public interface ICheesecakeProvider {
      * returned by {@link #getPrimaryCheesecake()}.
      *
      * @return All active {@link ICheesecake} instances.
-     * @see #getCheesecakeForPlayer(ClientPlayerEntity)
+     * @see #getCheesecakeForPlayer(LocalPlayer)
      */
     List<ICheesecake> getAllCheesecakes();
 
     /**
-     * Provides the {@link ICheesecake} instance for a given {@link ClientPlayerEntity}.
+     * Provides the {@link ICheesecake} instance for a given {@link LocalPlayer}.
      *
      * @param player The player
      * @return The {@link ICheesecake} instance.
      */
-    default ICheesecake getCheesecakeForPlayer(ClientPlayerEntity player) {
+    default ICheesecake getCheesecakeForPlayer(LocalPlayer player) {
         for (ICheesecake cheesecake : this.getAllCheesecakes()) {
             if (Objects.equals(player, cheesecake.getPlayerContext().player())) {
                 return cheesecake;
@@ -68,12 +68,12 @@ public interface ICheesecakeProvider {
     }
 
     /**
-     * Provides the {@link ICheesecake} instance for a given {@link MinecraftClient}.
+     * Provides the {@link ICheesecake} instance for a given {@link Minecraft}.
      *
      * @param minecraft The minecraft
      * @return The {@link ICheesecake} instance.
      */
-    default ICheesecake getCheesecakeForMinecraft(MinecraftClient minecraft) {
+    default ICheesecake getCheesecakeForMinecraft(Minecraft minecraft) {
         for (ICheesecake cheesecake : this.getAllCheesecakes()) {
             if (Objects.equals(minecraft, cheesecake.getPlayerContext().minecraft())) {
                 return cheesecake;
@@ -88,10 +88,10 @@ public interface ICheesecakeProvider {
      * @param connection The connection
      * @return The {@link ICheesecake} instance.
      */
-    default ICheesecake getCheesecakeForConnection(ClientPlayNetworkHandler connection) {
+    default ICheesecake getCheesecakeForConnection(ClientPacketListener connection) {
         for (ICheesecake cheesecake : this.getAllCheesecakes()) {
-            final ClientPlayerEntity player = cheesecake.getPlayerContext().player();
-            if (player != null && player.networkHandler == connection) {
+            final LocalPlayer player = cheesecake.getPlayerContext().player();
+            if (player != null && player.connection == connection) {
                 return cheesecake;
             }
         }
@@ -99,13 +99,13 @@ public interface ICheesecakeProvider {
     }
 
     /**
-     * Creates and registers a new {@link ICheesecake} instance using the specified {@link MinecraftClient}. The existing
+     * Creates and registers a new {@link ICheesecake} instance using the specified {@link Minecraft}. The existing
      * instance is returned if already registered.
      *
      * @param minecraft The minecraft
      * @return The {@link ICheesecake} instance
      */
-    ICheesecake createCheesecake(MinecraftClient minecraft);
+    ICheesecake createCheesecake(Minecraft minecraft);
 
     /**
      * Destroys and removes the specified {@link ICheesecake} instance. If the specified instance is the

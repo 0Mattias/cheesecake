@@ -25,7 +25,7 @@ import cheesecake.api.utils.input.Input;
 import cheesecake.behavior.Behavior;
 import java.util.HashMap;
 import java.util.Map;
-import net.minecraft.client.input.KeyboardInput;
+import net.minecraft.client.player.KeyboardInput;
 
 /**
  * An interface with the game's control system allowing the ability to

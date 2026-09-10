@@ -131,7 +131,7 @@ public abstract class Stage {
      * would put them in the console's dimension, the Overworld.
      */
     protected void teleport(double x, double y, double z) {
-        teleport(this.t.ctx().world().getRegistryKey().getValue().toString(), x, y, z);
+        teleport(this.t.ctx().world().dimension().identifier().toString(), x, y, z);
     }
 
     protected void teleport(String dimension, double x, double y, double z) {

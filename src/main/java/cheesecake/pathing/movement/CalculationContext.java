@@ -27,16 +27,14 @@ import cheesecake.utils.ToolSet;
 import cheesecake.utils.pathing.BetterWorldBorder;
 import java.util.ArrayList;
 import java.util.List;
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockState;
-import net.minecraft.client.network.ClientPlayerEntity;
-// import net.minecraft.enchantment.EnchantmentHelper;
-// import net.minecraft.enchantment.Enchantments;
-import net.minecraft.entity.player.PlayerInventory;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
 
 import static cheesecake.api.pathing.movement.ActionCosts.COST_INF;
 
@@ -50,7 +48,7 @@ public class CalculationContext {
 
     public final boolean safeForThreadedUse;
     public final ICheesecake cheesecake;
-    public final World world;
+    public final Level world;
     public final WorldData worldData;
     public final BlockStateInterface bsi;
     public final ToolSet toolSet;
@@ -91,14 +89,14 @@ public class CalculationContext {
         this.precomputedData = new PrecomputedData();
         this.safeForThreadedUse = forUseOnAnotherThread;
         this.cheesecake = cheesecake;
-        ClientPlayerEntity player = cheesecake.getPlayerContext().player();
+        LocalPlayer player = cheesecake.getPlayerContext().player();
         this.world = cheesecake.getPlayerContext().world();
         this.worldData = (WorldData) cheesecake.getPlayerContext().worldData();
         this.bsi = new BlockStateInterface(cheesecake.getPlayerContext(), forUseOnAnotherThread);
         this.toolSet = new ToolSet(player);
         this.hasThrowaway = Cheesecake.settings().allowPlace.value && ((Cheesecake) cheesecake).getInventoryBehavior().hasGenericThrowaway();
-        this.hasWaterBucket = Cheesecake.settings().allowWaterBucketFall.value && PlayerInventory.isValidHotbarIndex(player.getInventory().getSlotWithStack(STACK_BUCKET_WATER)) && world.getRegistryKey() != World.NETHER;
-        this.canSprint = Cheesecake.settings().allowSprint.value && player.getHungerManager().getFoodLevel() > 6;
+        this.hasWaterBucket = Cheesecake.settings().allowWaterBucketFall.value && Inventory.isHotbarSlot(player.getInventory().findSlotMatchingItem(STACK_BUCKET_WATER)) && world.dimension() != Level.NETHER;
+        this.canSprint = Cheesecake.settings().allowSprint.value && player.getFoodData().getFoodLevel() > 6;
         this.placeBlockCost = Cheesecake.settings().blockPlacementPenalty.value;
         this.allowBreak = Cheesecake.settings().allowBreak.value;
         this.allowBreakAnyway = new ArrayList<>(Cheesecake.settings().allowBreakAnyway.value);
@@ -162,10 +160,10 @@ public class CalculationContext {
         if (!worldBorder.canPlaceAt(x, z)) {
             return COST_INF;
         }
-        if (!Cheesecake.settings().allowPlaceInFluidsSource.value && current.getFluidState().isStill()) {
+        if (!Cheesecake.settings().allowPlaceInFluidsSource.value && current.getFluidState().isSource()) {
             return COST_INF;
         }
-        if (!Cheesecake.settings().allowPlaceInFluidsFlow.value && !current.getFluidState().isEmpty() && !current.getFluidState().isStill()) {
+        if (!Cheesecake.settings().allowPlaceInFluidsFlow.value && !current.getFluidState().isEmpty() && !current.getFluidState().isSource()) {
             return COST_INF;
         }
         return placeBlockCost;

@@ -23,7 +23,7 @@ import cheesecake.api.pathing.calc.IPath;
 import cheesecake.api.pathing.goals.Goal;
 import cheesecake.pathing.path.CutoffPath;
 import cheesecake.utils.BlockStateInterface;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.core.BlockPos;
 
 public abstract class PathBase implements IPath {
 

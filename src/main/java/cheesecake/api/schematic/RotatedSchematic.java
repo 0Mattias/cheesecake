@@ -19,20 +19,20 @@ package cheesecake.api.schematic;
 
 import java.util.List;
 import java.util.stream.Collectors;
-import net.minecraft.block.BlockState;
-import net.minecraft.util.BlockRotation;
+import net.minecraft.world.level.block.Rotation;
+import net.minecraft.world.level.block.state.BlockState;
 
 public class RotatedSchematic implements ISchematic {
 
     private final ISchematic schematic;
-    private final BlockRotation rotation;
-    private final BlockRotation inverseRotation;
+    private final Rotation rotation;
+    private final Rotation inverseRotation;
 
-    public RotatedSchematic(ISchematic schematic, BlockRotation rotation) {
+    public RotatedSchematic(ISchematic schematic, Rotation rotation) {
         this.schematic = schematic;
         this.rotation = rotation;
         // I don't think a 14 line switch would improve readability
-        this.inverseRotation = rotation.rotate(rotation).rotate(rotation);
+        this.inverseRotation = rotation.getRotated(rotation).getRotated(rotation);
     }
 
     @Override
@@ -79,14 +79,14 @@ public class RotatedSchematic implements ISchematic {
     /**
      * Wether {@code rotation} swaps the x and z components
      */
-    private static boolean flipsCoordinates(BlockRotation rotation) {
-        return rotation == BlockRotation.CLOCKWISE_90 || rotation == BlockRotation.COUNTERCLOCKWISE_90;
+    private static boolean flipsCoordinates(Rotation rotation) {
+        return rotation == Rotation.CLOCKWISE_90 || rotation == Rotation.COUNTERCLOCKWISE_90;
     }
 
     /**
      * The x component of x,y after applying the rotation
      */
-    private static int rotateX(int x, int z, int sizeX, int sizeZ, BlockRotation rotation) {
+    private static int rotateX(int x, int z, int sizeX, int sizeZ, Rotation rotation) {
         switch (rotation) {
             case NONE:
                 return x;
@@ -103,7 +103,7 @@ public class RotatedSchematic implements ISchematic {
     /**
      * The z component of x,y after applying the rotation
      */
-    private static int rotateZ(int x, int z, int sizeX, int sizeZ, BlockRotation rotation) {
+    private static int rotateZ(int x, int z, int sizeX, int sizeZ, Rotation rotation) {
         switch (rotation) {
             case NONE:
                 return z;
@@ -117,14 +117,14 @@ public class RotatedSchematic implements ISchematic {
         throw new IllegalArgumentException("Unknown rotation");
     }
 
-    private static BlockState rotate(BlockState state, BlockRotation rotation) {
+    private static BlockState rotate(BlockState state, Rotation rotation) {
         if (state == null) {
             return null;
         }
         return state.rotate(rotation);
     }
 
-    private static List<BlockState> rotate(List<BlockState> states, BlockRotation rotation) {
+    private static List<BlockState> rotate(List<BlockState> states, Rotation rotation) {
         if (states == null) {
             return null;
         }

@@ -28,12 +28,12 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.util.Optional;
-import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.EntityType;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.World;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * @author Brady
@@ -51,43 +51,43 @@ public abstract class MixinLivingEntity extends Entity {
     @Unique
     private RotationMoveEvent elytraRotationEvent;
 
-    private MixinLivingEntity(EntityType<?> entityTypeIn, World worldIn) {
+    private MixinLivingEntity(EntityType<?> entityTypeIn, Level worldIn) {
         super(entityTypeIn, worldIn);
     }
 
-    @Inject(method = "jump", at = @At("HEAD"))
+    @Inject(method = "jumpFromGround", at = @At("HEAD"))
     private void preMoveRelative(CallbackInfo ci) {
         this.getCheesecake().ifPresent(cheesecake -> {
-            this.jumpRotationEvent = new RotationMoveEvent(RotationMoveEvent.Type.JUMP, this.getYaw(), this.getPitch());
+            this.jumpRotationEvent = new RotationMoveEvent(RotationMoveEvent.Type.JUMP, this.getYRot(), this.getXRot());
             cheesecake.getGameEventHandler().onPlayerRotationMove(this.jumpRotationEvent);
         });
     }
 
-    @Redirect(method = "jump", at = @At(value = "INVOKE", target = "net/minecraft/entity/LivingEntity.getYaw()F"))
+    @Redirect(method = "jumpFromGround", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/LivingEntity;getYRot()F"))
     private float overrideYaw(LivingEntity self) {
-        if (self instanceof ClientPlayerEntity
-                && CheesecakeAPI.getProvider().getCheesecakeForPlayer((ClientPlayerEntity) (Object) this) != null) {
+        if (self instanceof LocalPlayer
+                && CheesecakeAPI.getProvider().getCheesecakeForPlayer((LocalPlayer) (Object) this) != null) {
             return this.jumpRotationEvent.getYaw();
         }
-        return self.getYaw();
+        return self.getYRot();
     }
 
-    @Inject(method = "travelGliding", at = @At(value = "INVOKE", target = "net/minecraft/entity/LivingEntity.calcGlidingVelocity(Lnet/minecraft/util/math/Vec3d;)Lnet/minecraft/util/math/Vec3d;"))
-    private void onPreElytraMove(Vec3d direction, CallbackInfo ci) {
+    @Inject(method = "travelFallFlying", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/LivingEntity;updateFallFlyingMovement(Lnet/minecraft/world/phys/Vec3;)Lnet/minecraft/world/phys/Vec3;"))
+    private void onPreElytraMove(Vec3 direction, CallbackInfo ci) {
         this.getCheesecake().ifPresent(cheesecake -> {
-            this.elytraRotationEvent = new RotationMoveEvent(RotationMoveEvent.Type.MOTION_UPDATE, this.getYaw(),
-                    this.getPitch());
+            this.elytraRotationEvent = new RotationMoveEvent(RotationMoveEvent.Type.MOTION_UPDATE, this.getYRot(),
+                    this.getXRot());
             cheesecake.getGameEventHandler().onPlayerRotationMove(this.elytraRotationEvent);
-            this.setYaw(this.elytraRotationEvent.getYaw());
-            this.setPitch(this.elytraRotationEvent.getPitch());
+            this.setYRot(this.elytraRotationEvent.getYaw());
+            this.setXRot(this.elytraRotationEvent.getPitch());
         });
     }
 
-    @Inject(method = "travelGliding", at = @At(value = "INVOKE", target = "net/minecraft/entity/LivingEntity.calcGlidingVelocity(Lnet/minecraft/util/math/Vec3d;)Lnet/minecraft/util/math/Vec3d;", shift = At.Shift.AFTER))
-    private void onPostElytraMove(Vec3d direction, CallbackInfo ci) {
+    @Inject(method = "travelFallFlying", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/LivingEntity;updateFallFlyingMovement(Lnet/minecraft/world/phys/Vec3;)Lnet/minecraft/world/phys/Vec3;", shift = At.Shift.AFTER))
+    private void onPostElytraMove(Vec3 direction, CallbackInfo ci) {
         if (this.elytraRotationEvent != null) {
-            this.setYaw(this.elytraRotationEvent.getOriginal().getYaw());
-            this.setPitch(this.elytraRotationEvent.getOriginal().getPitch());
+            this.setYRot(this.elytraRotationEvent.getOriginal().getYaw());
+            this.setXRot(this.elytraRotationEvent.getOriginal().getPitch());
             this.elytraRotationEvent = null;
         }
     }
@@ -95,9 +95,9 @@ public abstract class MixinLivingEntity extends Entity {
     @Unique
     private Optional<ICheesecake> getCheesecake() {
         // noinspection ConstantConditions
-        if (ClientPlayerEntity.class.isInstance(this)) {
+        if (LocalPlayer.class.isInstance(this)) {
             return Optional
-                    .ofNullable(CheesecakeAPI.getProvider().getCheesecakeForPlayer((ClientPlayerEntity) (Object) this));
+                    .ofNullable(CheesecakeAPI.getProvider().getCheesecakeForPlayer((LocalPlayer) (Object) this));
         } else {
             return Optional.empty();
         }

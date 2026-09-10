@@ -112,7 +112,7 @@ public final class CustomGoalProcess extends CheesecakeProcessHelper implements 
                     }
                     onLostControl(); // we're there xd
                     if (Cheesecake.settings().disconnectOnArrival.value) {
-                        ctx.player().networkHandler.getConnection().disconnect(net.minecraft.text.Text.literal("Disconnected by Baritone"));
+                        ctx.player().connection.getConnection().disconnect(net.minecraft.network.chat.Component.literal("Disconnected by Baritone"));
                     }
                     if (Cheesecake.settings().notificationOnPathComplete.value) {
                         logNotification("Pathing complete", false);

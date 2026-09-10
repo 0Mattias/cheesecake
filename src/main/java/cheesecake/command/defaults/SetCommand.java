@@ -34,12 +34,12 @@ import java.util.List;
 import java.util.Locale;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.text.ClickEvent;
-import net.minecraft.text.HoverEvent;
-import net.minecraft.text.MutableText;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
+import net.minecraft.ChatFormatting;
+import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.ClickEvent;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.HoverEvent;
+import net.minecraft.network.chat.MutableComponent;
 
 import static cheesecake.api.command.ICheesecakeChatControl.FORCE_COMMAND_PREFIX;
 import static cheesecake.api.utils.SettingsUtil.*;
@@ -93,20 +93,20 @@ public class SetCommand extends Command {
                                             viewModified ? "modified " : "", search)
                                     : String.format("All %ssettings:", viewModified ? "modified " : "")),
                     setting -> {
-                        MutableText typeComponent = Text.literal(String.format(
+                        MutableComponent typeComponent = Component.literal(String.format(
                                 " (%s)",
                                 settingTypeToString(setting)));
-                        typeComponent.setStyle(typeComponent.getStyle().withColor(Formatting.DARK_GRAY));
-                        MutableText hoverComponent = Text.literal("");
-                        hoverComponent.setStyle(hoverComponent.getStyle().withColor(Formatting.GRAY));
+                        typeComponent.setStyle(typeComponent.getStyle().withColor(ChatFormatting.DARK_GRAY));
+                        MutableComponent hoverComponent = Component.literal("");
+                        hoverComponent.setStyle(hoverComponent.getStyle().withColor(ChatFormatting.GRAY));
                         hoverComponent.append(setting.getName());
                         hoverComponent.append(String.format("\nType: %s", settingTypeToString(setting)));
                         hoverComponent.append(String.format("\n\nValue:\n%s", settingValueToString(setting)));
                         hoverComponent.append(String.format("\n\nDefault Value:\n%s", settingDefaultToString(setting)));
                         String commandSuggestion = Cheesecake.settings().prefix.value
                                 + String.format("set %s ", setting.getName());
-                        MutableText component = Text.literal(setting.getName());
-                        component.setStyle(component.getStyle().withColor(Formatting.GRAY));
+                        MutableComponent component = Component.literal(setting.getName());
+                        component.setStyle(component.getStyle().withColor(ChatFormatting.GRAY));
                         component.append(typeComponent);
                         component.setStyle(component.getStyle()
                                 .withHoverEvent(new HoverEvent.ShowText(hoverComponent))
@@ -186,11 +186,11 @@ public class SetCommand extends Command {
                         setting.getName(),
                         settingValueToString(setting)));
             }
-            MutableText oldValueComponent = Text.literal(String.format("Old value: %s", oldValue));
+            MutableComponent oldValueComponent = Component.literal(String.format("Old value: %s", oldValue));
             oldValueComponent.setStyle(oldValueComponent.getStyle()
-                    .withColor(Formatting.GRAY)
+                    .withColor(ChatFormatting.GRAY)
                     .withHoverEvent(new HoverEvent.ShowText(
-                            Text.literal("Click to set the setting back to this value")))
+                            Component.literal("Click to set the setting back to this value")))
                     .withClickEvent(new ClickEvent.RunCommand(
                             FORCE_COMMAND_PREFIX + String.format("set %s %s", setting.getName(), oldValue))));
             logDirect(oldValueComponent);
@@ -200,11 +200,11 @@ public class SetCommand extends Command {
                             && !Cheesecake.settings().chatControl.value) {
                 logDirect(
                         "Warning: Chat commands will no longer work. If you want to revert this change, use prefix control (if enabled) or click the old value listed above.",
-                        Formatting.RED);
+                        ChatFormatting.RED);
             } else if (setting.getName().equals("prefixControl") && !(Boolean) setting.value) {
                 logDirect(
                         "Warning: Prefixed commands will no longer work. If you want to revert this change, use chat control (if enabled) or click the old value listed above.",
-                        Formatting.RED);
+                        ChatFormatting.RED);
             }
         }
         SettingsUtil.save(Cheesecake.settings());
@@ -230,7 +230,7 @@ public class SetCommand extends Command {
                 } else if (Arrays.asList("ld", "load").contains(arg.toLowerCase(Locale.US))) {
                     // settings always use the directory of the main Minecraft instance
                     return RelativeFile.tabComplete(args,
-                            MinecraftClient.getInstance().runDirectory.toPath().resolve("cheesecake").toFile());
+                            Minecraft.getInstance().gameDirectory.toPath().resolve("cheesecake").toFile());
                 }
                 Settings.Setting setting = Cheesecake.settings().byLowerName.get(arg.toLowerCase(Locale.US));
                 if (setting != null) {

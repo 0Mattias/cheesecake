@@ -32,35 +32,35 @@ import com.google.common.collect.ImmutableSet;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.Blocks;
-import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 
 public class MovementDiagonal extends Movement {
 
     private static final double SQRT_2 = Math.sqrt(2);
 
     public MovementDiagonal(ICheesecake cheesecake, BetterBlockPos start, Direction dir1, Direction dir2, int dy) {
-        this(cheesecake, start, start.offset(dir1), start.offset(dir2), dir2, dy);
+        this(cheesecake, start, start.relative(dir1), start.relative(dir2), dir2, dy);
         // super(start, start.offset(dir1).offset(dir2), new BlockPos[]{start.offset(dir1), start.offset(dir1).up(), start.offset(dir2), start.offset(dir2).up(), start.offset(dir1).offset(dir2), start.offset(dir1).offset(dir2).up()}, new BlockPos[]{start.offset(dir1).offset(dir2).down()});
     }
 
     private MovementDiagonal(ICheesecake cheesecake, BetterBlockPos start, BetterBlockPos dir1, BetterBlockPos dir2, Direction drr2, int dy) {
-        this(cheesecake, start, dir1.offset(drr2).up(dy), dir1, dir2);
+        this(cheesecake, start, dir1.relative(drr2).above(dy), dir1, dir2);
     }
 
     private MovementDiagonal(ICheesecake cheesecake, BetterBlockPos start, BetterBlockPos end, BetterBlockPos dir1, BetterBlockPos dir2) {
-        super(cheesecake, start, end, new BetterBlockPos[]{dir1, dir1.up(), dir2, dir2.up(), end, end.up()});
+        super(cheesecake, start, end, new BetterBlockPos[]{dir1, dir1.above(), dir2, dir2.above(), end, end.above()});
     }
 
     @Override
     protected boolean safeToCancel(MovementState state) {
         //too simple. backfill does not work after cornering with this
         //return context.precomputedData.canWalkOn(ctx, ctx.playerFeet().down());
-        ClientPlayerEntity player = ctx.player();
+        LocalPlayer player = ctx.player();
         double offset = 0.25;
         double x = player.getX();
         double y = player.getY() - 1;
@@ -100,10 +100,10 @@ public class MovementDiagonal extends Movement {
         BetterBlockPos diagA = new BetterBlockPos(src.x, src.y, dest.z);
         BetterBlockPos diagB = new BetterBlockPos(dest.x, src.y, src.z);
         if (dest.y < src.y) {
-            return ImmutableSet.of(src, dest.up(), diagA, diagB, dest, diagA.down(), diagB.down());
+            return ImmutableSet.of(src, dest.above(), diagA, diagB, dest, diagA.below(), diagB.below());
         }
         if (dest.y > src.y) {
-            return ImmutableSet.of(src, src.up(), diagA, diagB, dest, diagA.up(), diagB.up());
+            return ImmutableSet.of(src, src.above(), diagA, diagB, dest, diagA.above(), diagB.above());
         }
         return ImmutableSet.of(src, dest, diagA, diagB);
     }
@@ -141,9 +141,9 @@ public class MovementDiagonal extends Movement {
         }
         double multiplier = WALK_ONE_BLOCK_COST;
         // For either possible soul sand, that affects half of our walking
-        if (destWalkOn.isOf(Blocks.SOUL_SAND)) {
+        if (destWalkOn.is(Blocks.SOUL_SAND)) {
             multiplier += (WALK_ONE_OVER_SOUL_SAND_COST - WALK_ONE_BLOCK_COST) / 2;
-        } else if (context.allowWalkOnMagmaBlocks && destWalkOn.isOf(Blocks.MAGMA_BLOCK)) {
+        } else if (context.allowWalkOnMagmaBlocks && destWalkOn.is(Blocks.MAGMA_BLOCK)) {
             multiplier += (SNEAK_ONE_BLOCK_COST - WALK_ONE_BLOCK_COST) / 2;
             sneaking = true;
         } else if (frostWalker) {
@@ -162,11 +162,11 @@ public class MovementDiagonal extends Movement {
             sneaking = true;
         }
         BlockState cuttingOver1 = context.get(x, y - 1, destZ);
-        if ((!context.allowWalkOnMagmaBlocks && cuttingOver1.isOf(Blocks.MAGMA_BLOCK)) || MovementHelper.isLava(cuttingOver1)) {
+        if ((!context.allowWalkOnMagmaBlocks && cuttingOver1.is(Blocks.MAGMA_BLOCK)) || MovementHelper.isLava(cuttingOver1)) {
             return;
         }
         BlockState cuttingOver2 = context.get(destX, y - 1, z);
-        if ((!context.allowWalkOnMagmaBlocks && cuttingOver1.isOf(Blocks.MAGMA_BLOCK)) || MovementHelper.isLava(cuttingOver2)) {
+        if ((!context.allowWalkOnMagmaBlocks && cuttingOver1.is(Blocks.MAGMA_BLOCK)) || MovementHelper.isLava(cuttingOver2)) {
             return;
         }
         boolean water = false;
@@ -268,7 +268,7 @@ public class MovementDiagonal extends Movement {
 
         if (ctx.playerFeet().equals(dest)) {
             return state.setStatus(MovementStatus.SUCCESS);
-        } else if (!playerInValidPosition() && !(MovementHelper.isLiquid(ctx, src) && getValidPositions().contains(ctx.playerFeet().up()))) {
+        } else if (!playerInValidPosition() && !(MovementHelper.isLiquid(ctx, src) && getValidPositions().contains(ctx.playerFeet().above()))) {
             return state.setStatus(MovementStatus.UNREACHABLE);
         }
         if (dest.y > src.y && ctx.player().getY() < src.y + 0.1 && ctx.player().horizontalCollision) {
@@ -277,7 +277,7 @@ public class MovementDiagonal extends Movement {
         if (sprint()) {
             state.setInput(Input.SPRINT, true);
         }
-        state.setInput(Input.SNEAK, Cheesecake.settings().allowWalkOnMagmaBlocks.value && MovementHelper.steppingOnBlocks(ctx).stream().anyMatch(block -> ctx.world().getBlockState(block).isOf(Blocks.MAGMA_BLOCK)));
+        state.setInput(Input.SNEAK, Cheesecake.settings().allowWalkOnMagmaBlocks.value && MovementHelper.steppingOnBlocks(ctx).stream().anyMatch(block -> ctx.world().getBlockState(block).is(Blocks.MAGMA_BLOCK)));
         MovementHelper.moveTowards(ctx, state, dest);
         return state;
     }

@@ -34,43 +34,43 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import net.minecraft.client.gui.screen.ChatInputSuggestor;
-import net.minecraft.client.gui.widget.TextFieldWidget;
-import net.minecraft.text.OrderedText;
+import net.minecraft.client.gui.components.CommandSuggestions;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.util.FormattedCharSequence;
 
 /**
  * @author Brady
  * @since 10/9/2019
  */
-@Mixin(ChatInputSuggestor.class)
+@Mixin(CommandSuggestions.class)
 @SuppressWarnings({ "rawtypes" })
 public class MixinCommandSuggestionHelper {
 
     @Shadow
     @Final
-    TextFieldWidget textField;
+    EditBox input;
 
     @Shadow
     @Final
-    private List<OrderedText> messages;
+    private List<FormattedCharSequence> commandUsage;
 
     @Shadow
-    private ParseResults parse;
+    private ParseResults currentParse;
 
     @Shadow
     private CompletableFuture<Suggestions> pendingSuggestions;
 
     @Shadow
-    private ChatInputSuggestor.SuggestionWindow window;
+    private CommandSuggestions.SuggestionsList suggestions;
 
     @Shadow
-    boolean completingSuggestions;
+    boolean keepSuggestions;
 
-    @Inject(method = "refresh", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "updateCommandInfo", at = @At("HEAD"), cancellable = true)
     private void preUpdateSuggestion(CallbackInfo ci) {
         // Anything that is present in the chatField text before the cursor position
-        String prefix = this.textField.getText().substring(0,
-                Math.min(this.textField.getText().length(), this.textField.getCursor()));
+        String prefix = this.input.getValue().substring(0,
+                Math.min(this.input.getValue().length(), this.input.getCursorPosition()));
 
         TabCompleteEvent event = new TabCompleteEvent(prefix);
         CheesecakeAPI.getProvider().getPrimaryCheesecake().getGameEventHandler().onPreTabComplete(event);
@@ -83,19 +83,19 @@ public class MixinCommandSuggestionHelper {
         if (event.completions != null) {
             ci.cancel();
 
-            this.parse = null; // stop coloring
+            this.currentParse = null; // stop coloring
 
-            if (this.completingSuggestions) { // Supress pendingSuggestions update when cycling pendingSuggestions.
+            if (this.keepSuggestions) { // Supress pendingSuggestions update when cycling pendingSuggestions.
                 return;
             }
 
-            this.textField.setSuggestion(null); // clear old pendingSuggestions
+            this.input.setSuggestion(null); // clear old pendingSuggestions
             this.pendingSuggestions = null;
             // TODO: Support populating the command usage
-            this.messages.clear();
+            this.commandUsage.clear();
 
             if (event.completions.length == 0) {
-                this.window = null;
+                this.suggestions = null;
             } else {
                 StringRange range = StringRange.between(prefix.lastIndexOf(" ") + 1, prefix.length()); // if there is no
                                                                                                        // space this
@@ -110,7 +110,7 @@ public class MixinCommandSuggestionHelper {
                 this.pendingSuggestions = new CompletableFuture<>();
                 this.pendingSuggestions.complete(pendingSuggestions);
             }
-            ((ChatInputSuggestor) (Object) this).show(true); // actually populate the pendingSuggestions list from the
+            ((CommandSuggestions) (Object) this).showSuggestions(true); // actually populate the pendingSuggestions list from the
                                                              // pendingSuggestions future
         }
     }
