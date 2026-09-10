@@ -46,6 +46,7 @@ import java.nio.file.Path;
 import java.util.concurrent.Executor;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import net.minecraft.client.Minecraft;
@@ -59,7 +60,14 @@ public class Cheesecake implements ICheesecake {
     private static final ThreadPoolExecutor threadPool;
 
     static {
-        threadPool = new ThreadPoolExecutor(4, Integer.MAX_VALUE, 60L, TimeUnit.SECONDS, new SynchronousQueue<>());
+        // Daemon threads: the chunk packer parks on this pool for the life of the game, and since
+        // 26.2 the client's shutdown watchdog files a crash report when a thread outlives the game.
+        AtomicInteger workers = new AtomicInteger();
+        threadPool = new ThreadPoolExecutor(4, Integer.MAX_VALUE, 60L, TimeUnit.SECONDS, new SynchronousQueue<>(), task -> {
+            Thread thread = new Thread(task, "cheesecake-worker-" + workers.incrementAndGet());
+            thread.setDaemon(true);
+            return thread;
+        });
     }
 
     private final Minecraft mc;
@@ -251,7 +259,7 @@ public class Cheesecake implements ICheesecake {
         new Thread(() -> {
             try {
                 Thread.sleep(100);
-                mc.execute(() -> mc.setScreen(new GuiClick()));
+                mc.execute(() -> mc.gui.setScreen(new GuiClick()));
             } catch (Exception ignored) {}
         }).start();
     }

@@ -62,6 +62,7 @@ Cheesecake began as a port of Baritone's 1.19.4 branch to Minecraft 1.21.11. Ups
 - The `renderGoalXZBeacon` setting draws the beacon beam instead of the goal box, as its description says. Upstream draws the beam on top of the box for every X/Z goal and never reads the setting.
 - Arriving at a `#goto` goal reports the `AT_GOAL` path event. Upstream cancels the path in the same tick the player steps into the goal, before the path can report that it finished, so its listeners see `CANCELED` instead. Likewise `CANCELED` is only fired when a path or a calculation was actually cancelled.
 - The elytra landing search treats every kind of air as air. Upstream only recognises the plain `air` block, and carved caves in the Nether are `cave_air`, so upstream circles above them until the fireworks run out.
+- The worker threads are daemon threads. Since 26.2 the client watches its own shutdown and files a crash report when a thread outlives the game; upstream's pool keeps the chunk packer parked for the life of the game, which trips that.
 - The `shortBaritonePrefix` setting is called `shortCheesecakePrefix`.
 
 ### Verification
