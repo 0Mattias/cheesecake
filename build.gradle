@@ -51,30 +51,14 @@ allprojects {
         }
     }
 
+    // Only what a Fabric + yarn build actually needs. The parchment, multimc, impact and
+    // spongepowered repos were inherited from upstream's multi-loader build; parchmentmc in
+    // particular now refuses connections, and Gradle treats that as a hard failure rather than
+    // moving on to the next repository.
     repositories {
-        maven {
-            name = 'spongepowered-repo'
-            url = 'https://repo.spongepowered.org/repository/maven-public/'
-        }
         maven {
             name = 'fabric-maven'
             url = 'https://maven.fabricmc.net/'
-        }
-        maven {
-            name = 'impactdevelopment-repo'
-            url = 'https://impactdevelopment.github.io/maven/'
-        }
-        maven {
-            name = "ldtteam"
-            url = "https://maven.parchmentmc.net/"
-        }
-        // for the newer version of launchwrapper
-        maven {
-            name = "multimc-maven"
-            url = "https://files.multimc.org/maven/"
-            metadataSources {
-                artifact()
-            }
         }
         mavenCentral()
         maven {
@@ -110,6 +94,8 @@ dependencies {
     implementation 'com.google.code.findbugs:jsr305:3.0.2'
     modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+
+    testImplementation 'junit:junit:4.13.2'
 }
 
 loom {
@@ -117,8 +103,35 @@ loom {
     // accessWidenerPath = file("src/main/resources/cheesecake.accesswidener")
 }
 
+sourceSets {
+    // Compile-only stubs for the Schematica/Litematica APIs. These MUST NOT end up in the jar: shipping
+    // classes in `fi.dy.masa.litematica` / `com.github.lunatrius` would shadow the real mods on Fabric's
+    // flat mod classpath and break them.
+    schematica_api {
+        compileClasspath += sourceSets.main.compileClasspath
+    }
+    main {
+        compileClasspath += sourceSets.schematica_api.output
+    }
+    test {
+        compileClasspath += sourceSets.main.compileClasspath
+        runtimeClasspath += sourceSets.main.runtimeClasspath
+    }
+}
+
+test {
+    useJUnit()
+}
+
 jar {
     from sourceSets.main.output
+}
+
+processResources {
+    inputs.property "version", project.version
+    filesMatching("fabric.mod.json") {
+        expand "version": project.version
+    }
 }
 
 task printClasspath {

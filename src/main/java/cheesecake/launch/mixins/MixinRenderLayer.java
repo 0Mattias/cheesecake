@@ -15,18 +15,24 @@
  * along with Cheesecake.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package com.github.lunatrius.schematica.api;
+package cheesecake.launch.mixins;
 
-import net.minecraft.block.BlockState;
-import net.minecraft.util.math.BlockPos;
+import cheesecake.utils.accessor.IRenderLayer;
+import net.minecraft.client.render.RenderLayer;
+import net.minecraft.client.render.RenderSetup;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 
-public interface ISchematic {
+@Mixin(RenderLayer.class)
+public abstract class MixinRenderLayer implements IRenderLayer {
 
-    BlockState getBlockState(BlockPos var1);
+    @Shadow
+    static RenderLayer of(String name, RenderSetup setup) {
+        return null;
+    }
 
-    int getWidth();
-
-    int getHeight();
-
-    int getLength();
+    @Override
+    public RenderLayer cheesecake$createRenderLayer(String name, RenderSetup setup) {
+        return of(name, setup);
+    }
 }

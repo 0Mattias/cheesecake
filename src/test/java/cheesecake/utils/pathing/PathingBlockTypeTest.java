@@ -15,15 +15,20 @@
  * along with Cheesecake.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package fi.dy.masa.litematica.schematic.placement;
 
-import java.util.List;
+package cheesecake.utils.pathing;
 
-public class SchematicPlacementManager {
+import org.junit.Test;
 
-    //in case of a java.lang.NoSuchMethodError try change the name of this method to getAllSchematicPlacements()
-    //there are inconsistencies in the litematica mod about the naming of this method
-    public List<SchematicPlacement> getAllSchematicsPlacements() {
-        throw new LinkageError();
+import static org.junit.Assert.assertTrue;
+
+public class PathingBlockTypeTest {
+
+    @Test
+    public void testBits() {
+        for (PathingBlockType type : PathingBlockType.values()) {
+            boolean[] bits = type.getBits();
+            assertTrue(type == PathingBlockType.fromBits(bits[0], bits[1]));
+        }
     }
 }

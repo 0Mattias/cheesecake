@@ -32,6 +32,7 @@ import cheesecake.utils.PathRenderer;
 import cheesecake.utils.accessor.IFireworkRocketEntity;
 import it.unimi.dsi.fastutil.floats.FloatArrayList;
 import it.unimi.dsi.fastutil.floats.FloatIterator;
+import net.minecraft.client.render.BufferBuilder;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.entity.EquipmentSlot;
@@ -440,31 +441,31 @@ public final class ElytraBehavior implements Helper {
                     Color.GREEN);
         }
         if (!this.clearLines.isEmpty() && settings.elytraRenderRaytraces.value) {
-            IRenderer.startLines(Color.GREEN, settings.pathRenderLineWidthPixels.value,
-                    settings.renderPathIgnoreDepth.value);
+            BufferBuilder bufferBuilder = IRenderer.startLines(Color.GREEN);
             for (Pair<Vec3d, Vec3d> line : this.clearLines) {
-                IRenderer.emitLine(event.getModelViewStack(), line.first(), line.second());
+                IRenderer.emitLine(bufferBuilder, event.getModelViewStack(), line.first(), line.second(),
+                        settings.pathRenderLineWidthPixels.value);
             }
-            IRenderer.endLines(settings.renderPathIgnoreDepth.value);
+            IRenderer.endLines(bufferBuilder, settings.renderPathIgnoreDepth.value);
         }
         if (!this.blockedLines.isEmpty() && Cheesecake.settings().elytraRenderRaytraces.value) {
-            IRenderer.startLines(Color.BLUE, settings.pathRenderLineWidthPixels.value,
-                    settings.renderPathIgnoreDepth.value);
+            BufferBuilder bufferBuilder = IRenderer.startLines(Color.BLUE);
             for (Pair<Vec3d, Vec3d> line : this.blockedLines) {
-                IRenderer.emitLine(event.getModelViewStack(), line.first(), line.second());
+                IRenderer.emitLine(bufferBuilder, event.getModelViewStack(), line.first(), line.second(),
+                        settings.pathRenderLineWidthPixels.value);
             }
-            IRenderer.endLines(settings.renderPathIgnoreDepth.value);
+            IRenderer.endLines(bufferBuilder, settings.renderPathIgnoreDepth.value);
         }
         if (this.simulationLine != null && Cheesecake.settings().elytraRenderSimulation.value) {
-            IRenderer.startLines(new Color(0x36CCDC), settings.pathRenderLineWidthPixels.value,
-                    settings.renderPathIgnoreDepth.value);
+            BufferBuilder bufferBuilder = IRenderer.startLines(new Color(0x36CCDC));
             final Vec3d offset = ctx.player().getLerpedPos(event.getPartialTicks());
             for (int i = 0; i < this.simulationLine.size() - 1; i++) {
                 final Vec3d src = this.simulationLine.get(i).add(offset);
                 final Vec3d dst = this.simulationLine.get(i + 1).add(offset);
-                IRenderer.emitLine(event.getModelViewStack(), src, dst);
+                IRenderer.emitLine(bufferBuilder, event.getModelViewStack(), src, dst,
+                        settings.pathRenderLineWidthPixels.value);
             }
-            IRenderer.endLines(settings.renderPathIgnoreDepth.value);
+            IRenderer.endLines(bufferBuilder, settings.renderPathIgnoreDepth.value);
         }
     }
 

@@ -186,6 +186,11 @@ public final class RotationUtils {
 
     public static Optional<Rotation> reachable(IPlayerContext ctx, BlockPos pos, double blockReachDistance,
             boolean wouldSneak) {
+        if (pos instanceof BetterBlockPos) {
+            // BetterBlockPos overrides hashCode, so letting one leak into vanilla's position-keyed maps
+            // (the block entity map, for one) makes lookups miss. Normalize before handing it to the world.
+            pos = new BlockPos(pos.getX(), pos.getY(), pos.getZ());
+        }
         if (CheesecakeAPI.getSettings().remainWithExistingLookDirection.value && ctx.isLookingAt(pos)) {
             /*
              * why add 0.0001?

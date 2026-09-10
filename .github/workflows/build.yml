@@ -1,0 +1,146 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+      - 'claude/**'
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build
+        run: ./gradlew build --stacktrace --no-daemon
+
+      - name: Check the built jar
+        run: |
+          set -euo pipefail
+          jar=$(ls build/libs/*.jar | grep -v -- '-sources' | head -1)
+          echo "Inspecting $jar"
+
+          # The Schematica/Litematica API stubs are compile-only. Shipping them would shadow the
+          # real mods on Fabric's flat mod classpath.
+          if unzip -l "$jar" | grep -E ' (fi/dy/masa|com/github/lunatrius)/'; then
+            echo "::error::jar ships Schematica/Litematica stub classes"
+            exit 1
+          fi
+
+          # The mod must be remapped to intermediary, not left as a dev jar.
+          unzip -p "$jar" cheesecake/Cheesecake.class > /tmp/Cheesecake.class
+          if ! javap -p -c /tmp/Cheesecake.class | grep -q 'net/minecraft/class_'; then
+            echo "::error::jar does not look remapped to intermediary"
+            exit 1
+          fi
+
+          # processResources must have substituted the real version.
+          unzip -p "$jar" fabric.mod.json | tee /tmp/fabric.mod.json
+          if grep -q '\${version}' /tmp/fabric.mod.json; then
+            echo "::error::fabric.mod.json version was not expanded"
+            exit 1
+          fi
+
+          # The icon fabric.mod.json points at has to actually be in the jar.
+          unzip -l "$jar" | grep -q 'assets/cheesecake/icon.png'
+
+          echo "jar checks passed"
+
+      - name: Upload mod jar
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cheesecake-jar
+          path: build/libs/*.jar
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: build/reports/tests/test
+          if-no-files-found: ignore
+
+  # The build proves the mixin configs are well-formed. It does not prove they APPLY -- that
+  # happens at class load in a running client. Launch one headless on software GL and fail on any
+  # mixin error. Getting to the main menu means every @Mixin target, @Shadow and @Inject resolved
+  # against the real Minecraft classes.
+  smoke:
+    name: headless client smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Install a headless GL stack
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libgl1-mesa-dri libglx-mesa0 mesa-utils libopenal1
+
+      - name: Launch the client
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+          GALLIUM_DRIVER: llvmpipe
+        run: |
+          set +e
+          xvfb-run -a --server-args="-screen 0 1280x720x24" \
+            timeout --signal=INT 300 ./gradlew runClient --no-daemon --stacktrace > client.log 2>&1
+          echo "gradle exited $?"
+          tail -60 client.log
+
+      - name: Assert the client came up with mixins applied
+        run: |
+          set -euo pipefail
+
+          if grep -nE "Mixin apply failed|mixin\.transformer\.throwables|InvalidInjectionException|InvalidAccessorException|InvalidMixinException|ShadowException|Critical injection failure|was not found in" client.log; then
+            echo "::error::mixin failure while loading the client - see the lines above"
+            exit 1
+          fi
+
+          # Not a grep for "cheesecake": the repo path contains it, so that matches every Gradle
+          # line whether or not the mod loaded. Assert on the mod's own code having run instead --
+          # this line is printed by the nether-pathfinder native that we bundle and load.
+          if ! grep -q "\[nether-pathfinder\] Loaded shared library" client.log; then
+            echo "::error::the mod never ran: no nether-pathfinder native load in the client log"
+            grep -nE "cheesecake" client.log | head -20 || true
+            exit 1
+          fi
+
+          # Something that only prints once the client is actually up and rendering.
+          if ! grep -qE "Backend library: LWJGL|Narrator library|Sound engine started|Created: .*texture" client.log; then
+            echo "::error::client never finished starting - no render/sound init markers found"
+            sed -n '1,200p' client.log
+            exit 1
+          fi
+
+          echo "client started, mod code ran, no mixin errors"
+
+      - name: Upload client log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: client-log
+          path: client.log
+          if-no-files-found: ignore

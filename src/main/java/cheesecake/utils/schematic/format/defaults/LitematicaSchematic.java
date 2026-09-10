@@ -25,6 +25,7 @@ import org.apache.commons.lang3.Validate;
 import javax.annotation.Nullable;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
+import net.minecraft.block.Blocks;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtList;
 import net.minecraft.registry.Registries;
@@ -84,11 +85,14 @@ public final class LitematicaSchematic extends CompositeSchematic implements ISt
         BlockState[] blockList = new BlockState[blockStatePalette.size()];
 
         for (int i = 0; i < blockStatePalette.size(); i++) {
-            Block block = Registries.BLOCK
-                    .getEntry(Identifier.of((((NbtCompound) blockStatePalette.get(i)).getString("Name").orElse(""))))
-                    .map(ref -> ref.value()).orElseThrow();
-            NbtCompound properties = ((NbtCompound) blockStatePalette.get(i)).getCompound("Properties")
-                    .orElse(new NbtCompound());
+            NbtCompound tag = (NbtCompound) blockStatePalette.get(i);
+            // A schematic may name a block this client doesn't have (a modded one, say) or carry a
+            // malformed palette entry. Fall back to air rather than throwing and failing the whole load.
+            Identifier blockKey = Identifier.tryParse(tag.getString("Name").orElse(""));
+            Block block = blockKey == null
+                    ? Blocks.AIR
+                    : Registries.BLOCK.getEntry(blockKey).map(ref -> ref.value()).orElse(Blocks.AIR);
+            NbtCompound properties = tag.getCompound("Properties").orElse(new NbtCompound());
 
             blockList[i] = getBlockState(block, properties);
         }

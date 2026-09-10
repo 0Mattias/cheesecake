@@ -49,6 +49,7 @@ import java.util.function.UnaryOperator;
 import java.util.stream.Stream;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
+import net.minecraft.client.render.BufferBuilder;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3i;
@@ -72,10 +73,10 @@ public class SelCommand extends Command {
                 float opacity = Cheesecake.settings().selectionOpacity.value;
                 float lineWidth = Cheesecake.settings().selectionLineWidth.value;
                 boolean ignoreDepth = Cheesecake.settings().renderSelectionIgnoreDepth.value;
-                IRenderer.startLines(color, opacity, lineWidth, ignoreDepth);
-                IRenderer.emitAABB(event.getModelViewStack(),
-                        new Box(pos1.x, pos1.y, pos1.z, pos1.x + 1, pos1.y + 1, pos1.z + 1));
-                IRenderer.endLines(ignoreDepth);
+                BufferBuilder bufferBuilder = IRenderer.startLines(color, opacity);
+                IRenderer.emitAABB(bufferBuilder, event.getModelViewStack(),
+                        new Box(pos1.x, pos1.y, pos1.z, pos1.x + 1, pos1.y + 1, pos1.z + 1), lineWidth);
+                IRenderer.endLines(bufferBuilder, ignoreDepth);
             }
         });
     }

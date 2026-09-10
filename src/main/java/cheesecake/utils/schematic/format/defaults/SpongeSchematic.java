@@ -27,6 +27,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
+import net.minecraft.block.Blocks;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.registry.Registries;
 import net.minecraft.state.property.Property;
@@ -64,7 +65,8 @@ public final class SpongeSchematic extends StaticSchematic {
 
         // BlockData is stored as an NBT byte[], however, the actual data that is
         // represented is a varint[]
-        byte[] rawBlockData = nbt.getByteArray("BlockData").orElse(new byte[0]);
+        byte[] rawBlockData = nbt.getByteArray("BlockData")
+                .orElseThrow(() -> new IllegalArgumentException("Schematic has no BlockData"));
         int[] blockData = new int[this.x * this.y * this.z];
         int offset = 0;
         for (int i = 0; i < blockData.length; i++) {
@@ -108,7 +110,10 @@ public final class SpongeSchematic extends StaticSchematic {
 
         private BlockState deserialize() {
             if (this.blockState == null) {
-                Block block = Registries.BLOCK.getEntry(this.resourceLocation).map(ref -> ref.value()).orElseThrow();
+                // A schematic can name a block this client doesn't have; air keeps the rest of the
+                // schematic loadable instead of failing the whole file.
+                Block block = Registries.BLOCK.getEntry(this.resourceLocation).map(ref -> ref.value())
+                        .orElse(Blocks.AIR);
                 this.blockState = block.getDefaultState();
 
                 this.properties.keySet().stream().sorted(String::compareTo).forEachOrdered(key -> {

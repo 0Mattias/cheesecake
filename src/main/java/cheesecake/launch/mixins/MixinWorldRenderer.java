@@ -46,7 +46,7 @@ public class MixinWorldRenderer {
             GpuBufferSlice gpuBufferSlice, Vector4f vector4f, boolean bl, CallbackInfo ci) {
         MatrixStack matrixStackIn = new MatrixStack();
         matrixStackIn.multiplyPositionMatrix(positionMatrix);
-        float partialTicks = tickCounter.getTickProgress(true);
+        float partialTicks = tickCounter.getTickProgress(false);
 
         for (ICheesecake icheesecake : CheesecakeAPI.getProvider().getAllCheesecakes()) {
             icheesecake.getGameEventHandler()

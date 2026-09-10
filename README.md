@@ -3,11 +3,45 @@
 
 # [DOWNLOAD HERE](https://github.com/0Mattias/cheesecake/blob/6eaf2b65f86ffe13975b31d6c651345811d30436/cheesecake-0.1-2-ga160ae3a-dirty.jar)
 
+> **Note:** that prebuilt jar is from an early commit and predates a batch of fixes to
+> rendering, sprinting, tool selection and jar packaging. Until it is replaced, either build
+> from source (see below) or grab the `cheesecake-jar` artifact from the most recent green run
+> on the [Actions tab](https://github.com/0Mattias/cheesecake/actions).
+
 ## How is Cheesecake different?
 
-Cheesecake is ported from the 1.19.4 fabric version of Baritone rather than the current 1.21.8 version. You're probably wondering why. The reason is that I didn't scroll down far enough down the Baritone Github repo to see that it had already been ported to a recent Minecraft version. This isn't a joke and this cost me an unbelievable amount of time to create. The result is nothing short of a miracle and is a 1:1 port of the 1.19.4 fabric version. I recommend you try it yourself, because honestly I'm kind of shocked how well it worked out.
+Cheesecake is ported from the 1.19.4 fabric version of Baritone rather than the current 1.21.x version. You're probably wondering why. The reason is that I didn't scroll down far enough down the Baritone Github repo to see that it had already been ported to a recent Minecraft version. This isn't a joke and this cost me an unbelievable amount of time to create.
 
-Everything works exactly like Baritone, below is the original readme file. Original credit goes to the original authors and their incredible hard work. Please support the original release.
+Everything works *mostly* like Baritone. Original credit goes to the original authors and their incredible hard work — please support the original release. The rest of this file is Baritone's own readme.
+
+### Building
+
+This fork is a single Fabric mod project, not upstream's multi-loader build, so upstream's
+`SETUP.md` build instructions do not apply. There is no ProGuard step, no `dist` directory
+and no api/standalone/unoptimized split.
+
+```
+./gradlew build
+```
+
+The mod jar lands in `build/libs`. `./gradlew test` runs the unit tests.
+
+### Known differences from upstream Baritone 1.21.11
+
+The port started from 1.19.4, so it is missing everything upstream landed between 1.19.4 and
+1.21.11, and a few things were left as stubs on the way. The ones worth knowing about:
+
+- **Block drops are approximated.** Upstream rolls the real vanilla loot tables to learn that
+  iron ore drops raw iron. This fork assumes a block drops itself, so `#mine <quantity> <block>`
+  never reaches its quantity limit for ores, and `mineScanDroppedItems` will not target their
+  drops on the ground.
+- **`renderGoalXZBeacon` does nothing.** The goal box is drawn either way; the beacon beam
+  itself is not implemented here.
+- **No forge, neoforge or tweaker builds**, and no `baritone-api` artifact for other mods to
+  integrate against.
+- **Elytra** is at 1.19.4 behaviour: no landing search, no `elytraAllowAboveRoof` handling, and
+  the nether-pathfinder native is pinned to 1.4.1 rather than upstream's 1.6.
+- **Climbing** only recognises ladders and vines, not upstream's weeping/twisting vines.
 
 # Baritone
 <p align="center">

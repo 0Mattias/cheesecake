@@ -33,6 +33,7 @@ import java.util.Collections;
 import java.util.List;
 import net.minecraft.block.BlockState;
 // import net.minecraft.client.render.block.entity.BeaconBlockEntityRenderer;
+import net.minecraft.client.render.BufferBuilder;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.math.BlockPos;
@@ -146,7 +147,7 @@ public final class PathRenderer implements IRenderer {
 
     public static void drawPath(MatrixStack stack, List<BetterBlockPos> positions, int startIndex, Color color,
             boolean fadeOut, int fadeStart0, int fadeEnd0, double offset) {
-        IRenderer.startLines(color, settings.pathRenderLineWidthPixels.value, settings.renderPathIgnoreDepth.value);
+        BufferBuilder bufferBuilder = IRenderer.startLines(color);
 
         int fadeStart = fadeStart0 + startIndex;
         int fadeEnd = fadeEnd0 + startIndex;
@@ -180,14 +181,14 @@ public final class PathRenderer implements IRenderer {
                 IRenderer.glColor(color, alpha);
             }
 
-            emitPathLine(stack, start.x, start.y, start.z, end.x, end.y, end.z, offset);
+            emitPathLine(bufferBuilder, stack, start.x, start.y, start.z, end.x, end.y, end.z, offset);
         }
 
-        IRenderer.endLines(settings.renderPathIgnoreDepth.value);
+        IRenderer.endLines(bufferBuilder, settings.renderPathIgnoreDepth.value);
     }
 
-    private static void emitPathLine(MatrixStack stack, double x1, double y1, double z1, double x2, double y2,
-            double z2, double offset) {
+    private static void emitPathLine(BufferBuilder bufferBuilder, MatrixStack stack, double x1, double y1, double z1,
+            double x2, double y2, double z2, double offset) {
         final double extraOffset = offset + 0.03D;
 
         double vpX = posX();
@@ -195,26 +196,31 @@ public final class PathRenderer implements IRenderer {
         double vpZ = posZ();
         boolean renderPathAsFrickinThingy = !settings.renderPathAsLine.value;
 
-        IRenderer.emitLine(stack,
+        final float lineWidth = settings.pathRenderLineWidthPixels.value;
+
+        IRenderer.emitLine(bufferBuilder, stack,
                 x1 + offset - vpX, y1 + offset - vpY, z1 + offset - vpZ,
-                x2 + offset - vpX, y2 + offset - vpY, z2 + offset - vpZ);
+                x2 + offset - vpX, y2 + offset - vpY, z2 + offset - vpZ,
+                lineWidth);
         if (renderPathAsFrickinThingy) {
-            IRenderer.emitLine(stack,
+            IRenderer.emitLine(bufferBuilder, stack,
                     x2 + offset - vpX, y2 + offset - vpY, z2 + offset - vpZ,
-                    x2 + offset - vpX, y2 + extraOffset - vpY, z2 + offset - vpZ);
-            IRenderer.emitLine(stack,
                     x2 + offset - vpX, y2 + extraOffset - vpY, z2 + offset - vpZ,
-                    x1 + offset - vpX, y1 + extraOffset - vpY, z1 + offset - vpZ);
-            IRenderer.emitLine(stack,
+                    lineWidth);
+            IRenderer.emitLine(bufferBuilder, stack,
+                    x2 + offset - vpX, y2 + extraOffset - vpY, z2 + offset - vpZ,
                     x1 + offset - vpX, y1 + extraOffset - vpY, z1 + offset - vpZ,
-                    x1 + offset - vpX, y1 + offset - vpY, z1 + offset - vpZ);
+                    lineWidth);
+            IRenderer.emitLine(bufferBuilder, stack,
+                    x1 + offset - vpX, y1 + extraOffset - vpY, z1 + offset - vpZ,
+                    x1 + offset - vpX, y1 + offset - vpY, z1 + offset - vpZ,
+                    lineWidth);
         }
     }
 
     public static void drawManySelectionBoxes(MatrixStack stack, Entity player, Collection<BlockPos> positions,
             Color color) {
-        IRenderer.startLines(color, settings.pathRenderLineWidthPixels.value,
-                settings.renderSelectionBoxesIgnoreDepth.value);
+        BufferBuilder bufferBuilder = IRenderer.startLines(color);
 
         // BlockPos blockpos = movingObjectPositionIn.getBlockPos();
         BlockStateInterface bsi = new BlockStateInterface(
@@ -228,18 +234,21 @@ public final class PathRenderer implements IRenderer {
             VoxelShape shape = state.getOutlineShape(player.getEntityWorld(), pos);
             Box toDraw = shape.isEmpty() ? VoxelShapes.fullCube().getBoundingBox() : shape.getBoundingBox();
             toDraw = toDraw.offset(pos);
-            IRenderer.emitAABB(stack, toDraw, .002D);
+            IRenderer.emitAABB(bufferBuilder, stack, toDraw, .002D, settings.pathRenderLineWidthPixels.value);
         });
 
-        IRenderer.endLines(settings.renderSelectionBoxesIgnoreDepth.value);
+        IRenderer.endLines(bufferBuilder, settings.renderSelectionBoxesIgnoreDepth.value);
     }
 
     public static void drawGoal(MatrixStack stack, IPlayerContext ctx, Goal goal, float partialTicks, Color color) {
-        drawGoal(stack, ctx, goal, partialTicks, color, true);
+        drawGoal(null, stack, ctx, goal, partialTicks, color, true);
     }
 
-    private static void drawGoal(MatrixStack stack, IPlayerContext ctx, Goal goal, float partialTicks, Color color,
-            boolean setupRender) {
+    private static void drawGoal(BufferBuilder bufferBuilder, MatrixStack stack, IPlayerContext ctx, Goal goal,
+            float partialTicks, Color color, boolean setupRender) {
+        if (!setupRender && bufferBuilder == null) {
+            throw new IllegalArgumentException("bufferBuilder must not be null if setupRender is false");
+        }
         double renderPosX = posX();
         double renderPosY = posY();
         double renderPosZ = posZ();
@@ -272,39 +281,14 @@ public final class PathRenderer implements IRenderer {
                 y2 -= 0.5;
                 maxY--;
             }
-            drawDankLitGoalBox(stack, color, minX, maxX, minZ, maxZ, minY, maxY, y1, y2, setupRender);
+            drawDankLitGoalBox(bufferBuilder, stack, color, minX, maxX, minZ, maxZ, minY, maxY, y1, y2, setupRender);
         } else if (goal instanceof GoalXZ) {
             GoalXZ goalPos = (GoalXZ) goal;
             minY = ctx.world().getBottomY();
             maxY = ctx.world().getTopYInclusive();
 
-            if (settings.renderGoalXZBeacon.value) {
-                // TODO: check
-                stack.push(); // push
-                stack.translate(goalPos.getX() - renderPosX, -renderPosY, goalPos.getZ() - renderPosZ); // translate
-
-                /*
-                 * BeaconBlockEntityRenderer.renderBeam(
-                 * stack,
-                 * net.minecraft.client.MinecraftClient.getInstance()
-                 * .getEntityRenderDispatcher()
-                 * .getEntityVertexConsumers(),
-                 * TEXTURE_BEACON_BEAM,
-                 * partialTicks,
-                 * 1.0F,
-                 * 100, // CHECK ME - WAS mc.world.getTime()
-                 * 0,
-                 * 256, // CHECK ME
-                 * color,
-                 * 0.2F,
-                 * 0.25F);
-                 */
-                stack.pop(); // pop
-
-                if (settings.renderGoalIgnoreDepth.value) {
-                }
-                return;
-            }
+            // NOTE: renderGoalXZBeacon is not implemented on this fork yet. It used to return here without
+            // drawing anything at all, which made GoalXZ invisible whenever the setting was enabled.
 
             minX = goalPos.getX() + 0.002 - renderPosX;
             maxX = goalPos.getX() + 1 - 0.002 - renderPosX;
@@ -315,21 +299,21 @@ public final class PathRenderer implements IRenderer {
             y2 = 0;
             minY -= renderPosY;
             maxY -= renderPosY;
-            drawDankLitGoalBox(stack, color, minX, maxX, minZ, maxZ, minY, maxY, y1, y2, setupRender);
+            drawDankLitGoalBox(bufferBuilder, stack, color, minX, maxX, minZ, maxZ, minY, maxY, y1, y2, setupRender);
         } else if (goal instanceof GoalComposite) {
             // Simple way to determine if goals can be batched, without having some sort of
             // GoalRenderer
             boolean batch = Arrays.stream(((GoalComposite) goal).goals()).allMatch(IGoalRenderPos.class::isInstance);
 
+            BufferBuilder buf = bufferBuilder;
             if (batch) {
-                IRenderer.startLines(color, settings.goalRenderLineWidthPixels.value,
-                        settings.renderGoalIgnoreDepth.value);
+                buf = IRenderer.startLines(color);
             }
             for (Goal g : ((GoalComposite) goal).goals()) {
-                drawGoal(stack, ctx, g, partialTicks, color, !batch);
+                drawGoal(buf, stack, ctx, g, partialTicks, color, !batch);
             }
             if (batch) {
-                IRenderer.endLines(settings.renderGoalIgnoreDepth.value);
+                IRenderer.endLines(buf, settings.renderGoalIgnoreDepth.value);
             }
         } else if (goal instanceof GoalInverted) {
             drawGoal(stack, ctx, ((GoalInverted) goal).origin, partialTicks, settings.colorInvertedGoalBox.value);
@@ -343,40 +327,40 @@ public final class PathRenderer implements IRenderer {
             maxY = minY + 2;
             y1 = 1 + y + goalpos.level - renderPosY;
             y2 = 1 - y + goalpos.level - renderPosY;
-            drawDankLitGoalBox(stack, color, minX, maxX, minZ, maxZ, minY, maxY, y1, y2, setupRender);
+            drawDankLitGoalBox(bufferBuilder, stack, color, minX, maxX, minZ, maxZ, minY, maxY, y1, y2, setupRender);
         }
     }
 
-    private static void drawDankLitGoalBox(MatrixStack stack, Color colorIn, double minX, double maxX, double minZ,
-            double maxZ, double minY, double maxY, double y1, double y2, boolean setupRender) {
+    private static void drawDankLitGoalBox(BufferBuilder bufferBuilder, MatrixStack stack, Color colorIn, double minX,
+            double maxX, double minZ, double maxZ, double minY, double maxY, double y1, double y2, boolean setupRender) {
+        final float lineWidth = settings.goalRenderLineWidthPixels.value;
         if (setupRender) {
-            IRenderer.startLines(colorIn, settings.goalRenderLineWidthPixels.value,
-                    settings.renderGoalIgnoreDepth.value);
+            bufferBuilder = IRenderer.startLines(colorIn);
         }
 
-        renderHorizontalQuad(stack, minX, maxX, minZ, maxZ, y1);
-        renderHorizontalQuad(stack, minX, maxX, minZ, maxZ, y2);
+        renderHorizontalQuad(bufferBuilder, stack, minX, maxX, minZ, maxZ, y1, lineWidth);
+        renderHorizontalQuad(bufferBuilder, stack, minX, maxX, minZ, maxZ, y2, lineWidth);
 
         for (double y = minY; y < maxY; y += 16) {
             double max = Math.min(maxY, y + 16);
-            IRenderer.emitLine(stack, minX, y, minZ, minX, max, minZ, 0.0, 1.0, 0.0);
-            IRenderer.emitLine(stack, maxX, y, minZ, maxX, max, minZ, 0.0, 1.0, 0.0);
-            IRenderer.emitLine(stack, maxX, y, maxZ, maxX, max, maxZ, 0.0, 1.0, 0.0);
-            IRenderer.emitLine(stack, minX, y, maxZ, minX, max, maxZ, 0.0, 1.0, 0.0);
+            IRenderer.emitLine(bufferBuilder, stack, minX, y, minZ, minX, max, minZ, 0.0, 1.0, 0.0, lineWidth);
+            IRenderer.emitLine(bufferBuilder, stack, maxX, y, minZ, maxX, max, minZ, 0.0, 1.0, 0.0, lineWidth);
+            IRenderer.emitLine(bufferBuilder, stack, maxX, y, maxZ, maxX, max, maxZ, 0.0, 1.0, 0.0, lineWidth);
+            IRenderer.emitLine(bufferBuilder, stack, minX, y, maxZ, minX, max, maxZ, 0.0, 1.0, 0.0, lineWidth);
         }
 
         if (setupRender) {
-            IRenderer.endLines(settings.renderGoalIgnoreDepth.value);
+            IRenderer.endLines(bufferBuilder, settings.renderGoalIgnoreDepth.value);
         }
     }
 
-    private static void renderHorizontalQuad(MatrixStack stack, double minX, double maxX, double minZ, double maxZ,
-            double y) {
+    private static void renderHorizontalQuad(BufferBuilder bufferBuilder, MatrixStack stack, double minX, double maxX,
+            double minZ, double maxZ, double y, float lineWidth) {
         if (y != 0) {
-            IRenderer.emitLine(stack, minX, y, minZ, maxX, y, minZ, 1.0, 0.0, 0.0);
-            IRenderer.emitLine(stack, maxX, y, minZ, maxX, y, maxZ, 0.0, 0.0, 1.0);
-            IRenderer.emitLine(stack, maxX, y, maxZ, minX, y, maxZ, -1.0, 0.0, 0.0);
-            IRenderer.emitLine(stack, minX, y, maxZ, minX, y, minZ, 0.0, 0.0, -1.0);
+            IRenderer.emitLine(bufferBuilder, stack, minX, y, minZ, maxX, y, minZ, 1.0, 0.0, 0.0, lineWidth);
+            IRenderer.emitLine(bufferBuilder, stack, maxX, y, minZ, maxX, y, maxZ, 0.0, 0.0, 1.0, lineWidth);
+            IRenderer.emitLine(bufferBuilder, stack, maxX, y, maxZ, minX, y, maxZ, -1.0, 0.0, 0.0, lineWidth);
+            IRenderer.emitLine(bufferBuilder, stack, minX, y, maxZ, minX, y, minZ, 0.0, 0.0, -1.0, lineWidth);
         }
     }
 }

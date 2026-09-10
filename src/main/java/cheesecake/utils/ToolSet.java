@@ -21,14 +21,17 @@ import cheesecake.Cheesecake;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.network.ClientPlayerEntity;
-// import net.minecraft.enchantment.EnchantmentHelper;
-// import net.minecraft.enchantment.Enchantments;
+import net.minecraft.component.type.ItemEnchantmentsComponent;
+import net.minecraft.enchantment.Enchantment;
+import net.minecraft.enchantment.Enchantments;
 import net.minecraft.entity.effect.StatusEffects;
+import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
+import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.registry.tag.ItemTags;
-// import net.minecraft.item.Item;
-// import net.minecraft.item.Item;
+import net.minecraft.registry.tag.TagKey;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
@@ -52,6 +55,19 @@ public class ToolSet {
     private final Function<Block, Double> backendCalculation;
 
     private final ClientPlayerEntity player;
+
+    /**
+     * Used for evaluating the material cost of a tool.
+     * see {@link #getMaterialCost(ItemStack)}
+     * Prefer tools with lower material cost (lower index in this list).
+     */
+    private static final List<TagKey<Item>> materialTagsPriorityList = List.of(
+            ItemTags.WOODEN_TOOL_MATERIALS,
+            ItemTags.STONE_TOOL_MATERIALS,
+            ItemTags.IRON_TOOL_MATERIALS,
+            ItemTags.GOLD_TOOL_MATERIALS,
+            ItemTags.DIAMOND_TOOL_MATERIALS,
+            ItemTags.NETHERITE_TOOL_MATERIALS);
 
     public ToolSet(ClientPlayerEntity player) {
         breakStrengthCache = new HashMap<>();
@@ -77,23 +93,32 @@ public class ToolSet {
     }
 
     /**
-     * Evaluate the material cost of a possible tool. The priority matches the
-     * harvest level order; there is a chance for multiple at the same with modded
-     * tools
-     * but in that case we don't really care.
+     * Evaluate the material cost of a possible tool.
+     * If all else is equal, we want to prefer the tool with the lowest material cost,
+     * i.e. a wooden pickaxe over a netherite one.
      *
      * @param itemStack a possibly empty ItemStack
      * @return values from 0 up
      */
     private int getMaterialCost(ItemStack itemStack) {
-        if (itemStack.contains(net.minecraft.component.DataComponentTypes.TOOL)) {
-            return 1;
-        } else {
-            return -1;
+        for (int i = 0; i < materialTagsPriorityList.size(); i++) {
+            final TagKey<Item> tag = materialTagsPriorityList.get(i);
+            if (itemStack.isIn(tag)) {
+                return i;
+            }
         }
+        return -1;
     }
 
     public boolean hasSilkTouch(ItemStack stack) {
+        ItemEnchantmentsComponent enchantments = stack.getEnchantments();
+        for (RegistryEntry<Enchantment> enchant : enchantments.getEnchantments()) {
+            // silk touch enchantment is still special cased as affecting block drops
+            // not possible to add custom attribute via datapack
+            if (enchant.matchesKey(Enchantments.SILK_TOUCH) && enchantments.getLevel(enchant) > 0) {
+                return true;
+            }
+        }
         return false;
     }
 
@@ -202,7 +227,10 @@ public class ToolSet {
 
         float speed = item.getMiningSpeedMultiplier(state);
         if (speed > 1) {
-            int effLevel = 0;
+            // Vanilla's efficiency bonus. Upstream reads this off the enchantment's mining_efficiency
+            // attribute effect so that datapack enchantments count too; this only covers vanilla
+            // Efficiency, but for vanilla the result is identical.
+            int effLevel = getEfficiencyLevel(item);
             if (effLevel > 0 && !item.isEmpty()) {
                 speed += effLevel * effLevel + 1;
             }
@@ -214,6 +242,16 @@ public class ToolSet {
         } else {
             return speed / 100;
         }
+    }
+
+    private static int getEfficiencyLevel(ItemStack stack) {
+        ItemEnchantmentsComponent enchantments = stack.getEnchantments();
+        for (RegistryEntry<Enchantment> enchant : enchantments.getEnchantments()) {
+            if (enchant.matchesKey(Enchantments.EFFICIENCY)) {
+                return enchantments.getLevel(enchant);
+            }
+        }
+        return 0;
     }
 
     /**

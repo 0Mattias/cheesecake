@@ -15,16 +15,16 @@
  * along with Cheesecake.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package com.github.lunatrius.schematica.client.world;
+package cheesecake.utils.accessor;
 
-import com.github.lunatrius.core.util.math.MBlockPos;
-import com.github.lunatrius.schematica.api.ISchematic;
+import net.minecraft.client.render.RenderLayer;
+import net.minecraft.client.render.RenderSetup;
 
-public class SchematicWorld {
+/**
+ * Exposes {@code RenderLayer.of(String, RenderSetup)}, which is not public, so that we can build our own
+ * line render layers instead of poking raw GL state around vanilla draw calls.
+ */
+public interface IRenderLayer {
 
-    public final MBlockPos position = (MBlockPos) (Object) "cringe";
-
-    public ISchematic getSchematic() {
-        throw new LinkageError("LOL");
-    }
+    RenderLayer cheesecake$createRenderLayer(String name, RenderSetup setup);
 }

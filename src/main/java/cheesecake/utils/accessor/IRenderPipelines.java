@@ -15,13 +15,15 @@
  * along with Cheesecake.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package fi.dy.masa.litematica.schematic;
+package cheesecake.utils.accessor;
 
-import net.minecraft.util.math.BlockPos;
+import com.mojang.blaze3d.pipeline.RenderPipeline;
 
-public class LitematicaSchematic {
+/**
+ * Exposes the private vanilla lines pipeline snippet so our line render layers inherit the vanilla
+ * shaders and vertex format instead of guessing at them.
+ */
+public interface IRenderPipelines {
 
-    public BlockPos getAreaSize(String name) {
-        throw new LinkageError();
-    }
+    RenderPipeline.Snippet cheesecake$getLinesSnippet();
 }
