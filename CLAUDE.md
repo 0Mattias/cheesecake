@@ -50,6 +50,7 @@ Set `mod_version` in `gradle.properties`, commit and push, then `git tag -a vX.Y
 - `IPlayerContext.world()` is a `World`, not a `ClientWorld`; check `instanceof` before calling client-only methods.
 - The control manager cancels the segment on every idle tick, and the elytra process asks for `CANCEL_AND_SET_GOAL` on every tick while flying.
 - `gh pr view N` needs `--repo 0Mattias/cheesecake`; without it the number can resolve against another repository.
+- `javap` on macOS is a stub that fails with "Unable to locate a Java Runtime" unless a JDK is installed system-wide; call `$JAVA_HOME/bin/javap` instead.
 
 ## Open work
 
