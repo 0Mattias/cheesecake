@@ -18,7 +18,7 @@ Fabric API is not needed. The mod runs on the client only and does nothing when 
 
 Download the jar from the most recent entry on the [Releases](https://github.com/0Mattias/cheesecake/releases) page and copy it into the `mods` folder of a Fabric 1.21.11 profile.
 
-Every push to `main` also builds the mod and launches a headless client to confirm that it loads. To try a change that has not been released yet, open the [Actions](https://github.com/0Mattias/cheesecake/actions) page, select the most recent successful run on `main`, and download the `cheesecake-jar` artifact.
+Every push to `main` also builds the mod, launches a headless client to confirm that it loads, and walks a path in a generated world. To try a change that has not been released yet, open the [Actions](https://github.com/0Mattias/cheesecake/actions) page, select the most recent successful run on `main`, and download the `cheesecake-jar` artifact.
 
 Alternatively, build the jar yourself as described under [Building](#building).
 
@@ -35,6 +35,7 @@ Commands are typed into chat with a `#` prefix. Some to begin with:
 | `#farm` | Harvest and replant the crops around you |
 | `#build house.schematic` | Build a schematic starting at your feet |
 | `#elytra` | Fly to the current goal on an elytra, using fireworks |
+| `#status` | Print the bot's state as one line of JSON |
 | `#stop` | Cancel whatever is running |
 | `#help` | List every command |
 
@@ -44,7 +45,7 @@ Three documents cover the details:
 
 - [USAGE.md](USAGE.md) is the full user guide, inherited from Baritone.
 - [FEATURES.md](FEATURES.md) describes what the pathfinder can and cannot do.
-- [AI_AGENT_README.md](AI_AGENT_README.md) is a compact command reference written for software that drives the mod through chat.
+- [AI_AGENT_README.md](AI_AGENT_README.md) is for software that drives the mod, through chat or through the local control socket that `agentApiPort` opens.
 
 `#build` reads schematics from `.minecraft/schematics` and accepts the MCEdit (`.schematic`), Sponge (`.schem`) and Litematica (`.litematic`) formats.
 
@@ -63,7 +64,7 @@ Cheesecake began as a port of Baritone's 1.19.4 branch to Minecraft 1.21.11. Ups
 
 ### Verification
 
-Every push is compiled against Minecraft 1.21.11, the unit tests are run, the jar is checked for correct remapping and packaging, and a client is launched under a virtual display to confirm that every mixin applies. What continuous integration cannot check is behaviour inside a world. Elytra flight and the item counts used by `#mine` are the most recently changed parts and the least exercised in play; reports on either are welcome.
+Every push is compiled against Minecraft 1.21.11, the unit tests are run, the jar is checked for correct remapping and packaging, and a client is launched under a virtual display to confirm that every mixin applies. A second client then creates a survival world from a fixed seed and walks a fixed distance with the pathfinder, which exercises world loading, chunk caching, path calculation and movement end to end. What that does not cover is the rest of the feature set in play: elytra flight and the item counts used by `#mine` are the most recently changed parts, and reports on either are welcome.
 
 ## Building
 
@@ -79,7 +80,7 @@ The mod jar is written to `build/libs`. `./gradlew test` runs the unit tests on 
 
 Set `mod_version` in `gradle.properties` to the new number, then push an annotated tag of the form `vX.Y.Z`. CI builds the jar with that version, runs the unit tests and the headless client, and publishes a GitHub release with the jar and its SHA-256 checksum. The body of the tag message becomes the release notes; a tag without one gets GitHub's generated notes. A pre-release suffix such as `v0.3.0-rc.1` publishes a pre-release.
 
-The code uses Yarn mappings, whereas Baritone uses Mojang's official names with Parchment. Patches taken from upstream need their Minecraft symbols translated, which is the main cost of keeping the fork current. Upstream's [SETUP.md](SETUP.md) is kept for reference; its instructions about loaders, artifacts and the `dist` directory do not apply here.
+The code uses Yarn mappings, whereas Baritone uses Mojang's official names with Parchment. Patches taken from upstream need their Minecraft symbols translated, which is the main cost of keeping the fork current. [SETUP.md](SETUP.md) covers the development setup, the project layout and what each CI job does.
 
 ## Reporting problems
 

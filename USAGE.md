@@ -1,107 +1,88 @@
-(assuming you already have Baritone [set up](SETUP.md))
+# Using Cheesecake
 
-# Prefix
+Cheesecake is driven from the chat box. This page covers the command prefix, the commands you will reach for most, the settings worth knowing about, where the mod keeps its files, and the usual reasons it appears not to respond. In the game, `#help` lists every command and `#help <command>` explains one in detail, including its arguments.
 
-Baritone's chat control prefix is `#` by default. In Impact, you can also use `.b` as a prefix. (for example, `.b click` instead of `#click`)
+## Prefix
 
-Baritone commands can also by default be typed in the chatbox. However if you make a typo, like typing "gola 10000 10000" instead of "goal" it goes into public chat, which is bad, so using `#` is suggested.
+Commands start with `#`: `#goto 100 64 100`. While the `chatControl` setting is on, a message without the prefix is also tried as a command, but a mistyped one then goes to public chat, so the prefixed form is the safer habit. `prefixControl` turns the prefixed form off and `chatControl` the unprefixed form; keep at least one of them on. If you lock yourself out, delete `.minecraft/cheesecake/settings.txt` and restart the game. The character itself is the `prefix` setting.
 
-To disable direct chat control (with no prefix), turn off the `chatControl` setting. To disable chat control with the `#` prefix, turn off the `prefixControl` setting. In Impact, `.b` cannot be disabled. Be careful that you don't leave yourself with all control methods disabled (if you do, reset your settings by deleting the file `minecraft/baritone/settings.txt` and relaunching).
+## Commands
 
-# For Baritone 1.2.10+, 1.3.5+, 1.4.2+
+Coordinates accept `~` for a value relative to your position, so `#goal ~ 64 ~-100` is a hundred blocks north of you at y 64. Block names are the usual identifiers, with or without the `minecraft:` namespace.
 
-Lots of the commands have changed, BUT `#help` is improved vastly (its clickable! commands have tab completion! oh my!).
+### Moving
 
-Try `#help` I promise it won't just send you back here =)
+| Command | What it does |
+| --- | --- |
+| `#goto <x> <y> <z>`, `#goto <x> <z>`, `#goto <y>` | Set a goal and start walking |
+| `#goto <block>` | Walk to the nearest block of that type, for example `#goto ender_chest` |
+| `#goal <x> <y> <z>` then `#path` | Set a goal without moving, then start. `#goal` alone targets your feet and `#goal clear` removes the goal |
+| `#thisway <blocks>` then `#path` | Go that far in the direction you are facing |
+| `#invert` | Get as far from the goal as possible instead of as close |
+| `#come` | Walk to where the camera is, which is useful with a freecam |
+| `#axis` | Head for the nearest axis or diagonal at y 120 (`axisHeight`) |
+| `#surface` | Get out of a cave to the nearest open air above |
+| `#click` | Pick the destination on screen: right-click to stand on a block, left-click to walk into it, drag to select an area |
+| `#stop`, `#cancel`, `#forcecancel` | Stop whatever is running. `#pause` and `#resume` suspend and continue it |
 
-"wtf where is cleararea" -> look at `#help sel`
+### Working
 
-"wtf where is goto death, goto waypoint" -> look at `#help wp` 
+| Command | What it does |
+| --- | --- |
+| `#mine <block>...` | Dig for the blocks, exploring around y 11 for ores. `legitMine` restricts it to ores it has seen |
+| `#mine <count> <block>` | Stop once the inventory holds that many of what the block drops; `#mine 64 iron_ore` counts raw iron |
+| `#tunnel` | Dig a one-by-two tunnel straight ahead. `#tunnel <height> <width> <depth>` clears a box instead |
+| `#farm [range] [waypoint]` | Harvest, replant and bone-meal crops. `farmUsingSelection` limits it to the current selection |
+| `#build <file> [x y z]` | Build a schematic from `.minecraft/schematics` with its origin at your feet or at the given position. MCEdit, Sponge and Litematica files are accepted |
+| `#litematica [index]`, `#schematica` | Build the schematic currently loaded in Litematica or Schematica |
+| `#explore [x z]` | Keep walking to the nearest chunk it has never seen. `#explorefilter <file.json> [invert]` restricts it to a list of chunks |
+| `#follow player <name>`, `#follow players`, `#follow entity <type>`, `#follow entities` | Follow a player or entities |
+| `#pickup` | Collect dropped items. `#help pickup` explains the arguments |
+| `#sel` | Selection commands: clear an area, fill it, build walls or a shell, and more. `#help sel` lists them |
 
-just look at `#help` lmao
+### Flying
 
-Watch this [showcase video](https://youtu.be/CZkLXWo4Fg4)!
+`#elytra` flies to the current goal with an elytra and firework rockets from the hotbar. It works in the Nether, the Overworld and the End. Set a goal with `#goal` first, then `#elytra`. `#elytra reset` recalculates from scratch and `#elytra repack` re-reads the loaded chunks. The first use prints a summary of what it needs; `elytraTermsAccepted` silences that.
 
-# Commands
+In the Nether the pathfinder can predict terrain beyond what you have seen when it knows the world seed (`elytraNetherSeed`, with `elytraPredictTerrain` on). Long trips route above the build limit when `elytraAllowAboveBuildLimit` is on and the distance exceeds `elytraLongDistanceThreshold`; in the Nether that also needs `elytraAllowAboveRoof`. `elytraAutoJump` lets it walk to an edge and take off on its own, and `elytraConserveFireworks` together with `elytraFireworkSpeed` slow it down.
 
-[Tutorial playlist](https://www.youtube.com/playlist?list=PLnwnJ1qsS7CoQl9Si-RTluuzCo_4Oulpa)
+### Information
 
-**All** of these commands may need a prefix before them, as above ^.
+| Command | What it does |
+| --- | --- |
+| `#status` | One line of JSON: position, dimension, health, the process in control, path progress and estimates. Meant for programs; see [AI_AGENT_README.md](AI_AGENT_README.md) |
+| `#eta` | Estimated ticks to the end of the current segment and to the goal |
+| `#proc` | Details about the process in control |
+| `#find <block>` | Search the chunk cache for a block |
+| `#wp` | Waypoints. `#wp save user <name>` stores your position and `#wp goal <name>` then `#path` returns to it; `#wp goal death` lists where you last died; `#sethome` and `#home` are shortcuts |
+| `#version`, `#help` | The version, and the list of commands |
 
-`help`
+### Maintenance
 
-To toggle a boolean setting, just say its name in chat (for example saying `allowBreak` toggles whether Baritone will consider breaking blocks). For a numeric setting, say its name then the new value (like `primaryTimeoutMS 250`). It's case insensitive. To reset a setting to its default value, say `acceptableThrowawayItems reset`. To reset all settings, say `reset`. To see all settings that have been modified from their default values, say `modified`.
+`#repack` re-reads the chunks around you into the cache, `#reloadall` and `#saveall` reload and save the cache for this world, `#render` fixes chunks that stopped rendering, `#blacklist` tells `#goto <block>` to skip the nearest candidate, and `#gc` asks the JVM to collect garbage.
 
-Commands in Baritone:
-- `thisway 1000` then `path` to go in the direction you're facing for a thousand blocks
-- `goal x y z` or `goal x z` or `goal y`, then `path` to set a goal to a certain coordinate then path to it
-- `goto x y z` or `goto x z` or `goto y` to go to a certain coordinate (in a single step, starts going immediately)
-- `goal` to set the goal to your player's feet
-- `goal clear` to clear the goal
-- `cancel` or `stop` to stop everything, `forcecancel` is also an option
-- `goto portal` or `goto ender_chest` or `goto block_type` to go to a block. (in Impact, `.goto` is an alias for `.b goto` for the most part)
-- `mine diamond_ore iron_ore` to mine diamond ore or iron ore (turn on the setting `legitMine` to only mine ores that it can actually see. It will explore randomly around y=11 until it finds them.) An amount of blocks can also be specified, for example, `mine 64 diamond_ore`.
-- `click` to click your destination on the screen. Right click path to on top of the block, left click to path into it (either at foot level or eye level), and left click and drag to select an area (`#help sel` to see what you can do with that selection).
-- `follow player playerName` to follow a player. `follow players` to follow any players in range (combine with Kill Aura for a fun time). `follow entities` to follow any entities. `follow entity pig` to follow entities of a specific type.
-- `wp` for waypoints. A "tag" is like "home" (created automatically on right clicking a bed) or "death" (created automatically on death) or "user" (has to be created manually). So you might want `#wp save user coolbiome`, then to set the goal `#wp goal coolbiome` then `#path` to path to it. For death, `#wp goal death` will list waypoints under the "death" tag (remember stuff is clickable!)
-- `build` to build a schematic. `build blah.schematic` will load `schematics/blah.schematic` and build it with the origin being your player feet. `build blah.schematic x y z` to set the origin. Any of those can be relative to your player (`~ 69 ~-420` would build at x=player x, y=69, z=player z-420).
-- `schematica` to build the schematic that is currently open in schematica
-- `tunnel` to dig and make a tunnel, 1x2. It will only deviate from the straight line if necessary such as to avoid lava. For a dumber tunnel that is really just cleararea, you can `tunnel 3 2 100`, to clear an area 3 high, 2 wide, and 100 deep.
-- `farm` to automatically harvest, replant, or bone meal crops. Use `farm <range>` or `farm <range> <waypoint>` to limit the max distance from the starting point or a waypoint. 
-- `axis` to go to an axis or diagonal axis at y=120 (`axisHeight` is a configurable setting, defaults to 120).
-- `explore x z` to explore the world from the origin of x,z. Leave out x and z to default to player feet. This will continually path towards the closest chunk to the origin that it's never seen before. `explorefilter filter.json` with optional invert can be used to load in a list of chunks to load.
-- `invert` to invert the current goal and path. This gets as far away from it as possible, instead of as close as possible. For example, do `goal` then `invert` to run as far as possible from where you're standing at the start.
-- `come` tells Baritone to head towards your camera, useful when freecam doesn't move your player position.
-- `blacklist` will stop baritone from going to the closest block so it won't attempt to get to it.
-- `eta` to get information about the estimated time until the next segment and the goal, be aware that the ETA to your goal is really unprecise.
-- `proc` to view miscellaneous information about the process currently controlling Baritone.
-- `repack` to re-cache the chunks around you.
-- `gc` to call `System.gc()` which may free up some memory.
-- `render` to fix glitched chunk rendering without having to reload all of them.
-- `reloadall` to reload Baritone's world cache or `saveall` to save Baritone's world cache.
-- `find` to search through Baritone's cache and attempt to find the location of the block.
-- `surface` or `top` to tell Baritone to head towards the closest surface-like area, this can be the surface or highest available air space.
-- `version` to get the version of Baritone you're running
-- `damn` daniel
+## Settings
 
-All the settings and documentation are <a href="https://github.com/cabaletta/baritone/blob/master/src/api/java/baritone/api/Settings.java">here</a>. If you find HTML easier to read than Javadoc, you can look <a href="https://baritone.leijurv.com/baritone/api/Settings.html#field.detail">here</a>.
+Say a boolean setting's name to toggle it (`#allowBreak`) or give it a value (`#allowBreak false`), and give numeric settings a value (`#primaryTimeoutMS 250`). `#<setting> reset` restores one setting, `#reset` restores all of them, and `#modified` lists the ones that differ from their defaults. Names are case insensitive. Every setting is documented in [Settings.java](src/main/java/cheesecake/api/Settings.java).
 
-There are about a hundred settings, but here are some fun / interesting / important ones that you might want to look at changing in normal usage of Baritone. The documentation for each can be found at the above links.
-- `allowBreak`
-- `allowSprint`
-- `allowPlace`
-- `allowParkour`
-- `allowParkourPlace`
-- `blockPlacementPenalty`
-- `renderCachedChunks` (and `cachedChunksOpacity`) <-- very fun but you need a beefy computer
-- `avoidance` (avoidance of mobs / mob spawners)
-- `legitMine`
-- `followRadius`
-- `backfill` (fill in tunnels behind you)
-- `buildInLayers`
-- `buildRepeatDistance` and `buildRepeatDirection`
-- `worldExploringChunkOffset`
-- `acceptableThrowawayItems`
-- `blocksToAvoidBreaking`
-- `mineScanDroppedItems`
-- `allowDiagonalAscend`
+Some worth knowing about:
 
+- `allowBreak`, `allowPlace`, `allowSprint`, `allowParkour` and `allowParkourPlace` decide what the pathfinder may do. `blockPlacementPenalty` and `acceptableThrowawayItems` shape block placing; `blocksToAvoidBreaking` protects blocks.
+- `avoidance` keeps away from mobs and spawners.
+- `legitMine` and `mineScanDroppedItems` affect mining; `backfill` fills tunnels behind you.
+- `buildInLayers`, `buildRepeatDistance` and `buildRepeatDirection` affect building.
+- `followRadius`, `farmUsingSelection` and `worldExploringChunkOffset`.
+- `renderCachedChunks` with `cachedChunksOpacity` draws the whole cache, which is striking but expensive.
+- The `elytra*` settings described above.
+- `agentApiPort` opens the local control socket for programs.
 
+## Files
 
+Settings are stored in `.minecraft/cheesecake/settings.txt`. Cached chunks and waypoints are kept per world: inside the save folder for singleplayer worlds, and under `.minecraft/cheesecake/<server address>/` for servers. Schematics are read from `.minecraft/schematics`.
 
-# Troubleshooting / common issues
+## When nothing happens
 
-## Why doesn't Baritone respond to any of my chat commands?
-This could be one of many things.
-
-First, make sure it's actually installed. An easy way to check is seeing if it created the folder `baritone` in your Minecraft folder.
-
-Second, make sure that you're using the prefix properly, and that chat control is enabled in the way you expect.
-
-For example, Impact disables direct chat control. (i.e. anything typed in chat without a prefix will be ignored and sent publicly). **This is a saved setting**, so if you run Impact once, `chatControl` will be off from then on, **even in other clients**.
-So you'll need to use the `#` prefix or edit `baritone/settings.txt` in your Minecraft folder to undo that (specifically, remove the line `chatControl false` then restart your client).
-
-
-## Why can I do `.goto x z` in Impact but nowhere else? Why can I do `-path to x z` in KAMI but nowhere else?
-These are custom commands that they added; those aren't from Baritone.
-The equivalent you're looking for is `goto x z`.
+- Confirm the mod is installed: a `cheesecake` folder appears in `.minecraft` on first launch, and `#version` answers in chat.
+- Check the prefix and the `chatControl` and `prefixControl` settings described above.
+- The mod runs on the client only. It does nothing installed on a server.
+- Where the fork differs from Baritone, the status section of the [README](README.md#status) explains what to expect.
