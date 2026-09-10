@@ -78,7 +78,7 @@ The mod jar is written to `build/libs`. `./gradlew test` runs the unit tests on 
 
 ### Releasing
 
-Set `mod_version` in `gradle.properties` to the new number, then push an annotated tag of the form `vX.Y.Z`. CI builds the jar with that version, runs the unit tests and the headless client, and publishes a GitHub release with the jar and its SHA-256 checksum. The body of the tag message becomes the release notes; a tag without one gets GitHub's generated notes. A pre-release suffix such as `v0.3.0-rc.1` publishes a pre-release.
+Set `mod_version` in `gradle.properties` to the new number, then push an annotated tag of the form `vX.Y.Z`. CI builds the jar with that version, runs the unit tests and the headless client, and publishes a GitHub release with the jar and its SHA-256 checksum. The body of the tag message becomes the release notes; a tag without one gets GitHub's generated notes. Git drops lines that start with `#` from a tag message, so write headings another way or tag with `--cleanup=verbatim`. A pre-release suffix such as `v0.3.0-rc.1` publishes a pre-release.
 
 The code uses Yarn mappings, whereas Baritone uses Mojang's official names with Parchment. Patches taken from upstream need their Minecraft symbols translated, which is the main cost of keeping the fork current. [SETUP.md](SETUP.md) covers the development setup, the project layout and what each CI job does.
 
