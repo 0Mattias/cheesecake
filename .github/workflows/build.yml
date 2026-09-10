@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - '1.21.11'
       - 'claude/**'
     tags:
       - 'v*'
