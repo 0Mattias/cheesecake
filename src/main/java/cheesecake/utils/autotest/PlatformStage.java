@@ -18,8 +18,8 @@
 package cheesecake.utils.autotest;
 
 import cheesecake.api.utils.BetterBlockPos;
-import net.minecraft.block.Blocks;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.block.Blocks;
 
 /**
  * Builds an obsidian platform high above the terrain and puts the player on it. The stages after
@@ -69,11 +69,11 @@ public final class PlatformStage extends Stage {
             return false;
         }
         BetterBlockPos feet = feet();
-        if (feet.y != PLATFORM_Y + 1 || !this.t.player().isOnGround()) {
+        if (feet.y != PLATFORM_Y + 1 || !this.t.player().onGround()) {
             return false;
         }
-        check(this.t.mc.world.getBlockState(new BlockPos(feet.x, PLATFORM_Y, feet.z)).isOf(Blocks.OBSIDIAN),
-                "standing on " + this.t.mc.world.getBlockState(new BlockPos(feet.x, PLATFORM_Y, feet.z)) + " instead of the platform");
+        check(this.t.mc.level.getBlockState(new BlockPos(feet.x, PLATFORM_Y, feet.z)).is(Blocks.OBSIDIAN),
+                "standing on " + this.t.mc.level.getBlockState(new BlockPos(feet.x, PLATFORM_Y, feet.z)) + " instead of the platform");
         this.t.log("standing on the platform at " + feet);
         return true;
     }

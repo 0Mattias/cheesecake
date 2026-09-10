@@ -20,7 +20,7 @@ package cheesecake.api.process;
 import cheesecake.api.pathing.goals.Goal;
 import cheesecake.api.utils.BetterBlockPos;
 import java.util.List;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.core.BlockPos;
 
 public interface IElytraProcess extends ICheesecakeProcess {
 

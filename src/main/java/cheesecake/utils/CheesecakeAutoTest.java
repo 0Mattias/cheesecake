@@ -31,22 +31,21 @@ import cheesecake.utils.autotest.SocketStage;
 import cheesecake.utils.autotest.Stage;
 import cheesecake.utils.autotest.VineStage;
 import cheesecake.utils.autotest.WalkStage;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.AccessibilityOnboardingScreen;
-import net.minecraft.client.gui.screen.GameMenuScreen;
-import net.minecraft.client.gui.screen.TitleScreen;
-import net.minecraft.client.option.CloudRenderMode;
-import net.minecraft.client.option.GameOptions;
-import net.minecraft.item.Items;
-import net.minecraft.particle.ParticlesMode;
-import net.minecraft.resource.DataConfiguration;
+import net.minecraft.client.CloudStatus;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.Options;
+import net.minecraft.client.gui.screens.AccessibilityOnboardingScreen;
+import net.minecraft.client.gui.screens.PauseScreen;
+import net.minecraft.client.gui.screens.TitleScreen;
+import net.minecraft.server.level.ParticleStatus;
 import net.minecraft.world.Difficulty;
-import net.minecraft.world.GameMode;
-import net.minecraft.world.gen.GeneratorOptions;
-import net.minecraft.world.gen.WorldPresets;
-import net.minecraft.world.level.LevelInfo;
-import net.minecraft.world.rule.GameRules;
-
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.LevelSettings;
+import net.minecraft.world.level.WorldDataConfiguration;
+import net.minecraft.world.level.gamerules.GameRules;
+import net.minecraft.world.level.levelgen.WorldOptions;
+import net.minecraft.world.level.levelgen.presets.WorldPresets;
 import java.util.ArrayDeque;
 import java.util.Arrays;
 import java.util.Deque;
@@ -150,35 +149,35 @@ public final class CheesecakeAutoTest implements AbstractGameEventListener {
     }
 
     private void tick(TickEvent event) {
-        MinecraftClient mc = MinecraftClient.getInstance();
+        Minecraft mc = Minecraft.getInstance();
         if (!this.started) {
             this.ticksBeforeStart++;
             // A fresh profile shows the accessibility onboarding screen before the title screen, and
             // nothing would ever dismiss it. Opt out before the client picks its first screen, and if
             // it is already up, do what its Continue button does.
             mc.options.onboardAccessibility = false;
-            if (mc.currentScreen instanceof AccessibilityOnboardingScreen) {
+            if (mc.screen instanceof AccessibilityOnboardingScreen) {
                 log("dismissing the accessibility onboarding screen");
-                mc.options.setAccessibilityOnboarded();
+                mc.options.onboardingAccessibilityFinished();
                 mc.setScreen(new TitleScreen());
                 return;
             }
-            if (mc.currentScreen instanceof TitleScreen && mc.getOverlay() == null) {
+            if (mc.screen instanceof TitleScreen && mc.getOverlay() == null) {
                 this.started = true;
                 configureOptions(mc.options);
                 createWorld(mc);
             } else if (this.ticksBeforeStart % 100 == 0) {
-                log("waiting for the title screen, tick " + this.ticksBeforeStart + ", screen=" + name(mc.currentScreen) + ", overlay=" + name(mc.getOverlay()));
+                log("waiting for the title screen, tick " + this.ticksBeforeStart + ", screen=" + name(mc.screen) + ", overlay=" + name(mc.getOverlay()));
             }
             if (this.ticksBeforeStart > MAX_TICKS_BEFORE_START) {
-                fail("never reached the title screen; screen=" + name(mc.currentScreen) + ", overlay=" + name(mc.getOverlay()), null);
+                fail("never reached the title screen; screen=" + name(mc.screen) + ", overlay=" + name(mc.getOverlay()), null);
             }
             return;
         }
-        if (event.getType() != TickEvent.Type.IN || mc.player == null || mc.world == null) {
+        if (event.getType() != TickEvent.Type.IN || mc.player == null || mc.level == null) {
             return;
         }
-        if (mc.currentScreen instanceof GameMenuScreen) {
+        if (mc.screen instanceof PauseScreen) {
             // The pause menu would stop the integrated server ticking.
             mc.setScreen(null);
         }
@@ -232,42 +231,42 @@ public final class CheesecakeAutoTest implements AbstractGameEventListener {
         }
     }
 
-    private static void configureOptions(GameOptions options) {
-        options.getMaxFps().setValue(20);
-        options.getViewDistance().setValue(4);
-        options.getSimulationDistance().setValue(5);
-        options.getCloudRenderMode().setValue(CloudRenderMode.OFF);
-        options.getParticles().setValue(ParticlesMode.MINIMAL);
-        options.getBiomeBlendRadius().setValue(0);
+    private static void configureOptions(Options options) {
+        options.framerateLimit().set(20);
+        options.renderDistance().set(4);
+        options.simulationDistance().set(5);
+        options.cloudStatus().set(CloudStatus.OFF);
+        options.particles().set(ParticleStatus.MINIMAL);
+        options.biomeBlendRadius().set(0);
         options.pauseOnLostFocus = false;
-        options.hudHidden = true;
+        options.hideGui = true;
     }
 
-    private static void createWorld(MinecraftClient mc) {
+    private static void createWorld(Minecraft mc) {
         String name = "cheesecake-autotest-" + System.currentTimeMillis();
         log("creating world " + name + " with seed " + AutoTestContext.SEED);
-        LevelInfo info = new LevelInfo(
+        LevelSettings info = new LevelSettings(
                 name,
-                GameMode.SURVIVAL,
+                GameType.SURVIVAL,
                 false,
                 Difficulty.PEACEFUL,
                 true,
-                new GameRules(DataConfiguration.SAFE_MODE.enabledFeatures()),
-                DataConfiguration.SAFE_MODE
+                new GameRules(WorldDataConfiguration.DEFAULT.enabledFeatures()),
+                WorldDataConfiguration.DEFAULT
         );
-        mc.createIntegratedServerLoader().createAndStart(
+        mc.createWorldOpenFlows().createFreshLevel(
                 name,
                 info,
-                new GeneratorOptions(AutoTestContext.SEED, true, false),
-                WorldPresets::createDemoOptions,
-                mc.currentScreen
+                new WorldOptions(AutoTestContext.SEED, true, false),
+                WorldPresets::createNormalWorldDimensions,
+                mc.screen
         );
     }
 
     private void pass(String message) {
         this.finished = true;
         log("PASS: " + message);
-        MinecraftClient.getInstance().scheduleStop();
+        Minecraft.getInstance().stop();
     }
 
     private void fail(String message, Throwable cause) {

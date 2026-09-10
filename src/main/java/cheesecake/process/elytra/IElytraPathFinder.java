@@ -17,9 +17,8 @@
 
 package cheesecake.process.elytra;
 
-import net.minecraft.util.math.BlockPos;
-
 import java.util.concurrent.CompletableFuture;
+import net.minecraft.core.BlockPos;
 
 public interface IElytraPathFinder {
 

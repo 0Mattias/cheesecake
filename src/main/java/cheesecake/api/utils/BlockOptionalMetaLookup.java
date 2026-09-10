@@ -24,9 +24,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Stream;
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockState;
-import net.minecraft.item.ItemStack;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
 
 public class BlockOptionalMetaLookup {
     private final ImmutableSet<Block> blockSet;
@@ -78,7 +78,7 @@ public class BlockOptionalMetaLookup {
 
     public boolean has(ItemStack stack) {
         int hash = ((IItemStack) (Object) stack).getCheesecakeHash();
-        hash -= stack.getDamage();
+        hash -= stack.getDamageValue();
         return stackHashes.contains(hash);
     }
 

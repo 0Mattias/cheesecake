@@ -17,7 +17,7 @@
 
 package fi.dy.masa.litematica.schematic;
 
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.core.BlockPos;
 
 public class LitematicaSchematic {
 

@@ -21,11 +21,11 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import net.minecraft.block.AirBlock;
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.Blocks;
-import net.minecraft.state.property.Property;
+import net.minecraft.world.level.block.AirBlock;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.Property;
 
 public class SubstituteSchematic extends AbstractSchematic {
 
@@ -57,7 +57,7 @@ public class SubstituteSchematic extends AbstractSchematic {
         }
         for (Block substitute : substitutes) {
             if (substitute instanceof AirBlock) {
-                return current.getBlock() instanceof AirBlock ? current : Blocks.AIR.getDefaultState(); // can always "place" air
+                return current.getBlock() instanceof AirBlock ? current : Blocks.AIR.defaultBlockState(); // can always "place" air
             }
             for (BlockState placeable : approxPlaceable) {
                 if (substitute.equals(placeable.getBlock())) {
@@ -65,7 +65,7 @@ public class SubstituteSchematic extends AbstractSchematic {
                 }
             }
         }
-        return substitutes.get(0).getDefaultState();
+        return substitutes.get(0).defaultBlockState();
     }
 
     private BlockState withBlock(BlockState state, Block block) {
@@ -73,7 +73,7 @@ public class SubstituteSchematic extends AbstractSchematic {
             return blockStateCache.get(state).get(block);
         }
         Collection<Property<?>> properties = state.getProperties();
-        BlockState newState = block.getDefaultState();
+        BlockState newState = block.defaultBlockState();
         for (Property<?> property : properties) {
             try {
                 newState = copySingleProp(state, newState, property);
@@ -85,6 +85,6 @@ public class SubstituteSchematic extends AbstractSchematic {
     }
 
     private <T extends Comparable<T>> BlockState copySingleProp(BlockState fromState, BlockState toState, Property<T> prop) {
-        return toState.with(prop, fromState.get(prop));
+        return toState.setValue(prop, fromState.getValue(prop));
     }
 }

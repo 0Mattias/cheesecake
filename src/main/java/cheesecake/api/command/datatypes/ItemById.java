@@ -20,18 +20,18 @@ package cheesecake.api.command.datatypes;
 import cheesecake.api.command.exception.CommandException;
 import cheesecake.api.command.helpers.TabCompleteHelper;
 import java.util.stream.Stream;
-import net.minecraft.item.Item;
-import net.minecraft.registry.Registries;
-import net.minecraft.util.Identifier;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.Item;
 
 public enum ItemById implements IDatatypeFor<Item> {
     INSTANCE;
 
     @Override
     public Item get(IDatatypeContext ctx) throws CommandException {
-        Identifier id = Identifier.of(ctx.getConsumer().getString());
+        Identifier id = Identifier.parse(ctx.getConsumer().getString());
         Item item;
-        if ((item = Registries.ITEM.getOptionalValue(id).orElse(null)) == null) {
+        if ((item = BuiltInRegistries.ITEM.getOptional(id).orElse(null)) == null) {
             throw new IllegalArgumentException("No item found by that id");
         }
         return item;
@@ -41,7 +41,7 @@ public enum ItemById implements IDatatypeFor<Item> {
     public Stream<String> tabComplete(IDatatypeContext ctx) throws CommandException {
         return new TabCompleteHelper()
                 .append(
-                        Registries.ITEM.getIds()
+                        BuiltInRegistries.ITEM.keySet()
                                 .stream()
                                 .map(Identifier::toString))
                 .filterPrefixNamespaced(ctx.getConsumer().getString())

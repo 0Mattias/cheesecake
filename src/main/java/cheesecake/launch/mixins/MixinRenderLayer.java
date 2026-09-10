@@ -18,21 +18,21 @@
 package cheesecake.launch.mixins;
 
 import cheesecake.utils.accessor.IRenderLayer;
-import net.minecraft.client.render.RenderLayer;
-import net.minecraft.client.render.RenderSetup;
+import net.minecraft.client.renderer.rendertype.RenderSetup;
+import net.minecraft.client.renderer.rendertype.RenderType;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 
-@Mixin(RenderLayer.class)
+@Mixin(RenderType.class)
 public abstract class MixinRenderLayer implements IRenderLayer {
 
     @Shadow
-    static RenderLayer of(String name, RenderSetup setup) {
+    static RenderType create(String name, RenderSetup setup) {
         return null;
     }
 
     @Override
-    public RenderLayer cheesecake$createRenderLayer(String name, RenderSetup setup) {
-        return of(name, setup);
+    public RenderType cheesecake$createRenderLayer(String name, RenderSetup setup) {
+        return create(name, setup);
     }
 }

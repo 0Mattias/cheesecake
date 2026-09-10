@@ -19,15 +19,15 @@ package cheesecake.api.schematic;
 
 import java.util.List;
 import java.util.stream.Collectors;
-import net.minecraft.block.BlockState;
-import net.minecraft.util.BlockMirror;
+import net.minecraft.world.level.block.Mirror;
+import net.minecraft.world.level.block.state.BlockState;
 
 public class MirroredSchematic implements ISchematic {
 
     private final ISchematic schematic;
-    private final BlockMirror mirror;
+    private final Mirror mirror;
 
-    public MirroredSchematic(ISchematic schematic, BlockMirror mirror) {
+    public MirroredSchematic(ISchematic schematic, Mirror mirror) {
         this.schematic = schematic;
         this.mirror = mirror;
     }
@@ -73,7 +73,7 @@ public class MirroredSchematic implements ISchematic {
         return schematic.lengthZ();
     }
 
-    private static int mirrorX(int x, int sizeX, BlockMirror mirror) {
+    private static int mirrorX(int x, int sizeX, Mirror mirror) {
         switch (mirror) {
             case NONE:
             case LEFT_RIGHT:
@@ -84,7 +84,7 @@ public class MirroredSchematic implements ISchematic {
         throw new IllegalArgumentException("Unknown mirror");
     }
 
-    private static int mirrorZ(int z, int sizeZ, BlockMirror mirror) {
+    private static int mirrorZ(int z, int sizeZ, Mirror mirror) {
         switch (mirror) {
             case NONE:
             case FRONT_BACK:
@@ -95,14 +95,14 @@ public class MirroredSchematic implements ISchematic {
         throw new IllegalArgumentException("Unknown mirror");
     }
 
-    private static BlockState mirror(BlockState state, BlockMirror mirror) {
+    private static BlockState mirror(BlockState state, Mirror mirror) {
         if (state == null) {
             return null;
         }
         return state.mirror(mirror);
     }
 
-    private static List<BlockState> mirror(List<BlockState> states, BlockMirror mirror) {
+    private static List<BlockState> mirror(List<BlockState> states, Mirror mirror) {
         if (states == null) {
             return null;
         }

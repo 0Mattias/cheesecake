@@ -33,10 +33,10 @@ import cheesecake.pathing.movement.MovementHelper;
 import cheesecake.pathing.movement.movements.*;
 import cheesecake.utils.BlockStateInterface;
 import java.util.*;
-import net.minecraft.util.Pair;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.util.math.Vec3i;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Vec3i;
+import net.minecraft.util.Tuple;
+import net.minecraft.world.phys.Vec3;
 
 import static cheesecake.api.pathing.movement.MovementStatus.*;
 
@@ -125,10 +125,10 @@ public class PathExecutor implements IPathExecutor, Helper {
                 }
             }
         }
-        Pair<Double, BlockPos> status = closestPathPos(path);
+        Tuple<Double, BlockPos> status = closestPathPos(path);
         if (possiblyOffPath(status, MAX_DIST_FROM_PATH)) {
             ticksAway++;
-            System.out.println("FAR AWAY FROM PATH FOR " + ticksAway + " TICKS. Current distance: " + status.getLeft() + ". Threshold: " + MAX_DIST_FROM_PATH);
+            System.out.println("FAR AWAY FROM PATH FOR " + ticksAway + " TICKS. Current distance: " + status.getA() + ". Threshold: " + MAX_DIST_FROM_PATH);
             if (ticksAway > MAX_TICKS_AWAY) {
                 logDebug("Too far away from path for too long, cancelling path");
                 cancel();
@@ -252,7 +252,7 @@ public class PathExecutor implements IPathExecutor, Helper {
         return canCancel; // movement is in progress, but if it reports cancellable, PathingBehavior is good to cut onto the next path
     }
 
-    private Pair<Double, BlockPos> closestPathPos(IPath path) {
+    private Tuple<Double, BlockPos> closestPathPos(IPath path) {
         double best = -1;
         BlockPos bestPos = null;
         for (IMovement movement : path.movements()) {
@@ -264,7 +264,7 @@ public class PathExecutor implements IPathExecutor, Helper {
                 }
             }
         }
-        return new Pair<>(best, bestPos);
+        return new Tuple<>(best, bestPos);
     }
 
     private boolean shouldPause() {
@@ -272,14 +272,14 @@ public class PathExecutor implements IPathExecutor, Helper {
         if (!current.isPresent()) {
             return false;
         }
-        if (!ctx.player().isOnGround()) {
+        if (!ctx.player().onGround()) {
             return false;
         }
-        if (!MovementHelper.canWalkOn(ctx, ctx.playerFeet().down())) {
+        if (!MovementHelper.canWalkOn(ctx, ctx.playerFeet().below())) {
             // we're in some kind of sketchy situation, maybe parkouring
             return false;
         }
-        if (!MovementHelper.canWalkThrough(ctx, ctx.playerFeet()) || !MovementHelper.canWalkThrough(ctx, ctx.playerFeet().up())) {
+        if (!MovementHelper.canWalkThrough(ctx, ctx.playerFeet()) || !MovementHelper.canWalkThrough(ctx, ctx.playerFeet().above())) {
             // suffocating?
             return false;
         }
@@ -300,8 +300,8 @@ public class PathExecutor implements IPathExecutor, Helper {
         return positions.contains(ctx.playerFeet());
     }
 
-    private boolean possiblyOffPath(Pair<Double, BlockPos> status, double leniency) {
-        double distanceFromPath = status.getLeft();
+    private boolean possiblyOffPath(Tuple<Double, BlockPos> status, double leniency) {
+        double distanceFromPath = status.getA();
         if (distanceFromPath > leniency) {
             // when we're midair in the middle of a fall, we're very far from both the beginning and the end, but we aren't actually off path
             if (path.movements().get(pathPosition) instanceof MovementFall) {
@@ -321,12 +321,12 @@ public class PathExecutor implements IPathExecutor, Helper {
      * @return Whether or not it was possible to snap to the current player feet
      */
     public boolean snipsnapifpossible() {
-        if (!ctx.player().isOnGround() && ctx.world().getFluidState(ctx.playerFeet()).isEmpty()) {
+        if (!ctx.player().onGround() && ctx.world().getFluidState(ctx.playerFeet()).isEmpty()) {
             // if we're falling in the air, and not in water, don't splice
             return false;
         } else {
             // we are either onGround or in liquid
-            if (ctx.player().getVelocity().getY() < -0.1) {
+            if (ctx.player().getDeltaMovement().y() < -0.1) {
                 // if we are strictly moving downwards (not stationary)
                 // we could be falling through water, which could be unsafe to splice
                 return false; // so don't
@@ -381,7 +381,7 @@ public class PathExecutor implements IPathExecutor, Helper {
             if (pathPosition < path.length() - 2) {
                 // keep this out of onTick, even if that means a tick of delay before it has an effect
                 IMovement next = path.movements().get(pathPosition + 1);
-                if (MovementHelper.canUseFrostWalker(ctx, next.getDest().down())) {
+                if (MovementHelper.canUseFrostWalker(ctx, next.getDest().below())) {
                     // frostwalker only works if you cross the edge of the block on ground so in some cases we may not overshoot
                     // Since MovementDescend can't know the next movement we have to tell it
                     if (next instanceof MovementTraverse || next instanceof MovementParkour) {
@@ -390,8 +390,8 @@ public class PathExecutor implements IPathExecutor, Helper {
                         // in that case current.getDirection() is e.g. (0, -1, 1) and next.getDirection() is e.g. (0, 0, 3) so the cross product of (0, 0, 1) and (0, 0, 3) is taken, which is (0, 0, 0) because the vectors are colinear (don't form a plane)
                         // since movements in exactly the opposite direction (e.g. descend (0, -1, 1) and traverse (0, 0, -1)) would also pass this check we also have to rule out that case
                         // we can do that by adding the directions because traverse is always 1 long like descend and parkour can't jump through current.getSrc().down()
-                        boolean sameFlatDirection = !current.getDirection().up().add(next.getDirection()).equals(BlockPos.ORIGIN)
-                                && current.getDirection().up().crossProduct(next.getDirection()).equals(BlockPos.ORIGIN); // here's why you learn maths in school
+                        boolean sameFlatDirection = !current.getDirection().above().offset(next.getDirection()).equals(BlockPos.ZERO)
+                                && current.getDirection().above().cross(next.getDirection()).equals(BlockPos.ZERO); // here's why you learn maths in school
                         if (sameFlatDirection && !couldPlaceInstead) {
                             ((MovementDescend) current).forceSafeMode();
                         }
@@ -405,7 +405,7 @@ public class PathExecutor implements IPathExecutor, Helper {
 
             if (pathPosition < path.length() - 2) {
                 IMovement next = path.movements().get(pathPosition + 1);
-                if (next instanceof MovementAscend && current.getDirection().up().equals(next.getDirection().down())) {
+                if (next instanceof MovementAscend && current.getDirection().above().equals(next.getDirection().below())) {
                     // a descend then an ascend in the same direction
                     pathPosition++;
                     onChangeInPathPosition();
@@ -436,8 +436,8 @@ public class PathExecutor implements IPathExecutor, Helper {
         }
         if (current instanceof MovementAscend && pathPosition != 0) {
             IMovement prev = path.movements().get(pathPosition - 1);
-            if (prev instanceof MovementDescend && prev.getDirection().up().equals(current.getDirection().down())) {
-                BlockPos center = current.getSrc().up();
+            if (prev instanceof MovementDescend && prev.getDirection().above().equals(current.getDirection().below())) {
+                BlockPos center = current.getSrc().above();
                 // playerFeet adds 0.1251 to account for soul sand
                 // farmland is 0.9375
                 // 0.07 is to account for farmland
@@ -451,9 +451,9 @@ public class PathExecutor implements IPathExecutor, Helper {
             }
         }
         if (current instanceof MovementFall) {
-            Pair<Vec3d, BlockPos> data = overrideFall((MovementFall) current);
+            Tuple<Vec3, BlockPos> data = overrideFall((MovementFall) current);
             if (data != null) {
-                BetterBlockPos fallDest = new BetterBlockPos(data.getRight());
+                BetterBlockPos fallDest = new BetterBlockPos(data.getB());
                 if (!path.positions().contains(fallDest)) {
                     throw new IllegalStateException(String.format(
                             "Fall override at %s %s %s returned illegal destination %s %s %s",
@@ -466,7 +466,7 @@ public class PathExecutor implements IPathExecutor, Helper {
                     return true;
                 }
                 clearKeys();
-                behavior.cheesecake.getLookBehavior().updateTarget(RotationUtils.calcRotationFromVec3d(ctx.playerHead(), data.getLeft(), ctx.playerRotations()), false);
+                behavior.cheesecake.getLookBehavior().updateTarget(RotationUtils.calcRotationFromVec3d(ctx.playerHead(), data.getA(), ctx.playerRotations()), false);
                 behavior.cheesecake.getInputOverrideHandler().setInputForceState(Input.MOVE_FORWARD, true);
                 return true;
             }
@@ -474,7 +474,7 @@ public class PathExecutor implements IPathExecutor, Helper {
         return false;
     }
 
-    private Pair<Vec3d, BlockPos> overrideFall(MovementFall movement) {
+    private Tuple<Vec3, BlockPos> overrideFall(MovementFall movement) {
         Vec3i dir = movement.getDirection();
         if (dir.getY() < -3) {
             return null;
@@ -499,7 +499,7 @@ public class PathExecutor implements IPathExecutor, Helper {
                     break outer;
                 }
             }
-            if (!MovementHelper.canWalkOn(ctx, next.getDest().down())) {
+            if (!MovementHelper.canWalkOn(ctx, next.getDest().below())) {
                 break;
             }
         }
@@ -508,9 +508,9 @@ public class PathExecutor implements IPathExecutor, Helper {
             return null; // no valid extension exists
         }
         double len = i - pathPosition - 0.4;
-        return new Pair<>(
-                new Vec3d(flatDir.getX() * len + movement.getDest().x + 0.5, movement.getDest().y, flatDir.getZ() * len + movement.getDest().z + 0.5),
-                movement.getDest().add(flatDir.getX() * (i - pathPosition), 0, flatDir.getZ() * (i - pathPosition)));
+        return new Tuple<>(
+                new Vec3(flatDir.getX() * len + movement.getDest().x + 0.5, movement.getDest().y, flatDir.getZ() * len + movement.getDest().z + 0.5),
+                movement.getDest().offset(flatDir.getX() * (i - pathPosition), 0, flatDir.getZ() * (i - pathPosition)));
     }
 
     private static boolean skipNow(IPlayerContext ctx, IMovement current) {
@@ -519,7 +519,7 @@ public class PathExecutor implements IPathExecutor, Helper {
             return false;
         }
         // we are centered
-        BlockPos headBonk = current.getSrc().subtract(current.getDirection()).up(2);
+        BlockPos headBonk = current.getSrc().subtract(current.getDirection()).above(2);
         if (MovementHelper.fullyPassable(ctx, headBonk)) {
             return true;
         }
@@ -532,16 +532,16 @@ public class PathExecutor implements IPathExecutor, Helper {
         if (!Cheesecake.settings().sprintAscends.value) {
             return false;
         }
-        if (!current.getDirection().equals(next.getDirection().down())) {
+        if (!current.getDirection().equals(next.getDirection().below())) {
             return false;
         }
         if (nextnext.getDirection().getX() != next.getDirection().getX() || nextnext.getDirection().getZ() != next.getDirection().getZ()) {
             return false;
         }
-        if (!MovementHelper.canWalkOn(ctx, current.getDest().down())) {
+        if (!MovementHelper.canWalkOn(ctx, current.getDest().below())) {
             return false;
         }
-        if (!MovementHelper.canWalkOn(ctx, next.getDest().down())) {
+        if (!MovementHelper.canWalkOn(ctx, next.getDest().below())) {
             return false;
         }
         if (!next.toBreakCached.isEmpty()) {
@@ -549,26 +549,26 @@ public class PathExecutor implements IPathExecutor, Helper {
         }
         for (int x = 0; x < 2; x++) {
             for (int y = 0; y < 3; y++) {
-                BlockPos chk = current.getSrc().up(y);
+                BlockPos chk = current.getSrc().above(y);
                 if (x == 1) {
-                    chk = chk.add(current.getDirection());
+                    chk = chk.offset(current.getDirection());
                 }
                 if (!MovementHelper.fullyPassable(ctx, chk)) {
                     return false;
                 }
             }
         }
-        if (MovementHelper.avoidWalkingInto(ctx.world().getBlockState(current.getSrc().up(3)))) {
+        if (MovementHelper.avoidWalkingInto(ctx.world().getBlockState(current.getSrc().above(3)))) {
             return false;
         }
-        return !MovementHelper.avoidWalkingInto(ctx.world().getBlockState(next.getDest().up(2))); // codacy smh my head
+        return !MovementHelper.avoidWalkingInto(ctx.world().getBlockState(next.getDest().above(2))); // codacy smh my head
     }
 
     private static boolean canSprintFromDescendInto(IPlayerContext ctx, IMovement current, IMovement next) {
         if (next instanceof MovementDescend && next.getDirection().equals(current.getDirection())) {
             return true;
         }
-        if (!MovementHelper.canWalkOn(ctx, current.getDest().add(current.getDirection()))) {
+        if (!MovementHelper.canWalkOn(ctx, current.getDest().offset(current.getDirection()))) {
             return false;
         }
         if (next instanceof MovementTraverse && next.getDirection().equals(current.getDirection())) {

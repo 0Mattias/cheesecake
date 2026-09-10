@@ -17,7 +17,7 @@
 
 package cheesecake.api.event.events;
 
-import net.minecraft.client.util.math.MatrixStack;
+import com.mojang.blaze3d.vertex.PoseStack;
 import org.joml.Matrix4f;
 
 /**
@@ -32,9 +32,9 @@ public final class RenderEvent {
     private final float partialTicks;
 
     private final Matrix4f projectionMatrix;
-    private final MatrixStack modelViewStack;
+    private final PoseStack modelViewStack;
 
-    public RenderEvent(float partialTicks, MatrixStack modelViewStack, Matrix4f projectionMatrix) {
+    public RenderEvent(float partialTicks, PoseStack modelViewStack, Matrix4f projectionMatrix) {
         this.partialTicks = partialTicks;
         this.modelViewStack = modelViewStack;
         this.projectionMatrix = projectionMatrix;
@@ -47,7 +47,7 @@ public final class RenderEvent {
         return this.partialTicks;
     }
 
-    public MatrixStack getModelViewStack() {
+    public PoseStack getModelViewStack() {
         return this.modelViewStack;
     }
 

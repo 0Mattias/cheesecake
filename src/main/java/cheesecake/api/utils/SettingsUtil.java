@@ -38,14 +38,14 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import net.minecraft.block.Block;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.item.Item;
-import net.minecraft.registry.Registries;
-import net.minecraft.util.BlockMirror;
-import net.minecraft.util.BlockRotation;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.math.Vec3i;
+import net.minecraft.client.Minecraft;
+import net.minecraft.core.Vec3i;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Mirror;
+import net.minecraft.world.level.block.Rotation;
 
 @SuppressWarnings({"unchecked", "rawtypes"})
 public class SettingsUtil {
@@ -114,7 +114,7 @@ public class SettingsUtil {
     }
 
     private static Path settingsByName(String name) {
-        return MinecraftClient.getInstance().runDirectory.toPath().resolve("cheesecake").resolve(name);
+        return Minecraft.getInstance().gameDirectory.toPath().resolve("cheesecake").resolve(name);
     }
 
     public static List<Settings.Setting> modifiedSettings(Settings settings) {
@@ -232,8 +232,8 @@ public class SettingsUtil {
         FLOAT(Float.class, Float::parseFloat),
         LONG(Long.class, Long::parseLong),
         STRING(String.class, String::new),
-        MIRROR(BlockMirror.class, BlockMirror::valueOf, BlockMirror::name),
-        ROTATION(BlockRotation.class, BlockRotation::valueOf, BlockRotation::name),
+        MIRROR(Mirror.class, Mirror::valueOf, Mirror::name),
+        ROTATION(Rotation.class, Rotation::valueOf, Rotation::name),
         COLOR(
                 Color.class,
                 str -> new Color(Integer.parseInt(str.split(",")[0]), Integer.parseInt(str.split(",")[1]),
@@ -250,8 +250,8 @@ public class SettingsUtil {
                 BlockUtils::blockToString),
         ITEM(
                 Item.class,
-                str -> Registries.ITEM.getOptionalValue(Identifier.of(str.trim())).orElse(null), // TODO this now returns AIR on failure instead of null, is that an issue?
-                item -> Registries.ITEM.getId(item).toString()),
+                str -> BuiltInRegistries.ITEM.getOptional(Identifier.parse(str.trim())).orElse(null), // TODO this now returns AIR on failure instead of null, is that an issue?
+                item -> BuiltInRegistries.ITEM.getKey(item).toString()),
         LIST() {
             @Override
             public Object parse(Type type, String raw) {

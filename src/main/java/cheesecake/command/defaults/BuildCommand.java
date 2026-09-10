@@ -41,7 +41,7 @@ public class BuildCommand extends Command {
 
     public BuildCommand(ICheesecake cheesecake) {
         super(cheesecake, "build");
-        this.schematicsDir = new File(cheesecake.getPlayerContext().minecraft().runDirectory, "schematics");
+        this.schematicsDir = new File(cheesecake.getPlayerContext().minecraft().gameDirectory, "schematics");
     }
 
     @Override

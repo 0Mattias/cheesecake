@@ -26,18 +26,6 @@ import cheesecake.api.event.events.ChunkEvent;
 import cheesecake.api.event.events.type.EventState;
 import cheesecake.api.utils.Pair;
 import cheesecake.cache.CachedChunk;
-import net.minecraft.block.BlockState;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.network.ClientPlayNetworkHandler;
-import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.network.packet.s2c.play.BlockUpdateS2CPacket;
-import net.minecraft.network.packet.s2c.play.ChunkDataS2CPacket;
-import net.minecraft.network.packet.s2c.play.ChunkDeltaUpdateS2CPacket;
-import net.minecraft.network.packet.s2c.play.DeathMessageS2CPacket;
-import net.minecraft.network.packet.s2c.play.UnloadChunkS2CPacket;
-// import net.minecraft.network.packet.s2c.play.*;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.ChunkPos;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -45,12 +33,23 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.util.ArrayList;
 import java.util.List;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientPacketListener;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.core.BlockPos;
+import net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket;
+import net.minecraft.network.protocol.game.ClientboundForgetLevelChunkPacket;
+import net.minecraft.network.protocol.game.ClientboundLevelChunkWithLightPacket;
+import net.minecraft.network.protocol.game.ClientboundPlayerCombatKillPacket;
+import net.minecraft.network.protocol.game.ClientboundSectionBlocksUpdatePacket;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.block.state.BlockState;
 
 /**
  * @author Brady
  * @since 8/3/2018
  */
-@Mixin(ClientPlayNetworkHandler.class)
+@Mixin(ClientPacketListener.class)
 public class MixinClientPlayNetHandler {
 
     // unused lol
@@ -83,11 +82,11 @@ public class MixinClientPlayNetHandler {
      * }
      */
 
-    @Inject(method = "sendChatMessage(Ljava/lang/String;)V", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "sendChat(Ljava/lang/String;)V", at = @At("HEAD"), cancellable = true)
     private void sendChatMessageMessage(String string, CallbackInfo ci) {
         ChatEvent event = new ChatEvent(string);
         ICheesecake cheesecake = CheesecakeAPI.getProvider()
-                .getCheesecakeForPlayer(MinecraftClient.getInstance().player);
+                .getCheesecakeForPlayer(Minecraft.getInstance().player);
         if (cheesecake == null) {
             return;
         }
@@ -97,55 +96,55 @@ public class MixinClientPlayNetHandler {
         }
     }
 
-    @Inject(method = "onChunkData", at = @At("RETURN"))
-    private void postHandleChunkData(ChunkDataS2CPacket packetIn, CallbackInfo ci) {
+    @Inject(method = "handleLevelChunkWithLight", at = @At("RETURN"))
+    private void postHandleChunkData(ClientboundLevelChunkWithLightPacket packetIn, CallbackInfo ci) {
         for (ICheesecake icheesecake : CheesecakeAPI.getProvider().getAllCheesecakes()) {
-            ClientPlayerEntity player = icheesecake.getPlayerContext().player();
-            if (player != null && player.networkHandler == (ClientPlayNetworkHandler) (Object) this) {
+            LocalPlayer player = icheesecake.getPlayerContext().player();
+            if (player != null && player.connection == (ClientPacketListener) (Object) this) {
                 icheesecake.getGameEventHandler().onChunkEvent(
                         new ChunkEvent(
                                 EventState.POST,
-                                !packetIn.isWritingErrorSkippable() ? ChunkEvent.Type.POPULATE_FULL
+                                !packetIn.isSkippable() ? ChunkEvent.Type.POPULATE_FULL
                                         : ChunkEvent.Type.POPULATE_PARTIAL,
-                                packetIn.getChunkX(),
-                                packetIn.getChunkZ()));
+                                packetIn.getX(),
+                                packetIn.getZ()));
             }
         }
     }
 
-    @Inject(method = "onUnloadChunk", at = @At("HEAD"))
-    private void preChunkUnload(UnloadChunkS2CPacket packet, CallbackInfo ci) {
+    @Inject(method = "handleForgetLevelChunk", at = @At("HEAD"))
+    private void preChunkUnload(ClientboundForgetLevelChunkPacket packet, CallbackInfo ci) {
         for (ICheesecake icheesecake : CheesecakeAPI.getProvider().getAllCheesecakes()) {
-            ClientPlayerEntity player = icheesecake.getPlayerContext().player();
-            if (player != null && player.networkHandler == (ClientPlayNetworkHandler) (Object) this) {
+            LocalPlayer player = icheesecake.getPlayerContext().player();
+            if (player != null && player.connection == (ClientPacketListener) (Object) this) {
                 icheesecake.getGameEventHandler().onChunkEvent(
                         new ChunkEvent(EventState.PRE, ChunkEvent.Type.UNLOAD, packet.pos().x, packet.pos().z));
             }
         }
     }
 
-    @Inject(method = "onUnloadChunk", at = @At("RETURN"))
-    private void postChunkUnload(UnloadChunkS2CPacket packet, CallbackInfo ci) {
+    @Inject(method = "handleForgetLevelChunk", at = @At("RETURN"))
+    private void postChunkUnload(ClientboundForgetLevelChunkPacket packet, CallbackInfo ci) {
         for (ICheesecake icheesecake : CheesecakeAPI.getProvider().getAllCheesecakes()) {
-            ClientPlayerEntity player = icheesecake.getPlayerContext().player();
-            if (player != null && player.networkHandler == (ClientPlayNetworkHandler) (Object) this) {
+            LocalPlayer player = icheesecake.getPlayerContext().player();
+            if (player != null && player.connection == (ClientPacketListener) (Object) this) {
                 icheesecake.getGameEventHandler().onChunkEvent(
                         new ChunkEvent(EventState.POST, ChunkEvent.Type.UNLOAD, packet.pos().x, packet.pos().z));
             }
         }
     }
 
-    @Inject(method = "onBlockUpdate", at = @At("RETURN"))
-    private void postHandleBlockChange(BlockUpdateS2CPacket packetIn, CallbackInfo ci) {
+    @Inject(method = "handleBlockUpdate", at = @At("RETURN"))
+    private void postHandleBlockChange(ClientboundBlockUpdatePacket packetIn, CallbackInfo ci) {
         if (!Cheesecake.settings().repackOnAnyBlockChange.value) {
             return;
         }
-        if (!CachedChunk.BLOCKS_TO_KEEP_TRACK_OF.contains(packetIn.getState().getBlock())) {
+        if (!CachedChunk.BLOCKS_TO_KEEP_TRACK_OF.contains(packetIn.getBlockState().getBlock())) {
             return;
         }
         for (ICheesecake icheesecake : CheesecakeAPI.getProvider().getAllCheesecakes()) {
-            ClientPlayerEntity player = icheesecake.getPlayerContext().player();
-            if (player != null && player.networkHandler == (ClientPlayNetworkHandler) (Object) this) {
+            LocalPlayer player = icheesecake.getPlayerContext().player();
+            if (player != null && player.connection == (ClientPacketListener) (Object) this) {
                 icheesecake.getGameEventHandler().onChunkEvent(
                         new ChunkEvent(
                                 EventState.POST,
@@ -156,17 +155,17 @@ public class MixinClientPlayNetHandler {
         }
     }
 
-    @Inject(method = "onChunkDeltaUpdate", at = @At("RETURN"))
-    private void postHandleMultiBlockChange(ChunkDeltaUpdateS2CPacket packetIn, CallbackInfo ci) {
+    @Inject(method = "handleChunkBlocksUpdate", at = @At("RETURN"))
+    private void postHandleMultiBlockChange(ClientboundSectionBlocksUpdatePacket packetIn, CallbackInfo ci) {
         ICheesecake cheesecake = CheesecakeAPI.getProvider()
-                .getCheesecakeForConnection((ClientPlayNetworkHandler) (Object) this);
+                .getCheesecakeForConnection((ClientPacketListener) (Object) this);
         if (cheesecake == null) {
             return;
         }
 
         List<Pair<BlockPos, BlockState>> changes = new ArrayList<>();
-        packetIn.visitUpdates((mutPos, state) -> {
-            changes.add(new Pair<>(mutPos.toImmutable(), state));
+        packetIn.runUpdates((mutPos, state) -> {
+            changes.add(new Pair<>(mutPos.immutable(), state));
         });
         if (changes.isEmpty()) {
             return;
@@ -176,11 +175,11 @@ public class MixinClientPlayNetHandler {
                 changes));
     }
 
-    @Inject(method = "onDeathMessage", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/network/ClientPlayerEntity;showsDeathScreen()Z"))
-    private void onPlayerDeath(DeathMessageS2CPacket packetIn, CallbackInfo ci) {
+    @Inject(method = "handlePlayerCombatKill", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/player/LocalPlayer;shouldShowDeathScreen()Z"))
+    private void onPlayerDeath(ClientboundPlayerCombatKillPacket packetIn, CallbackInfo ci) {
         for (ICheesecake icheesecake : CheesecakeAPI.getProvider().getAllCheesecakes()) {
-            ClientPlayerEntity player = icheesecake.getPlayerContext().player();
-            if (player != null && player.networkHandler == (ClientPlayNetworkHandler) (Object) this) {
+            LocalPlayer player = icheesecake.getPlayerContext().player();
+            if (player != null && player.connection == (ClientPacketListener) (Object) this) {
                 icheesecake.getGameEventHandler().onPlayerDeath();
             }
         }

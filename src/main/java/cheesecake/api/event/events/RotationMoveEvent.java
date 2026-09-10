@@ -18,9 +18,9 @@
 package cheesecake.api.event.events;
 
 import cheesecake.api.utils.Rotation;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * @author Brady
@@ -100,7 +100,7 @@ public final class RotationMoveEvent {
         /**
          * Called when the player's motion is updated.
          *
-         * @see Entity#updateVelocity(float, Vec3d)
+         * @see Entity#moveRelative(float, Vec3)
          */
         MOTION_UPDATE,
 

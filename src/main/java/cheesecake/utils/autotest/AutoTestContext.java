@@ -21,20 +21,19 @@ import cheesecake.Cheesecake;
 import cheesecake.api.Settings;
 import cheesecake.api.utils.BetterBlockPos;
 import cheesecake.api.utils.IPlayerContext;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.server.command.CommandOutput;
-import net.minecraft.server.integrated.IntegratedServer;
-import net.minecraft.text.Text;
-import net.minecraft.text.TextColor;
-import net.minecraft.util.Formatting;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
+import net.minecraft.ChatFormatting;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.client.server.IntegratedServer;
+import net.minecraft.commands.CommandSource;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.TextColor;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 
 /**
  * What the stages of the in-world test share: the mod, the client, everything the mod has said in
@@ -51,7 +50,7 @@ public final class AutoTestContext {
     public static final long SEED = -928872506371745L;
 
     public final Cheesecake cheesecake;
-    public final MinecraftClient mc;
+    public final Minecraft mc;
     /**
      * Top block of the obsidian platform that {@link PlatformStage} builds in the sky, where the
      * later stages set up their scenarios.
@@ -62,14 +61,14 @@ public final class AutoTestContext {
     private int chatMark;
     private String stage = "setup";
 
-    public AutoTestContext(Cheesecake cheesecake, MinecraftClient mc) {
+    public AutoTestContext(Cheesecake cheesecake, Minecraft mc) {
         this.cheesecake = cheesecake;
         this.mc = mc;
         // Record everything the mod says in chat so stages can assert on the messages a player
         // would see. The previous logger still runs. The agent API wraps and later restores whatever
         // logger it finds, so this one survives the socket stage.
         Settings settings = Cheesecake.settings();
-        Consumer<Text> previous = settings.logger.value;
+        Consumer<Component> previous = settings.logger.value;
         settings.logger.value = message -> {
             String text = message.getString();
             synchronized (this.chat) {
@@ -92,7 +91,7 @@ public final class AutoTestContext {
         return this.cheesecake.getPlayerContext();
     }
 
-    public ClientPlayerEntity player() {
+    public LocalPlayer player() {
         return this.mc.player;
     }
 
@@ -105,41 +104,41 @@ public final class AutoTestContext {
      * once the command has run, and exceptionally if the command reported an error.
      */
     public CompletableFuture<Void> serverCommand(String command) {
-        IntegratedServer server = this.mc.getServer();
+        IntegratedServer server = this.mc.getSingleplayerServer();
         if (server == null) {
             throw new AutoTestFailure("no integrated server is running");
         }
         log("server command: /" + command);
         return server.submit(() -> {
             List<String> errors = new ArrayList<>();
-            CommandOutput output = new CommandOutput() {
+            CommandSource output = new CommandSource() {
                 @Override
-                public void sendMessage(Text message) {
+                public void sendSystemMessage(Component message) {
                     String text = message.getString();
                     log("server: " + text);
                     // sendError wraps its message in red; plain feedback carries no colour.
                     TextColor color = message.getStyle().getColor();
-                    if (color != null && color.getRgb() == Formatting.RED.getColorValue()) {
+                    if (color != null && color.getValue() == ChatFormatting.RED.getColor()) {
                         errors.add(text);
                     }
                 }
 
                 @Override
-                public boolean shouldReceiveFeedback() {
+                public boolean acceptsSuccess() {
                     return true;
                 }
 
                 @Override
-                public boolean shouldTrackOutput() {
+                public boolean acceptsFailure() {
                     return true;
                 }
 
                 @Override
-                public boolean shouldBroadcastConsoleToOps() {
+                public boolean shouldInformAdmins() {
                     return false;
                 }
             };
-            server.getCommandManager().parseAndExecute(server.getCommandSource().withOutput(output), command);
+            server.getCommands().performPrefixedCommand(server.createCommandSourceStack().withSource(output), command);
             if (!errors.isEmpty()) {
                 throw new AutoTestFailure("/" + command + " failed: " + String.join("; ", errors));
             }
@@ -161,8 +160,8 @@ public final class AutoTestContext {
      */
     public int countItems(Item item) {
         int count = 0;
-        for (ItemStack stack : player().getInventory().getMainStacks()) {
-            if (stack.isOf(item)) {
+        for (ItemStack stack : player().getInventory().getNonEquipmentItems()) {
+            if (stack.is(item)) {
                 count += stack.getCount();
             }
         }

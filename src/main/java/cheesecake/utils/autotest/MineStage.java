@@ -19,9 +19,9 @@ package cheesecake.utils.autotest;
 
 import cheesecake.agent.AgentStatus;
 import cheesecake.api.utils.BetterBlockPos;
-import net.minecraft.item.Item;
-import net.minecraft.item.Items;
-import net.minecraft.registry.Registries;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.Items;
 
 /**
  * Places a patch of a block on the platform, hands the player a stone pickaxe and runs
@@ -89,16 +89,16 @@ public final class MineStage extends Stage {
                 // The patch went in by command, after the chunk was cached. Pack it again now
                 // rather than relying on the block update having done so.
                 this.t.cheesecake.getWorldProvider().getCurrentWorld().getCachedWorld()
-                        .queueForPacking(this.t.mc.world.getChunk(this.stand.x >> 4, this.stand.z >> 4));
+                        .queueForPacking(this.t.mc.level.getChunk(this.stand.x >> 4, this.stand.z >> 4));
                 this.repacked = true;
                 this.miningTick = ticks();
                 return false;
             }
-            if (ticks() - this.miningTick < 20 || !this.t.player().isOnGround()) {
+            if (ticks() - this.miningTick < 20 || !this.t.player().onGround()) {
                 return false;
             }
             check(this.t.countItems(Items.STONE_PICKAXE) > 0, "the pickaxe did not arrive");
-            check(this.t.countItems(this.drop) == 0, "already carrying " + Registries.ITEM.getId(this.drop));
+            check(this.t.countItems(this.drop) == 0, "already carrying " + BuiltInRegistries.ITEM.getKey(this.drop));
             this.t.chatCommand("mine " + this.count + " " + this.block);
             check(this.t.cheesecake.getMineProcess().isActive(), "the mine process did not start");
             this.mining = true;
@@ -112,11 +112,11 @@ public final class MineStage extends Stage {
         int have = this.t.countItems(this.drop);
         if (have >= this.count && !this.t.cheesecake.getMineProcess().isActive()) {
             check(this.t.saidSinceMark("Have " + have + " valid items"), "the process stopped without reporting the count");
-            this.t.log("mined " + have + " " + Registries.ITEM.getId(this.drop) + " after " + ticks() + " ticks and the process stopped by itself");
+            this.t.log("mined " + have + " " + BuiltInRegistries.ITEM.getKey(this.drop) + " after " + ticks() + " ticks and the process stopped by itself");
             return true;
         }
         check(this.t.cheesecake.getMineProcess().isActive() || have >= this.count,
-                "the mine process stopped with " + have + " " + Registries.ITEM.getId(this.drop));
+                "the mine process stopped with " + have + " " + BuiltInRegistries.ITEM.getKey(this.drop));
         return false;
     }
 }

@@ -19,9 +19,9 @@ package fi.dy.masa.litematica.schematic.placement;
 
 import com.google.common.collect.ImmutableMap;
 import fi.dy.masa.litematica.schematic.LitematicaSchematic;
-import net.minecraft.util.BlockMirror;
-import net.minecraft.util.BlockRotation;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.block.Mirror;
+import net.minecraft.world.level.block.Rotation;
 
 public class SchematicPlacement {
 
@@ -33,11 +33,11 @@ public class SchematicPlacement {
         throw new LinkageError();
     }
 
-    public BlockRotation getRotation() {
+    public Rotation getRotation() {
         throw new LinkageError();
     }
 
-    public BlockMirror getMirror() {
+    public Mirror getMirror() {
         throw new LinkageError();
     }
 

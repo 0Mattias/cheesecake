@@ -19,16 +19,16 @@ package cheesecake.api.utils;
 
 import java.util.HashMap;
 import java.util.Map;
-import net.minecraft.block.Block;
-import net.minecraft.registry.Registries;
-import net.minecraft.util.Identifier;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.level.block.Block;
 
 public class BlockUtils {
 
     private static transient Map<String, Block> resourceCache = new HashMap<>();
 
     public static String blockToString(Block block) {
-        Identifier loc = Registries.BLOCK.getId(block);
+        Identifier loc = BuiltInRegistries.BLOCK.getKey(block);
         String name = loc.getPath(); // normally, only write the part after the minecraft:
         if (!loc.getNamespace().equals("minecraft")) {
             // Cheesecake is running on top of forge with mods installed, perhaps?
@@ -56,7 +56,7 @@ public class BlockUtils {
         if (resourceCache.containsKey(name)) {
             return null; // cached as null
         }
-        block = Registries.BLOCK.getOptionalValue(Identifier.tryParse(name.contains(":") ? name : "minecraft:" + name)).orElse(null);
+        block = BuiltInRegistries.BLOCK.getOptional(Identifier.tryParse(name.contains(":") ? name : "minecraft:" + name)).orElse(null);
         Map<String, Block> copy = new HashMap<>(resourceCache); // read only copy is safe, wont throw concurrentmodification
         copy.put(name, block);
         resourceCache = copy;

@@ -19,8 +19,8 @@ package cheesecake.launch.mixins;
 
 import cheesecake.api.CheesecakeAPI;
 import cheesecake.api.event.events.RotationMoveEvent;
-import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.entity.Entity;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.world.entity.Entity;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
@@ -32,34 +32,34 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public class MixinEntity {
 
     @Shadow
-    private float yaw;
+    private float yRot;
 
     @Shadow
-    private float pitch;
+    private float xRot;
 
     @Unique
     private RotationMoveEvent motionUpdateRotationEvent;
 
-    @Inject(method = "updateVelocity", at = @At("HEAD"))
+    @Inject(method = "moveRelative", at = @At("HEAD"))
     private void moveRelativeHead(CallbackInfo info) {
         // noinspection ConstantConditions
-        if (!ClientPlayerEntity.class.isInstance(this)
-                || CheesecakeAPI.getProvider().getCheesecakeForPlayer((ClientPlayerEntity) (Object) this) == null) {
+        if (!LocalPlayer.class.isInstance(this)
+                || CheesecakeAPI.getProvider().getCheesecakeForPlayer((LocalPlayer) (Object) this) == null) {
             return;
         }
-        this.motionUpdateRotationEvent = new RotationMoveEvent(RotationMoveEvent.Type.MOTION_UPDATE, this.yaw,
-                this.pitch);
-        CheesecakeAPI.getProvider().getCheesecakeForPlayer((ClientPlayerEntity) (Object) this).getGameEventHandler()
+        this.motionUpdateRotationEvent = new RotationMoveEvent(RotationMoveEvent.Type.MOTION_UPDATE, this.yRot,
+                this.xRot);
+        CheesecakeAPI.getProvider().getCheesecakeForPlayer((LocalPlayer) (Object) this).getGameEventHandler()
                 .onPlayerRotationMove(motionUpdateRotationEvent);
-        this.yaw = this.motionUpdateRotationEvent.getYaw();
-        this.pitch = this.motionUpdateRotationEvent.getPitch();
+        this.yRot = this.motionUpdateRotationEvent.getYaw();
+        this.xRot = this.motionUpdateRotationEvent.getPitch();
     }
 
-    @Inject(method = "updateVelocity", at = @At("RETURN"))
+    @Inject(method = "moveRelative", at = @At("RETURN"))
     private void moveRelativeReturn(CallbackInfo info) {
         if (this.motionUpdateRotationEvent != null) {
-            this.yaw = this.motionUpdateRotationEvent.getOriginal().getYaw();
-            this.pitch = this.motionUpdateRotationEvent.getOriginal().getPitch();
+            this.yRot = this.motionUpdateRotationEvent.getOriginal().getYaw();
+            this.xRot = this.motionUpdateRotationEvent.getOriginal().getPitch();
             this.motionUpdateRotationEvent = null;
         }
     }

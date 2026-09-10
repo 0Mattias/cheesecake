@@ -28,7 +28,7 @@ import cheesecake.api.process.PathingCommandType;
 import cheesecake.behavior.PathingBehavior;
 import cheesecake.pathing.path.PathExecutor;
 import java.util.*;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.core.BlockPos;
 
 public class PathingControlManager implements IPathingControlManager {
 

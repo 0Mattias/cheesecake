@@ -50,8 +50,8 @@ public final class AStarPathFinder extends AbstractNodeCostSearch {
 
     @Override
     protected Optional<IPath> calculate0(long primaryTimeout, long failureTimeout) {
-        int minY = calcContext.world.getDimension().minY();
-        int height = calcContext.world.getDimension().height();
+        int minY = calcContext.world.dimensionType().minY();
+        int height = calcContext.world.dimensionType().height();
         startNode = getNodeAtPosition(startX, startY, startZ, BetterBlockPos.longHash(startX, startY, startZ));
         startNode.cost = 0;
         startNode.combinedCost = startNode.estimatedCostToGoal;

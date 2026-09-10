@@ -19,7 +19,7 @@ package cheesecake.api.schematic.mask.shape;
 
 import cheesecake.api.schematic.mask.AbstractMask;
 import cheesecake.api.schematic.mask.StaticMask;
-import net.minecraft.util.math.Direction;
+import net.minecraft.core.Direction;
 
 /**
  * @author Brady

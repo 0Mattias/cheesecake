@@ -26,8 +26,8 @@ import cheesecake.api.pathing.goals.GoalStrictDirection;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Stream;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 
 public class TunnelCommand extends Command {
 
@@ -44,7 +44,7 @@ public class TunnelCommand extends Command {
             int width = Integer.parseInt(args.getArgs().get(1).getValue());
             int depth = Integer.parseInt(args.getArgs().get(2).getValue());
 
-            if (width < 1 || height < 2 || depth < 1 || height > ctx.world().getTopYInclusive()){
+            if (width < 1 || height < 2 || depth < 1 || height > ctx.world().getMaxY()){
                 logDirect("Width and depth must at least be 1 block; Height must at least be 2 blocks, and cannot be greater than the build limit.");
                 cont = false;
             }
@@ -54,7 +54,7 @@ public class TunnelCommand extends Command {
                 width--;
                 BlockPos corner1;
                 BlockPos corner2;
-                Direction enumFacing = ctx.player().getHorizontalFacing();
+                Direction enumFacing = ctx.player().getDirection();
                 int addition = ((width % 2 == 0) ? 0 : 1);
                 switch (enumFacing) {
                     case EAST:
@@ -82,7 +82,7 @@ public class TunnelCommand extends Command {
         } else {
             Goal goal = new GoalStrictDirection(
                     ctx.playerFeet(),
-                    ctx.player().getHorizontalFacing()
+                    ctx.player().getDirection()
             );
             cheesecake.getCustomGoalProcess().setGoalAndPath(goal);
             logDirect(String.format("Goal: %s", goal.toString()));

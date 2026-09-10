@@ -48,7 +48,7 @@ import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
-import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.Minecraft;
 
 /**
  * @author Brady
@@ -62,7 +62,7 @@ public class Cheesecake implements ICheesecake {
         threadPool = new ThreadPoolExecutor(4, Integer.MAX_VALUE, 60L, TimeUnit.SECONDS, new SynchronousQueue<>());
     }
 
-    private final MinecraftClient mc;
+    private final Minecraft mc;
     private final Path directory;
 
     private final GameEventHandler gameEventHandler;
@@ -91,11 +91,11 @@ public class Cheesecake implements ICheesecake {
 
     public BlockStateInterface bsi;
 
-    Cheesecake(MinecraftClient mc) {
+    Cheesecake(Minecraft mc) {
         this.mc = mc;
         this.gameEventHandler = new GameEventHandler(this);
 
-        this.directory = mc.runDirectory.toPath().resolve("cheesecake");
+        this.directory = mc.gameDirectory.toPath().resolve("cheesecake");
         if (!Files.exists(this.directory)) {
             try {
                 Files.createDirectories(this.directory);

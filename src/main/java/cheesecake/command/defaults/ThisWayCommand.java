@@ -38,7 +38,7 @@ public class ThisWayCommand extends Command {
         args.requireExactly(1);
         GoalXZ goal = GoalXZ.fromDirection(
                 ctx.playerFeetAsVec(),
-                ctx.player().getHeadYaw(),
+                ctx.player().getYHeadRot(),
                 args.getAs(Double.class)
         );
         cheesecake.getCustomGoalProcess().setGoal(goal);

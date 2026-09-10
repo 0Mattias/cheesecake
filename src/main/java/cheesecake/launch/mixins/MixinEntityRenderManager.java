@@ -18,24 +18,24 @@
 package cheesecake.launch.mixins;
 
 import cheesecake.utils.accessor.IEntityRenderManager;
-import net.minecraft.client.render.entity.EntityRenderManager;
+import net.minecraft.client.renderer.entity.EntityRenderDispatcher;
 import org.spongepowered.asm.mixin.Mixin;
 
-@Mixin(EntityRenderManager.class)
+@Mixin(EntityRenderDispatcher.class)
 public class MixinEntityRenderManager implements IEntityRenderManager {
 
     @Override
     public double renderPosX() {
-        return ((EntityRenderManager) (Object) this).camera.getCameraPos().x;
+        return ((EntityRenderDispatcher) (Object) this).camera.position().x;
     }
 
     @Override
     public double renderPosY() {
-        return ((EntityRenderManager) (Object) this).camera.getCameraPos().y;
+        return ((EntityRenderDispatcher) (Object) this).camera.position().y;
     }
 
     @Override
     public double renderPosZ() {
-        return ((EntityRenderManager) (Object) this).camera.getCameraPos().z;
+        return ((EntityRenderDispatcher) (Object) this).camera.position().z;
     }
 }

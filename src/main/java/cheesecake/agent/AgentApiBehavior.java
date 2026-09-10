@@ -22,12 +22,12 @@ import cheesecake.api.Settings;
 import cheesecake.api.event.events.PathEvent;
 import cheesecake.api.event.events.TickEvent;
 import cheesecake.api.event.listener.AbstractGameEventListener;
-import net.minecraft.text.Text;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.function.Consumer;
+import net.minecraft.network.chat.Component;
 
 /**
  * Runs the {@link AgentApi} inside the game: starts and stops it to follow the {@code agentApiPort}
@@ -44,8 +44,8 @@ public final class AgentApiBehavior implements AbstractGameEventListener {
 
     // The chat logger is wrapped so clients see what the mod says; the wrapped logger is restored
     // when the api stops.
-    private Consumer<Text> wrappedLogger;
-    private Consumer<Text> hook;
+    private Consumer<Component> wrappedLogger;
+    private Consumer<Component> hook;
 
     public AgentApiBehavior(Cheesecake cheesecake) {
         this.settings = Cheesecake.settings();
@@ -79,7 +79,7 @@ public final class AgentApiBehavior implements AbstractGameEventListener {
         if (this.api.isRunning()) {
             if (this.settings.logger.value != this.hook) {
                 this.wrappedLogger = this.settings.logger.value;
-                final Consumer<Text> wrapped = this.wrappedLogger;
+                final Consumer<Component> wrapped = this.wrappedLogger;
                 this.hook = message -> {
                     wrapped.accept(message);
                     this.api.broadcastLog(message.getString());

@@ -18,12 +18,12 @@
 package cheesecake.utils.accessor;
 
 import java.util.concurrent.atomic.AtomicReferenceArray;
-import net.minecraft.world.chunk.WorldChunk;
+import net.minecraft.world.level.chunk.LevelChunk;
 
 public interface IChunkArray {
     void copyFrom(IChunkArray other);
 
-    AtomicReferenceArray<WorldChunk> getChunks();
+    AtomicReferenceArray<LevelChunk> getChunks();
 
     int centerX();
 

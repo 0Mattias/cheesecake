@@ -25,13 +25,13 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.Blocks;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.registry.Registries;
-import net.minecraft.state.property.Property;
-import net.minecraft.util.Identifier;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.Property;
 
 /**
  * @author Brady
@@ -39,15 +39,15 @@ import net.minecraft.util.Identifier;
  */
 public final class SpongeSchematic extends StaticSchematic {
 
-    public SpongeSchematic(NbtCompound nbt) {
+    public SpongeSchematic(CompoundTag nbt) {
         this.x = nbt.getInt("Width").orElse(0);
         this.y = nbt.getInt("Height").orElse(0);
         this.z = nbt.getInt("Length").orElse(0);
         this.states = new BlockState[this.x][this.z][this.y];
 
         Int2ObjectArrayMap<BlockState> palette = new Int2ObjectArrayMap<>();
-        NbtCompound paletteTag = nbt.getCompound("Palette").orElse(new NbtCompound());
-        for (String tag : paletteTag.getKeys()) {
+        CompoundTag paletteTag = nbt.getCompound("Palette").orElse(new CompoundTag());
+        for (String tag : paletteTag.keySet()) {
             int index = paletteTag.getInt(tag).orElse(0);
 
             SerializedBlockState serializedState = SerializedBlockState.getFromString(tag);
@@ -112,12 +112,12 @@ public final class SpongeSchematic extends StaticSchematic {
             if (this.blockState == null) {
                 // A schematic can name a block this client doesn't have; air keeps the rest of the
                 // schematic loadable instead of failing the whole file.
-                Block block = Registries.BLOCK.getEntry(this.resourceLocation).map(ref -> ref.value())
+                Block block = BuiltInRegistries.BLOCK.get(this.resourceLocation).map(ref -> ref.value())
                         .orElse(Blocks.AIR);
-                this.blockState = block.getDefaultState();
+                this.blockState = block.defaultBlockState();
 
                 this.properties.keySet().stream().sorted(String::compareTo).forEachOrdered(key -> {
-                    Property<?> property = block.getStateManager().getProperty(key);
+                    Property<?> property = block.getStateDefinition().getProperty(key);
                     if (property != null) {
                         this.blockState = setPropertyValue(this.blockState, property, this.properties.get(key));
                     }
@@ -136,7 +136,7 @@ public final class SpongeSchematic extends StaticSchematic {
                 String location = m.group("location");
                 String properties = m.group("properties");
 
-                Identifier resourceLocation = Identifier.of(location);
+                Identifier resourceLocation = Identifier.parse(location);
                 Map<String, String> propertiesMap = new HashMap<>();
                 if (properties != null) {
                     for (String property : properties.split(",")) {
@@ -154,9 +154,9 @@ public final class SpongeSchematic extends StaticSchematic {
 
         private static <T extends Comparable<T>> BlockState setPropertyValue(BlockState state, Property<T> property,
                 String value) {
-            Optional<T> parsed = property.parse(value);
+            Optional<T> parsed = property.getValue(value);
             if (parsed.isPresent()) {
-                return state.with(property, parsed.get());
+                return state.setValue(property, parsed.get());
             } else {
                 throw new IllegalArgumentException("Invalid value for property " + property);
             }

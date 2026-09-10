@@ -18,14 +18,13 @@
 package cheesecake.utils.autotest;
 
 import cheesecake.api.utils.BetterBlockPos;
-import net.minecraft.block.Block;
-import net.minecraft.block.Blocks;
-import net.minecraft.entity.EquipmentSlot;
-import net.minecraft.item.Items;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
-
 import java.util.Locale;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 
 /**
  * Flies to a goal with {@code #elytra}. Each trip covers a different part of the process: the climb
@@ -200,7 +199,7 @@ public final class ElytraStage extends Stage {
     }
 
     private boolean inNether() {
-        return this.t.ctx().world() != null && this.t.ctx().world().getRegistryKey() == World.NETHER;
+        return this.t.ctx().world() != null && this.t.ctx().world().dimension() == Level.NETHER;
     }
 
     /**
@@ -221,7 +220,7 @@ public final class ElytraStage extends Stage {
                     this.stepTick = ticks();
                     return false;
                 }
-                if (!this.padBuilt || ticksInStep() < 20 || !this.t.player().isOnGround()) {
+                if (!this.padBuilt || ticksInStep() < 20 || !this.t.player().onGround()) {
                     return false;
                 }
                 check(feet().y == PILLAR_Y, "expected to stand on the pillar at y " + PILLAR_Y + ", standing at " + feet());
@@ -230,7 +229,7 @@ public final class ElytraStage extends Stage {
                 launch(this.pad.x, null, this.pad.z);
                 return false;
             case OVERWORLD_AUTO_JUMP:
-                if (ticksInStep() < 20 || !this.t.player().isOnGround()) {
+                if (ticksInStep() < 20 || !this.t.player().onGround()) {
                     return false;
                 }
                 check(feet().y == this.pad.y + 1, "expected to stand on the pad, standing at " + feet());
@@ -266,7 +265,7 @@ public final class ElytraStage extends Stage {
                     return false;
                 }
                 if (this.netherPhase == 1) {
-                    if (!this.t.player().isOnGround() || feet().y != ROOF_Y) {
+                    if (!this.t.player().onGround() || feet().y != ROOF_Y) {
                         return false;
                     }
                     BetterBlockPos spot = findOpenSpot(this.netherAnchor);
@@ -287,7 +286,7 @@ public final class ElytraStage extends Stage {
                 launch(this.landing.x, this.landing.y, this.landing.z);
                 return false;
             default:
-                if (!inNether() || ticksInStep() < 40 || !this.t.player().isOnGround()) {
+                if (!inNether() || ticksInStep() < 40 || !this.t.player().onGround()) {
                     return false;
                 }
                 check(feet().y == ROOF_Y, "expected to stand on the roof at y " + ROOF_Y + ", standing at " + feet());
@@ -306,7 +305,7 @@ public final class ElytraStage extends Stage {
      * pathfinder likes elsewhere.
      */
     private void launch(int x, Integer y, int z) {
-        check(this.t.player().getEquippedStack(EquipmentSlot.CHEST).isOf(Items.ELYTRA), "no elytra equipped");
+        check(this.t.player().getItemBySlot(EquipmentSlot.CHEST).is(Items.ELYTRA), "no elytra equipped");
         check(this.t.countItems(Items.FIREWORK_ROCKET) >= 32, "only " + this.t.countItems(Items.FIREWORK_ROCKET) + " fireworks");
         settings().elytraTermsAccepted.value = true;
         this.origin = feet();
@@ -343,13 +342,13 @@ public final class ElytraStage extends Stage {
         for (BetterBlockPos node : this.t.cheesecake.getElytraProcess().getPath()) {
             this.maxPathY = Math.max(this.maxPathY, node.y);
         }
-        if (this.t.player().isGliding()) {
+        if (this.t.player().isFallFlying()) {
             this.glidingTicks++;
         }
         for (String failure : new String[]{"Failed to compute path to destination", "Failed to compute a walking path", "no fireworks", "Not taking off"}) {
             check(!this.t.saidSinceMark(failure), "the process gave up: " + failure);
         }
-        if (!this.t.saidSinceMark("Done :)") || this.t.cheesecake.getElytraProcess().isActive() || !this.t.player().isOnGround()) {
+        if (!this.t.saidSinceMark("Done :)") || this.t.cheesecake.getElytraProcess().isActive() || !this.t.player().onGround()) {
             return false;
         }
         double travelled = xzDistance(feet, this.origin.x, this.origin.z);
@@ -361,7 +360,7 @@ public final class ElytraStage extends Stage {
         check(this.t.saidSinceMark("Found potential landing spot"), "no landing spot was reported");
         switch (this.trip) {
             case OVERWORLD_ABOVE_LIMIT:
-                check(this.maxPathY > this.t.ctx().world().getTopYInclusive(), "the path never went above the build limit; highest node y " + this.maxPathY);
+                check(this.maxPathY > this.t.ctx().world().getMaxY(), "the path never went above the build limit; highest node y " + this.maxPathY);
                 check(feet.y == this.pad.y + 1 && left <= PAD_RADIUS + 4, "did not land on the pad at " + this.pad);
                 break;
             case OVERWORLD_AUTO_JUMP:
@@ -388,12 +387,12 @@ public final class ElytraStage extends Stage {
      * @return the point two blocks under the ceiling of the deepest such spot, or null
      */
     private BetterBlockPos findOpenSpot(BetterBlockPos anchor) {
-        World world = this.t.ctx().world();
+        Level world = this.t.ctx().world();
         int radius = SCAN_RADIUS;
         int half = 6;
         BetterBlockPos best = null;
         int bestHeight = 0;
-        BlockPos.Mutable pos = new BlockPos.Mutable();
+        BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
         for (int x = anchor.x - radius; x <= anchor.x + radius; x += 4) {
             for (int z = anchor.z - radius; z <= anchor.z + radius; z += 4) {
                 if (!chunksLoaded(world, x - half, z - half, x + half, z + half)) {
@@ -430,11 +429,11 @@ public final class ElytraStage extends Stage {
      * @return the point {@link #LANDING_GOAL_ABOVE_FLOOR} blocks above the floor, or null
      */
     private BetterBlockPos findLandingColumn(BetterBlockPos anchor) {
-        World world = this.t.ctx().world();
+        Level world = this.t.ctx().world();
         int radius = SCAN_RADIUS;
         int safeFloors = 0;
         int clearColumns = 0;
-        BlockPos.Mutable pos = new BlockPos.Mutable();
+        BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
         for (int x = anchor.x - radius; x <= anchor.x + radius; x += 2) {
             for (int z = anchor.z - radius; z <= anchor.z + radius; z += 2) {
                 if (!chunksLoaded(world, x - LANDING_BUBBLE, z - LANDING_BUBBLE, x + LANDING_BUBBLE, z + LANDING_BUBBLE)) {
@@ -486,10 +485,10 @@ public final class ElytraStage extends Stage {
      * Whether every chunk the scans look at around the anchor has arrived.
      */
     private boolean areaLoaded(BetterBlockPos anchor) {
-        World world = this.t.ctx().world();
+        Level world = this.t.ctx().world();
         for (int cx = (anchor.x - SCAN_RADIUS - LANDING_BUBBLE) >> 4; cx <= (anchor.x + SCAN_RADIUS + LANDING_BUBBLE) >> 4; cx++) {
             for (int cz = (anchor.z - SCAN_RADIUS - LANDING_BUBBLE) >> 4; cz <= (anchor.z + SCAN_RADIUS + LANDING_BUBBLE) >> 4; cz++) {
-                if (!world.getChunkManager().isChunkLoaded(cx, cz)) {
+                if (!world.getChunkSource().hasChunk(cx, cz)) {
                     return false;
                 }
             }
@@ -497,13 +496,13 @@ public final class ElytraStage extends Stage {
         return true;
     }
 
-    private static boolean chunksLoaded(World world, int minX, int minZ, int maxX, int maxZ) {
-        return world.getChunkManager().isChunkLoaded(minX >> 4, minZ >> 4) && world.getChunkManager().isChunkLoaded(maxX >> 4, maxZ >> 4)
-                && world.getChunkManager().isChunkLoaded(minX >> 4, maxZ >> 4) && world.getChunkManager().isChunkLoaded(maxX >> 4, minZ >> 4);
+    private static boolean chunksLoaded(Level world, int minX, int minZ, int maxX, int maxZ) {
+        return world.getChunkSource().hasChunk(minX >> 4, minZ >> 4) && world.getChunkSource().hasChunk(maxX >> 4, maxZ >> 4)
+                && world.getChunkSource().hasChunk(minX >> 4, maxZ >> 4) && world.getChunkSource().hasChunk(maxX >> 4, minZ >> 4);
     }
 
-    private static boolean isAirBox(World world, int minX, int minY, int minZ, int maxX, int maxY, int maxZ) {
-        BlockPos.Mutable pos = new BlockPos.Mutable();
+    private static boolean isAirBox(Level world, int minX, int minY, int minZ, int maxX, int maxY, int maxZ) {
+        BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
         for (int x = minX; x <= maxX; x++) {
             for (int z = minZ; z <= maxZ; z++) {
                 for (int y = minY; y <= maxY; y++) {

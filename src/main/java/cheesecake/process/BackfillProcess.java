@@ -28,10 +28,10 @@ import cheesecake.pathing.path.PathExecutor;
 import cheesecake.utils.CheesecakeProcessHelper;
 import java.util.*;
 import java.util.stream.Collectors;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.Blocks;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.chunk.EmptyChunk;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.EmptyLevelChunk;
 
 public final class BackfillProcess extends CheesecakeProcessHelper {
 
@@ -55,7 +55,7 @@ public final class BackfillProcess extends CheesecakeProcessHelper {
             return false;
         }
         for (BlockPos pos : new ArrayList<>(blocksToReplace.keySet())) {
-            if (ctx.world().getChunk(pos) instanceof EmptyChunk || ctx.world().getBlockState(pos).getBlock() != Blocks.AIR) {
+            if (ctx.world().getChunk(pos) instanceof EmptyLevelChunk || ctx.world().getBlockState(pos).getBlock() != Blocks.AIR) {
                 blocksToReplace.remove(pos);
             }
         }
@@ -102,9 +102,9 @@ public final class BackfillProcess extends CheesecakeProcessHelper {
                 .keySet()
                 .stream()
                 .filter(pos -> ctx.world().getBlockState(pos).getBlock() == Blocks.AIR)
-                .filter(pos -> cheesecake.getBuilderProcess().placementPlausible(pos, Blocks.DIRT.getDefaultState()))
+                .filter(pos -> cheesecake.getBuilderProcess().placementPlausible(pos, Blocks.DIRT.defaultBlockState()))
                 .filter(pos -> !partOfCurrentMovement(pos))
-                .sorted(Comparator.<BlockPos>comparingDouble(ctx.playerFeet()::getSquaredDistance).reversed())
+                .sorted(Comparator.<BlockPos>comparingDouble(ctx.playerFeet()::distSqr).reversed())
                 .collect(Collectors.toList());
     }
 

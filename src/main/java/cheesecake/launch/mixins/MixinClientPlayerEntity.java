@@ -22,8 +22,8 @@ import cheesecake.api.ICheesecake;
 import cheesecake.api.event.events.PlayerUpdateEvent;
 import cheesecake.api.event.events.type.EventState;
 import cheesecake.behavior.LookBehavior;
-import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.entity.player.PlayerAbilities;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.world.entity.player.Abilities;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -34,40 +34,40 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * @author Brady
  * @since 8/1/2018
  */
-@Mixin(ClientPlayerEntity.class)
+@Mixin(LocalPlayer.class)
 public class MixinClientPlayerEntity {
 
     @Inject(method = "tick", at = @At("HEAD"))
     private void onPreUpdate(CallbackInfo ci) {
-        ICheesecake cheesecake = CheesecakeAPI.getProvider().getCheesecakeForPlayer((ClientPlayerEntity) (Object) this);
+        ICheesecake cheesecake = CheesecakeAPI.getProvider().getCheesecakeForPlayer((LocalPlayer) (Object) this);
         if (cheesecake != null) {
             cheesecake.getGameEventHandler().onPlayerUpdate(new PlayerUpdateEvent(EventState.PRE));
         }
     }
 
-    @Redirect(method = "tickMovement", at = @At(value = "FIELD", target = "Lnet/minecraft/entity/player/PlayerAbilities;allowFlying:Z"))
-    private boolean isAllowFlying(PlayerAbilities capabilities) {
-        ICheesecake cheesecake = CheesecakeAPI.getProvider().getCheesecakeForPlayer((ClientPlayerEntity) (Object) this);
+    @Redirect(method = "aiStep", at = @At(value = "FIELD", target = "Lnet/minecraft/world/entity/player/Abilities;mayfly:Z"))
+    private boolean isAllowFlying(Abilities capabilities) {
+        ICheesecake cheesecake = CheesecakeAPI.getProvider().getCheesecakeForPlayer((LocalPlayer) (Object) this);
         if (cheesecake == null) {
-            return capabilities.allowFlying;
+            return capabilities.mayfly;
         }
-        return !cheesecake.getPathingBehavior().isPathing() && capabilities.allowFlying;
+        return !cheesecake.getPathingBehavior().isPathing() && capabilities.mayfly;
     }
 
-    @Inject(method = "tickRiding", at = @At(value = "HEAD"))
+    @Inject(method = "rideTick", at = @At(value = "HEAD"))
     private void updateRidden(CallbackInfo cb) {
-        ICheesecake cheesecake = CheesecakeAPI.getProvider().getCheesecakeForPlayer((ClientPlayerEntity) (Object) this);
+        ICheesecake cheesecake = CheesecakeAPI.getProvider().getCheesecakeForPlayer((LocalPlayer) (Object) this);
         if (cheesecake != null) {
             ((LookBehavior) cheesecake.getLookBehavior()).pig();
         }
     }
 
-    @Redirect(method = "tickMovement", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/network/ClientPlayerEntity;checkGliding()Z"))
-    private boolean tryToStartFallFlying(final ClientPlayerEntity instance) {
+    @Redirect(method = "aiStep", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/player/LocalPlayer;tryToStartFallFlying()Z"))
+    private boolean tryToStartFallFlying(final LocalPlayer instance) {
         ICheesecake cheesecake = CheesecakeAPI.getProvider().getCheesecakeForPlayer(instance);
         if (cheesecake != null && cheesecake.getPathingBehavior().isPathing()) {
             return false;
         }
-        return instance.checkGliding();
+        return instance.tryToStartFallFlying();
     }
 }

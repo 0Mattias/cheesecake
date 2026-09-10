@@ -27,9 +27,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Stream;
-import net.minecraft.item.Item;
-import net.minecraft.registry.Registries;
-import net.minecraft.util.Identifier;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.Item;
 
 public class PickupCommand extends Command {
 
@@ -50,7 +50,7 @@ public class PickupCommand extends Command {
         } else {
             cheesecake.getFollowProcess().pickup(stack -> collecting.contains(stack.getItem()));
             logDirect("Picking up these items:");
-            collecting.stream().map(Registries.ITEM::getId).map(Identifier::toString).forEach(this::logDirect);
+            collecting.stream().map(BuiltInRegistries.ITEM::getKey).map(Identifier::toString).forEach(this::logDirect);
         }
     }
 

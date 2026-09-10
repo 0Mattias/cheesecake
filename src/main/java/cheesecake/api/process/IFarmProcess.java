@@ -17,7 +17,7 @@
 
 package cheesecake.api.process;
 
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.core.BlockPos;
 
 public interface IFarmProcess extends ICheesecakeProcess {
 

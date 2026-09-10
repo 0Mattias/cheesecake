@@ -21,15 +21,14 @@ import cheesecake.Cheesecake;
 import cheesecake.api.utils.BetterBlockPos;
 import cheesecake.api.utils.IPlayerContext;
 import cheesecake.api.utils.Pair;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.ChunkPos;
-import net.minecraft.util.math.Vec3i;
-import net.minecraft.world.Heightmap;
-
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Vec3i;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.levelgen.Heightmap;
 
 /**
  * Routes long trips above the build limit, where there is nothing to collide with, and hands the
@@ -52,10 +51,10 @@ public class BuildLimitPathFinder implements IElytraPathFinder {
             throw new IllegalArgumentException("NetherPathfinderContext cannot be null");
         }
 
-        this.flightLevel = ctx.world().getTopYInclusive() + 16;
+        this.flightLevel = ctx.world().getMaxY() + 16;
         this.netherCtx = netherCtx;
 
-        if (netherCtx.getMaxHeight() + ctx.world().getBottomY() < ctx.world().getTopYInclusive()) {
+        if (netherCtx.getMaxHeight() + ctx.world().getMinY() < ctx.world().getMaxY()) {
             throw new IllegalStateException("Nether pathfinder max height is below world build limit, cannot proceed");
         }
     }
@@ -120,7 +119,7 @@ public class BuildLimitPathFinder implements IElytraPathFinder {
         final double stepX = deltaX * scale;
         final double stepZ = deltaZ * scale;
 
-        final int netherMaxHeight = netherCtx.getMaxHeight() + playerCtx.world().getBottomY() - 1;
+        final int netherMaxHeight = netherCtx.getMaxHeight() + playerCtx.world().getMinY() - 1;
 
         final ChunkPos startChunk = new ChunkPos(start.x >> 4, start.z >> 4);
 
@@ -131,7 +130,7 @@ public class BuildLimitPathFinder implements IElytraPathFinder {
         LinkedList<BetterBlockPos> path = new LinkedList<>();
 
         // Start with the middle block so the transition doesn't leave the only chunk we can confirm is clear
-        final BlockPos middlePos = startChunk.getCenterAtY(netherMaxHeight + 4);
+        final BlockPos middlePos = startChunk.getMiddleBlockPosition(netherMaxHeight + 4);
 
         for (int i = 2; i <= 2; i++) {
             BetterBlockPos next = new BetterBlockPos(
@@ -152,7 +151,7 @@ public class BuildLimitPathFinder implements IElytraPathFinder {
      * @return The path (single point) and a boolean indicating if a transition point was found
      */
     public Pair<List<BetterBlockPos>, Boolean> generateTransitionDown(BetterBlockPos start) {
-        final int netherMaxHeight = netherCtx.getMaxHeight() + playerCtx.world().getBottomY() - 1;
+        final int netherMaxHeight = netherCtx.getMaxHeight() + playerCtx.world().getMinY() - 1;
         final ChunkPos startChunk = new ChunkPos(start.x >> 4, start.z >> 4);
 
         LinkedList<BetterBlockPos> path = new LinkedList<>();
@@ -161,19 +160,19 @@ public class BuildLimitPathFinder implements IElytraPathFinder {
             return new Pair<>(new LinkedList<>(), false);
         }
 
-        path.add(new BetterBlockPos(startChunk.getCenterAtY(netherMaxHeight - 8)));
+        path.add(new BetterBlockPos(startChunk.getMiddleBlockPosition(netherMaxHeight - 8)));
         return new Pair<>(path, true);
     }
 
     public boolean isSkyClear(ChunkPos pos, int y) {
-        if (!playerCtx.world().getChunkManager().isChunkLoaded(pos.x, pos.z)) {
+        if (!playerCtx.world().getChunkSource().hasChunk(pos.x, pos.z)) {
             return false;
         }
 
         for (int x = 0; x < 16; x++) {
             for (int z = 0; z < 16; z++) {
-                BlockPos blockPos = pos.getBlockPos(x, y, z);
-                int height = playerCtx.world().getTopY(Heightmap.Type.MOTION_BLOCKING, blockPos.getX(), blockPos.getZ());
+                BlockPos blockPos = pos.getBlockAt(x, y, z);
+                int height = playerCtx.world().getHeight(Heightmap.Types.MOTION_BLOCKING, blockPos.getX(), blockPos.getZ());
                 if (height > y) {
                     return false;
                 }
@@ -184,13 +183,13 @@ public class BuildLimitPathFinder implements IElytraPathFinder {
 
     @Override
     public CompletableFuture<UnpackedSegment> pathFindAsync(BlockPos src, BlockPos dst) {
-        final int netherMaxHeight = netherCtx.getMaxHeight() + playerCtx.world().getBottomY() - 1;
+        final int netherMaxHeight = netherCtx.getMaxHeight() + playerCtx.world().getMinY() - 1;
         final int maxDirectPathSize = 500;
 
         // There can be some navigation issues around failed transitions if the threshold distance isn't large enough
         final double maxDistance = Cheesecake.settings().elytraLongDistanceThreshold.value >= 32 ? (double) Cheesecake.settings().elytraLongDistanceThreshold.value : Double.POSITIVE_INFINITY;
 
-        final double distanceXZ = src.getSquaredDistance(new Vec3i(dst.getX(), src.getY(), dst.getZ()));
+        final double distanceXZ = src.distSqr(new Vec3i(dst.getX(), src.getY(), dst.getZ()));
         final boolean isLongDistance = distanceXZ > maxDistance * maxDistance;
         final boolean srcAboveSupportedHeight = src.getY() >= netherMaxHeight;
         final boolean dstAboveSupportedHeight = dst.getY() >= netherMaxHeight;
@@ -243,7 +242,7 @@ public class BuildLimitPathFinder implements IElytraPathFinder {
                 boolean success = transition.second();
 
                 if (!success) {
-                    BetterBlockPos newDest = distanceXZ > 32 ? new BetterBlockPos(dst) : new BetterBlockPos(dst.getX(), playerCtx.world().getTopYInclusive(), dst.getZ());
+                    BetterBlockPos newDest = distanceXZ > 32 ? new BetterBlockPos(dst) : new BetterBlockPos(dst.getX(), playerCtx.world().getMaxY(), dst.getZ());
                     Pair<List<BetterBlockPos>, Boolean> directPath = generateDirectPath(new BetterBlockPos(src), newDest, 0, 2);
                     return CompletableFuture.completedFuture(new UnpackedSegment(directPath.first().stream(), directPath.second()));
                 }

@@ -30,12 +30,12 @@ import cheesecake.utils.BlockStateInterface;
 import cheesecake.utils.pathing.MutableMoveResult;
 import java.util.HashSet;
 import java.util.Set;
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.Blocks;
-import net.minecraft.block.StairsBlock;
-import net.minecraft.fluid.WaterFluid;
-import net.minecraft.util.math.Direction;
+import net.minecraft.core.Direction;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.StairBlock;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.material.WaterFluid;
 
 public class MovementParkour extends Movement {
 
@@ -46,7 +46,7 @@ public class MovementParkour extends Movement {
     private final boolean ascend;
 
     private MovementParkour(ICheesecake cheesecake, BetterBlockPos src, int dist, Direction dir, boolean ascend) {
-        super(cheesecake, src, src.offset(dir, dist).up(ascend ? 1 : 0), EMPTY, src.offset(dir, dist).down(ascend ? 0 : 1));
+        super(cheesecake, src, src.relative(dir, dist).above(ascend ? 1 : 0), EMPTY, src.relative(dir, dist).below(ascend ? 0 : 1));
         this.direction = dir;
         this.dist = dist;
         this.ascend = ascend;
@@ -63,11 +63,11 @@ public class MovementParkour extends Movement {
         if (!context.allowParkour) {
             return;
         }
-        if (!context.allowJumpAtBuildLimit && y >= context.world.getTopYInclusive()) {
+        if (!context.allowJumpAtBuildLimit && y >= context.world.getMaxY()) {
             return;
         }
-        int xDiff = dir.getOffsetX();
-        int zDiff = dir.getOffsetZ();
+        int xDiff = dir.getStepX();
+        int zDiff = dir.getStepZ();
         if (!MovementHelper.fullyPassable(context, x + xDiff, y, z + zDiff)) {
             // most common case at the top -- the adjacent block isn't air
             return;
@@ -77,7 +77,7 @@ public class MovementParkour extends Movement {
             // second most common case -- we could just traverse not parkour
             return;
         }
-        if (MovementHelper.avoidWalkingInto(adj) && !(adj.getFluidState().getFluid() instanceof WaterFluid)) { // magma sucks
+        if (MovementHelper.avoidWalkingInto(adj) && !(adj.getFluidState().getType() instanceof WaterFluid)) { // magma sucks
             return;
         }
         if (!MovementHelper.fullyPassable(context, x + xDiff, y + 1, z + zDiff)) {
@@ -90,7 +90,7 @@ public class MovementParkour extends Movement {
             return;
         }
         BlockState standingOn = context.get(x, y - 1, z);
-        if (MovementHelper.isClimbable(standingOn.getBlock()) || standingOn.getBlock() instanceof StairsBlock || MovementHelper.isBottomSlab(standingOn)) {
+        if (MovementHelper.isClimbable(standingOn.getBlock()) || standingOn.getBlock() instanceof StairBlock || MovementHelper.isBottomSlab(standingOn)) {
             return;
         }
         // we can't jump from (frozen) water with assumeWalkOnWater because we can't be sure it will be frozen
@@ -101,7 +101,7 @@ public class MovementParkour extends Movement {
             return; // can't jump out of water
         }
         int maxJump;
-        if (context.allowWalkOnMagmaBlocks && standingOn.isOf(Blocks.MAGMA_BLOCK)) {
+        if (context.allowWalkOnMagmaBlocks && standingOn.is(Blocks.MAGMA_BLOCK)) {
             maxJump = 2;
         } else if (standingOn.getBlock() == Blocks.SOUL_SAND) {
             maxJump = 2; // 1 block gap
@@ -182,9 +182,9 @@ public class MovementParkour extends Movement {
                 continue;
             }
             for (int j = 0; j < 5; j++) {
-                int againstX = destX + HORIZONTALS_BUT_ALSO_DOWN_____SO_EVERY_DIRECTION_EXCEPT_UP[j].getOffsetX();
-                int againstY = y - 1 + HORIZONTALS_BUT_ALSO_DOWN_____SO_EVERY_DIRECTION_EXCEPT_UP[j].getOffsetY();
-                int againstZ = destZ + HORIZONTALS_BUT_ALSO_DOWN_____SO_EVERY_DIRECTION_EXCEPT_UP[j].getOffsetZ();
+                int againstX = destX + HORIZONTALS_BUT_ALSO_DOWN_____SO_EVERY_DIRECTION_EXCEPT_UP[j].getStepX();
+                int againstY = y - 1 + HORIZONTALS_BUT_ALSO_DOWN_____SO_EVERY_DIRECTION_EXCEPT_UP[j].getStepY();
+                int againstZ = destZ + HORIZONTALS_BUT_ALSO_DOWN_____SO_EVERY_DIRECTION_EXCEPT_UP[j].getStepZ();
                 if (againstX == destX - xDiff && againstZ == destZ - zDiff) { // we can't turn around that fast
                     continue;
                 }
@@ -233,7 +233,7 @@ public class MovementParkour extends Movement {
         Set<BetterBlockPos> set = new HashSet<>();
         for (int i = 0; i <= dist; i++) {
             for (int y = 0; y < 2; y++) {
-                set.add(src.offset(direction, i).up(y));
+                set.add(src.relative(direction, i).above(y));
             }
         }
         return set;
@@ -261,7 +261,7 @@ public class MovementParkour extends Movement {
         if (dist >= 4 || ascend) {
             state.setInput(Input.SPRINT, true);
         }
-        if (Cheesecake.settings().allowWalkOnMagmaBlocks.value && ctx.world().getBlockState(ctx.playerFeet().down()).isOf(Blocks.MAGMA_BLOCK)) {
+        if (Cheesecake.settings().allowWalkOnMagmaBlocks.value && ctx.world().getBlockState(ctx.playerFeet().below()).is(Blocks.MAGMA_BLOCK)) {
             state.setInput(Input.SNEAK, true);
         }
 
@@ -277,12 +277,12 @@ public class MovementParkour extends Movement {
                 state.setStatus(MovementStatus.SUCCESS);
             }
         } else if (!ctx.playerFeet().equals(src)) {
-            if (ctx.playerFeet().equals(src.offset(direction)) || ctx.player().getY() - src.y > 0.0001) {
+            if (ctx.playerFeet().equals(src.relative(direction)) || ctx.player().getY() - src.y > 0.0001) {
                 if (Cheesecake.settings().allowPlace.value // see PR #3775
                         && ((Cheesecake) cheesecake).getInventoryBehavior().hasGenericThrowaway()
-                        && !MovementHelper.canWalkOn(ctx, dest.down())
-                        && !ctx.player().isOnGround()
-                        && MovementHelper.attemptToPlaceABlock(state, cheesecake, dest.down(), true, false) == PlaceResult.READY_TO_PLACE
+                        && !MovementHelper.canWalkOn(ctx, dest.below())
+                        && !ctx.player().onGround()
+                        && MovementHelper.attemptToPlaceABlock(state, cheesecake, dest.below(), true, false) == PlaceResult.READY_TO_PLACE
                 ) {
                     // go in the opposite order to check DOWN before all horizontals -- down is preferable because you don't have to look to the side while in midair, which could mess up the trajectory
                     state.setInput(Input.CLICK_RIGHT, true);
@@ -298,12 +298,12 @@ public class MovementParkour extends Movement {
                 }
 
                 state.setInput(Input.JUMP, true);
-            } else if (!ctx.playerFeet().equals(dest.offset(direction, -1))) {
+            } else if (!ctx.playerFeet().equals(dest.relative(direction, -1))) {
                 state.setInput(Input.SPRINT, false);
-                if (ctx.playerFeet().equals(src.offset(direction, -1))) {
+                if (ctx.playerFeet().equals(src.relative(direction, -1))) {
                     MovementHelper.moveTowards(ctx, state, src);
                 } else {
-                    MovementHelper.moveTowards(ctx, state, src.offset(direction, -1));
+                    MovementHelper.moveTowards(ctx, state, src.relative(direction, -1));
                 }
             }
         }

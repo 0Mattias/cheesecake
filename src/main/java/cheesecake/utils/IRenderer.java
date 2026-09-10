@@ -27,23 +27,23 @@ import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.platform.DepthTestFunction;
 import com.mojang.blaze3d.platform.DestFactor;
 import com.mojang.blaze3d.platform.SourceFactor;
+import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import com.mojang.blaze3d.vertex.MeshData;
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexFormat;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gl.RenderPipelines;
-import net.minecraft.client.render.BufferBuilder;
-import net.minecraft.client.render.BuiltBuffer;
-import net.minecraft.client.render.LightmapTextureManager;
-import net.minecraft.client.render.OverlayTexture;
-import net.minecraft.client.render.RenderLayer;
-import net.minecraft.client.render.RenderLayers;
-import net.minecraft.client.render.RenderSetup;
-import net.minecraft.client.render.Tessellator;
-import net.minecraft.client.render.VertexFormats;
-import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.util.Identifier;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.LightTexture;
+import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.client.renderer.rendertype.RenderSetup;
+import net.minecraft.client.renderer.rendertype.RenderType;
+import net.minecraft.client.renderer.rendertype.RenderTypes;
+import net.minecraft.client.renderer.texture.OverlayTexture;
+import net.minecraft.resources.Identifier;
 import net.minecraft.util.Util;
-import net.minecraft.util.math.Box;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 
 import java.awt.Color;
@@ -51,9 +51,9 @@ import java.util.function.BiFunction;
 
 public interface IRenderer {
 
-    Tessellator tessellator = Tessellator.getInstance();
+    Tesselator tessellator = Tesselator.getInstance();
 
-    IEntityRenderManager renderManager = (IEntityRenderManager) MinecraftClient.getInstance()
+    IEntityRenderManager renderManager = (IEntityRenderManager) Minecraft.getInstance()
             .getEntityRenderDispatcher();
     Settings settings = CheesecakeAPI.getSettings();
 
@@ -81,7 +81,7 @@ public interface IRenderer {
             .withVertexShader("core/rendertype_beacon_beam")
             .withFragmentShader("core/rendertype_beacon_beam")
             .withSampler("Sampler0")
-            .withVertexFormat(VertexFormats.POSITION_COLOR_TEXTURE_LIGHT_NORMAL, VertexFormat.DrawMode.QUADS)
+            .withVertexFormat(DefaultVertexFormat.BLOCK, VertexFormat.Mode.QUADS)
             .buildSnippet();
 
     RenderPipeline BEACON_BEAM_OPAQUE = ((IRenderPipelines) new RenderPipelines()).cheesecake$registerPipeline(
@@ -106,36 +106,36 @@ public interface IRenderer {
      * were implemented by toggling GL_DEPTH_TEST around the draw call, but the render pipeline owns that
      * state now, so the toggle silently did nothing (and left vanilla's state tracker out of sync).
      */
-    RenderLayer linesWithDepthRenderLayer = ((IRenderLayer) RenderLayers.LINES).cheesecake$createRenderLayer(
+    RenderType linesWithDepthRenderLayer = ((IRenderLayer) RenderTypes.LINES).cheesecake$createRenderLayer(
             "renderLayer/cheesecake_lines_with_depth",
             RenderSetup.builder(RenderPipeline.builder(CHEESECAKE_LINES_SNIPPET)
                     .withLocation("pipeline/cheesecake_lines_with_depth")
                     .withDepthTestFunction(DepthTestFunction.LEQUAL_DEPTH_TEST)
                     .build())
-                    .expectedBufferSize(256)
-                    .build());
+                    .bufferSize(256)
+                    .createRenderSetup());
 
-    RenderLayer linesNoDepthRenderLayer = ((IRenderLayer) RenderLayers.LINES).cheesecake$createRenderLayer(
+    RenderType linesNoDepthRenderLayer = ((IRenderLayer) RenderTypes.LINES).cheesecake$createRenderLayer(
             "renderLayer/cheesecake_lines_no_depth",
             RenderSetup.builder(RenderPipeline.builder(CHEESECAKE_LINES_SNIPPET)
                     .withLocation("pipeline/cheesecake_lines_no_depth")
                     .withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
                     .build())
-                    .expectedBufferSize(256)
-                    .build());
+                    .bufferSize(256)
+                    .createRenderSetup());
 
     /**
      * Beacon beam layers that ignore depth, keyed by texture and translucency like vanilla's
-     * {@link RenderLayers#beaconBeam(Identifier, boolean)}.
+     * {@link RenderTypes#beaconBeam(Identifier, boolean)}.
      */
-    BiFunction<Identifier, Boolean, RenderLayer> BEACON_BEAM = Util.memoize(
-            (texture, translucent) -> ((IRenderLayer) RenderLayers.LINES).cheesecake$createRenderLayer(
+    BiFunction<Identifier, Boolean, RenderType> BEACON_BEAM = Util.memoize(
+            (texture, translucent) -> ((IRenderLayer) RenderTypes.LINES).cheesecake$createRenderLayer(
                     translucent ? "renderLayer/cheesecake_beacon_beam_translucent"
                             : "renderLayer/cheesecake_beacon_beam_opaque",
                     RenderSetup.builder(translucent ? BEACON_BEAM_TRANSLUCENT : BEACON_BEAM_OPAQUE)
-                            .texture("Sampler0", texture)
-                            .translucent()
-                            .build()));
+                            .withTexture("Sampler0", texture)
+                            .sortOnUpload()
+                            .createRenderSetup()));
 
     float[] color = new float[] { 1.0F, 1.0F, 1.0F, 255.0F };
 
@@ -149,7 +149,7 @@ public interface IRenderer {
 
     static BufferBuilder startLines(Color color, float alpha) {
         glColor(color, alpha);
-        return tessellator.begin(VertexFormat.DrawMode.LINES, RenderLayers.LINES.getVertexFormat());
+        return tessellator.begin(VertexFormat.Mode.LINES, RenderTypes.LINES.format());
     }
 
     static BufferBuilder startLines(Color color) {
@@ -157,24 +157,24 @@ public interface IRenderer {
     }
 
     static void endLines(BufferBuilder bufferBuilder, boolean ignoreDepth) {
-        BuiltBuffer builtBuffer = bufferBuilder.endNullable();
+        MeshData builtBuffer = bufferBuilder.build();
         if (builtBuffer != null) {
             (ignoreDepth ? linesNoDepthRenderLayer : linesWithDepthRenderLayer).draw(builtBuffer);
         }
     }
 
     static BufferBuilder startBlockQuads() {
-        return tessellator.begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_COLOR_TEXTURE_LIGHT_NORMAL);
+        return tessellator.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.BLOCK);
     }
 
-    static void endBuffer(BufferBuilder bufferBuilder, RenderLayer renderLayer) {
-        BuiltBuffer builtBuffer = bufferBuilder.endNullable();
+    static void endBuffer(BufferBuilder bufferBuilder, RenderType renderLayer) {
+        MeshData builtBuffer = bufferBuilder.build();
         if (builtBuffer != null) {
             renderLayer.draw(builtBuffer);
         }
     }
 
-    static void emitLine(BufferBuilder bufferBuilder, MatrixStack stack,
+    static void emitLine(BufferBuilder bufferBuilder, PoseStack stack,
             double x1, double y1, double z1,
             double x2, double y2, double z2,
             float lineWidth) {
@@ -190,7 +190,7 @@ public interface IRenderer {
         emitLine(bufferBuilder, stack, x1, y1, z1, x2, y2, z2, nx, ny, nz, lineWidth);
     }
 
-    static void emitLine(BufferBuilder bufferBuilder, MatrixStack stack,
+    static void emitLine(BufferBuilder bufferBuilder, PoseStack stack,
             double x1, double y1, double z1,
             double x2, double y2, double z2,
             double nx, double ny, double nz,
@@ -202,29 +202,29 @@ public interface IRenderer {
                 lineWidth);
     }
 
-    static void emitLine(BufferBuilder bufferBuilder, MatrixStack stack,
+    static void emitLine(BufferBuilder bufferBuilder, PoseStack stack,
             float x1, float y1, float z1,
             float x2, float y2, float z2,
             float nx, float ny, float nz,
             float lineWidth) {
 
-        final MatrixStack.Entry entry = stack.peek();
-        final Matrix4f matrix4f = entry.getPositionMatrix();
+        final PoseStack.Pose entry = stack.last();
+        final Matrix4f matrix4f = entry.pose();
 
         bufferBuilder
-                .vertex(matrix4f, x1, y1, z1)
-                .color(color[0], color[1], color[2], color[3])
-                .normal(entry, nx, ny, nz)
-                .lineWidth(lineWidth);
+                .addVertex(matrix4f, x1, y1, z1)
+                .setColor(color[0], color[1], color[2], color[3])
+                .setNormal(entry, nx, ny, nz)
+                .setLineWidth(lineWidth);
         bufferBuilder
-                .vertex(matrix4f, x2, y2, z2)
-                .color(color[0], color[1], color[2], color[3])
-                .normal(entry, nx, ny, nz)
-                .lineWidth(lineWidth);
+                .addVertex(matrix4f, x2, y2, z2)
+                .setColor(color[0], color[1], color[2], color[3])
+                .setNormal(entry, nx, ny, nz)
+                .setLineWidth(lineWidth);
     }
 
-    static void emitAABB(BufferBuilder bufferBuilder, MatrixStack stack, Box aabb, float lineWidth) {
-        Box toDraw = aabb.offset(-renderManager.renderPosX(), -renderManager.renderPosY(), -renderManager.renderPosZ());
+    static void emitAABB(BufferBuilder bufferBuilder, PoseStack stack, AABB aabb, float lineWidth) {
+        AABB toDraw = aabb.move(-renderManager.renderPosX(), -renderManager.renderPosY(), -renderManager.renderPosZ());
 
         // bottom
         emitLine(bufferBuilder, stack, toDraw.minX, toDraw.minY, toDraw.minZ, toDraw.maxX, toDraw.minY, toDraw.minZ, 1.0, 0.0, 0.0, lineWidth);
@@ -243,11 +243,11 @@ public interface IRenderer {
         emitLine(bufferBuilder, stack, toDraw.minX, toDraw.minY, toDraw.maxZ, toDraw.minX, toDraw.maxY, toDraw.maxZ, 0.0, 1.0, 0.0, lineWidth);
     }
 
-    static void emitAABB(BufferBuilder bufferBuilder, MatrixStack stack, Box aabb, double expand, float lineWidth) {
-        emitAABB(bufferBuilder, stack, aabb.expand(expand, expand, expand), lineWidth);
+    static void emitAABB(BufferBuilder bufferBuilder, PoseStack stack, AABB aabb, double expand, float lineWidth) {
+        emitAABB(bufferBuilder, stack, aabb.inflate(expand, expand, expand), lineWidth);
     }
 
-    static void emitLine(BufferBuilder bufferBuilder, MatrixStack stack, Vec3d start, Vec3d end, float lineWidth) {
+    static void emitLine(BufferBuilder bufferBuilder, PoseStack stack, Vec3 start, Vec3 end, float lineWidth) {
         double vpX = renderManager.renderPosX();
         double vpY = renderManager.renderPosY();
         double vpZ = renderManager.renderPosZ();
@@ -257,21 +257,21 @@ public interface IRenderer {
                 lineWidth);
     }
 
-    static void emitTexturedVertex(BufferBuilder bufferBuilder, MatrixStack.Entry entry, float x, float y, float z,
+    static void emitTexturedVertex(BufferBuilder bufferBuilder, PoseStack.Pose entry, float x, float y, float z,
             int color, float u, float v, float nx, float ny, float nz) {
-        bufferBuilder.vertex(entry, x, y, z)
-                .color(color)
-                .texture(u, v)
-                .overlay(OverlayTexture.DEFAULT_UV)
-                .light(LightmapTextureManager.MAX_LIGHT_COORDINATE)
-                .normal(entry, nx, ny, nz);
+        bufferBuilder.addVertex(entry, x, y, z)
+                .setColor(color)
+                .setUv(u, v)
+                .setOverlay(OverlayTexture.NO_OVERLAY)
+                .setLight(LightTexture.FULL_BRIGHT)
+                .setNormal(entry, nx, ny, nz);
     }
 
-    static RenderLayer beaconBeam(Identifier texture, boolean translucent) {
+    static RenderType beaconBeam(Identifier texture, boolean translucent) {
         return BEACON_BEAM.apply(texture, translucent);
     }
 
-    static RenderLayer beaconBeam(Identifier texture, boolean translucent, boolean ignoreDepth) {
-        return ignoreDepth ? beaconBeam(texture, translucent) : RenderLayers.beaconBeam(texture, translucent);
+    static RenderType beaconBeam(Identifier texture, boolean translucent, boolean ignoreDepth) {
+        return ignoreDepth ? beaconBeam(texture, translucent) : RenderTypes.beaconBeam(texture, translucent);
     }
 }

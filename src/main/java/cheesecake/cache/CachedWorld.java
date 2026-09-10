@@ -33,10 +33,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.LinkedBlockingQueue;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.ChunkPos;
-import net.minecraft.world.chunk.WorldChunk;
-import net.minecraft.world.dimension.DimensionType;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.dimension.DimensionType;
 
 /**
  * @author Brady
@@ -71,8 +71,8 @@ public final class CachedWorld implements ICachedWorld, Helper {
      * new update to the chunk occurs
      * while waiting in the queue for the packer thread to get to it.
      */
-    private final Map<ChunkPos, WorldChunk> toPackMap = CacheBuilder.newBuilder().softValues()
-            .<ChunkPos, WorldChunk>build().asMap();
+    private final Map<ChunkPos, LevelChunk> toPackMap = CacheBuilder.newBuilder().softValues()
+            .<ChunkPos, LevelChunk>build().asMap();
 
     private final DimensionType dimension;
 
@@ -104,7 +104,7 @@ public final class CachedWorld implements ICachedWorld, Helper {
     }
 
     @Override
-    public final void queueForPacking(WorldChunk chunk) {
+    public final void queueForPacking(LevelChunk chunk) {
         if (toPackMap.put(chunk.getPos(), chunk) == null) {
             toPackQueue.add(chunk.getPos());
         }
@@ -310,7 +310,7 @@ public final class CachedWorld implements ICachedWorld, Helper {
             while (true) {
                 try {
                     ChunkPos pos = toPackQueue.take();
-                    WorldChunk chunk = toPackMap.remove(pos);
+                    LevelChunk chunk = toPackMap.remove(pos);
                     if (toPackQueue.size() > Cheesecake.settings().chunkPackerQueueMaxSize.value) {
                         continue;
                     }

@@ -5,9 +5,9 @@ import cheesecake.api.event.events.RenderEvent;
 import cheesecake.api.event.listener.AbstractGameEventListener;
 import cheesecake.api.selection.ISelection;
 import cheesecake.utils.IRenderer;
-import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.client.render.BufferBuilder;
-import net.minecraft.util.math.Box;
+import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.PoseStack;
+import net.minecraft.world.phys.AABB;
 
 public class SelectionRenderer implements IRenderer, AbstractGameEventListener {
 
@@ -20,7 +20,7 @@ public class SelectionRenderer implements IRenderer, AbstractGameEventListener {
         cheesecake.getGameEventHandler().registerEventListener(this);
     }
 
-    public static void renderSelections(MatrixStack stack, ISelection[] selections) {
+    public static void renderSelections(PoseStack stack, ISelection[] selections) {
         float opacity = settings.selectionOpacity.value;
         boolean ignoreDepth = settings.renderSelectionIgnoreDepth.value;
         float lineWidth = settings.selectionLineWidth.value;
@@ -39,14 +39,14 @@ public class SelectionRenderer implements IRenderer, AbstractGameEventListener {
             IRenderer.glColor(settings.colorSelectionPos1.value, opacity);
 
             for (ISelection selection : selections) {
-                IRenderer.emitAABB(bufferBuilder, stack, new Box(selection.pos1().x, selection.pos1().y, selection.pos1().z,
+                IRenderer.emitAABB(bufferBuilder, stack, new AABB(selection.pos1().x, selection.pos1().y, selection.pos1().z,
                         selection.pos1().x + 1, selection.pos1().y + 1, selection.pos1().z + 1), lineWidth);
             }
 
             IRenderer.glColor(settings.colorSelectionPos2.value, opacity);
 
             for (ISelection selection : selections) {
-                IRenderer.emitAABB(bufferBuilder, stack, new Box(selection.pos2().x, selection.pos2().y, selection.pos2().z,
+                IRenderer.emitAABB(bufferBuilder, stack, new AABB(selection.pos2().x, selection.pos2().y, selection.pos2().z,
                         selection.pos2().x + 1, selection.pos2().y + 1, selection.pos2().z + 1), lineWidth);
             }
         }

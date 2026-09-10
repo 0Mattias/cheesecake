@@ -18,8 +18,8 @@
 package cheesecake.api.event.events;
 
 import cheesecake.api.event.events.type.EventState;
-import net.minecraft.network.ClientConnection;
-import net.minecraft.network.packet.Packet;
+import net.minecraft.network.Connection;
+import net.minecraft.network.protocol.Packet;
 
 /**
  * @author Brady
@@ -27,19 +27,19 @@ import net.minecraft.network.packet.Packet;
  */
 public final class PacketEvent {
 
-    private final ClientConnection networkManager;
+    private final Connection networkManager;
 
     private final EventState state;
 
     private final Packet<?> packet;
 
-    public PacketEvent(ClientConnection networkManager, EventState state, Packet<?> packet) {
+    public PacketEvent(Connection networkManager, EventState state, Packet<?> packet) {
         this.networkManager = networkManager;
         this.state = state;
         this.packet = packet;
     }
 
-    public final ClientConnection getNetworkManager() {
+    public final Connection getNetworkManager() {
         return this.networkManager;
     }
 

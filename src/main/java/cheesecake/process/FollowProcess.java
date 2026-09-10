@@ -31,10 +31,10 @@ import cheesecake.utils.CheesecakeProcessHelper;
 import java.util.List;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.ItemEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.item.ItemStack;
 
 /**
  * Follow an entity
@@ -61,10 +61,10 @@ public final class FollowProcess extends CheesecakeProcessHelper implements IFol
     private Goal towards(Entity following) {
         BlockPos pos;
         if (Cheesecake.settings().followOffsetDistance.value == 0 || into) {
-            pos = following.getBlockPos();
+            pos = following.blockPosition();
         } else {
             GoalXZ g = GoalXZ.fromDirection(
-                    new net.minecraft.util.math.Vec3d(following.getX(), following.getY(), following.getZ()),
+                    new net.minecraft.world.phys.Vec3(following.getX(), following.getY(), following.getZ()),
                     Cheesecake.settings().followOffsetDirection.value,
                     Cheesecake.settings().followOffsetDistance.value);
             pos = new BetterBlockPos(g.getX(), following.getY(), g.getZ());
@@ -86,7 +86,7 @@ public final class FollowProcess extends CheesecakeProcessHelper implements IFol
             return false;
         }
         int maxDist = Cheesecake.settings().followTargetMaxDistance.value;
-        if (maxDist != 0 && entity.squaredDistanceTo(ctx.player()) > maxDist * maxDist) {
+        if (maxDist != 0 && entity.distanceToSqr(ctx.player()) > maxDist * maxDist) {
             return false;
         }
         return ctx.entitiesStream().anyMatch(entity::equals);
@@ -128,7 +128,7 @@ public final class FollowProcess extends CheesecakeProcessHelper implements IFol
 
     @Override
     public void pickup(Predicate<ItemStack> filter) {
-        this.filter = e -> e instanceof ItemEntity && filter.test(((ItemEntity) e).getStack());
+        this.filter = e -> e instanceof ItemEntity && filter.test(((ItemEntity) e).getItem());
         this.into = true;
     }
 

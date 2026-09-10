@@ -19,10 +19,10 @@ package cheesecake.utils;
 
 import cheesecake.Cheesecake;
 import cheesecake.api.utils.IPlayerContext;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.Hand;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.hit.HitResult;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
 
 public class BlockPlaceHelper {
     // base ticks between places caused by tick logic
@@ -41,16 +41,16 @@ public class BlockPlaceHelper {
             return;
         }
         HitResult mouseOver = ctx.objectMouseOver();
-        if (!rightClickRequested || ctx.player().isRiding() || mouseOver == null || mouseOver.getType() != HitResult.Type.BLOCK) {
+        if (!rightClickRequested || ctx.player().isHandsBusy() || mouseOver == null || mouseOver.getType() != HitResult.Type.BLOCK) {
             return;
         }
         rightClickTimer = Cheesecake.settings().rightClickSpeed.value - BASE_PLACE_DELAY;
-        for (Hand hand : Hand.values()) {
-            if (ctx.playerController().processRightClickBlock(ctx.player(), ctx.world(), hand, (BlockHitResult) mouseOver) == ActionResult.SUCCESS) {
-                ctx.player().swingHand(hand);
+        for (InteractionHand hand : InteractionHand.values()) {
+            if (ctx.playerController().processRightClickBlock(ctx.player(), ctx.world(), hand, (BlockHitResult) mouseOver) == InteractionResult.SUCCESS) {
+                ctx.player().swing(hand);
                 return;
             }
-            if (!ctx.player().getStackInHand(hand).isEmpty() && ctx.playerController().processRightClick(ctx.player(), ctx.world(), hand) == ActionResult.SUCCESS) {
+            if (!ctx.player().getItemInHand(hand).isEmpty() && ctx.playerController().processRightClick(ctx.player(), ctx.world(), hand) == InteractionResult.SUCCESS) {
                 return;
             }
         }

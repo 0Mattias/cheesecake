@@ -19,7 +19,7 @@ package cheesecake.pathing.movement;
 
 import cheesecake.api.utils.input.Input;
 import java.util.stream.Stream;
-import net.minecraft.util.math.MathHelper;
+import net.minecraft.util.Mth;
 
 public record MovementOption(Input input1, Input input2, float motionX, float motionZ) {
     private static final float SPRINT_MULTIPLIER = 1.3f;
@@ -38,7 +38,7 @@ public record MovementOption(Input input1, Input input2, float motionX, float mo
     }
 
     public float distanceToSq(float otherX, float otherZ) {
-        return MathHelper.abs(motionX() - otherX) + MathHelper.abs(motionZ() - otherZ);
+        return Mth.abs(motionX() - otherX) + Mth.abs(motionZ() - otherZ);
     }
     
     public static Stream<MovementOption> getOptions(float motionX, float motionZ, boolean canSprint) {

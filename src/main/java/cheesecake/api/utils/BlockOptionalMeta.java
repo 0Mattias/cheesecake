@@ -20,18 +20,17 @@ package cheesecake.api.utils;
 import cheesecake.api.utils.accessor.IItemStack;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockState;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.loot.LootTable;
-import net.minecraft.registry.Registries;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.state.property.Property;
-import net.minecraft.util.Identifier;
-
 import javax.annotation.Nonnull;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.Property;
+import net.minecraft.world.level.storage.loot.LootTable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -99,8 +98,8 @@ public final class BlockOptionalMeta {
             }
             String rawKey = parts[0];
             String rawValue = parts[1];
-            Property<?> key = block.getStateManager().getProperty(rawKey);
-            Comparable<?> value = castToIProperty(key).parse(rawValue)
+            Property<?> key = block.getStateDefinition().getProperty(rawKey);
+            Comparable<?> value = castToIProperty(key).getValue(rawValue)
                     .orElseThrow(() -> new IllegalArgumentException(String.format(
                             "\"%s\" is not a valid value for %s on %s",
                             rawValue, key, block)));
@@ -110,9 +109,9 @@ public final class BlockOptionalMeta {
     }
 
     private static Set<BlockState> getStates(@Nonnull Block block, @Nonnull Map<Property<?>, ?> properties) {
-        return block.getStateManager().getStates().stream()
+        return block.getStateDefinition().getPossibleStates().stream()
                 .filter(blockstate -> properties.entrySet().stream()
-                        .allMatch(entry -> blockstate.get(entry.getKey()) == entry.getValue()))
+                        .allMatch(entry -> blockstate.getValue(entry.getKey()) == entry.getValue()))
                 .collect(Collectors.toSet());
     }
 
@@ -151,7 +150,7 @@ public final class BlockOptionalMeta {
         // noinspection ConstantConditions
         int hash = ((IItemStack) (Object) stack).getCheesecakeHash();
 
-        hash -= stack.getDamage();
+        hash -= stack.getDamageValue();
 
         return stackHashes.contains(hash);
     }
@@ -190,11 +189,11 @@ public final class BlockOptionalMeta {
      */
     private static synchronized List<Item> drops(Block b) {
         return drops.computeIfAbsent(b, block -> {
-            Optional<RegistryKey<LootTable>> key = block.getLootTableKey();
+            Optional<ResourceKey<LootTable>> key = block.getLootTable();
             if (key.isEmpty()) {
                 return Collections.emptyList(); // dropsNothing()
             }
-            Optional<Set<String>> ids = LOOT.itemIds(key.get().getValue().toString());
+            Optional<Set<String>> ids = LOOT.itemIds(key.get().identifier().toString());
             if (ids.isEmpty()) {
                 Item item = block.asItem();
                 // Blocks with no item form map to AIR; letting that through would make every empty
@@ -204,8 +203,8 @@ public final class BlockOptionalMeta {
             List<Item> items = new ArrayList<>();
             for (String id : ids.get()) {
                 Identifier identifier = Identifier.tryParse(id);
-                if (identifier != null && Registries.ITEM.containsId(identifier)) {
-                    items.add(Registries.ITEM.get(identifier));
+                if (identifier != null && BuiltInRegistries.ITEM.containsKey(identifier)) {
+                    items.add(BuiltInRegistries.ITEM.getValue(identifier));
                 }
             }
             return items;

@@ -20,7 +20,7 @@ package cheesecake.utils.schematic;
 import cheesecake.api.schematic.AbstractSchematic;
 import cheesecake.api.schematic.IStaticSchematic;
 import java.util.List;
-import net.minecraft.block.BlockState;
+import net.minecraft.world.level.block.state.BlockState;
 
 /**
  * Default implementation of {@link IStaticSchematic}

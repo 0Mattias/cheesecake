@@ -19,17 +19,17 @@ package cheesecake.utils.player;
 
 import cheesecake.api.utils.IPlayerController;
 import cheesecake.utils.accessor.IPlayerControllerMP;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.screen.slot.SlotActionType;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.Hand;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
-import net.minecraft.world.GameMode;
-import net.minecraft.world.World;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.inventory.ClickType;
+import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.BlockHitResult;
 
 
 /**
@@ -40,60 +40,60 @@ import net.minecraft.world.World;
  */
 public final class CheesecakePlayerController implements IPlayerController {
 
-    private final MinecraftClient mc;
+    private final Minecraft mc;
 
-    public CheesecakePlayerController(MinecraftClient mc) {
+    public CheesecakePlayerController(Minecraft mc) {
         this.mc = mc;
     }
 
     @Override
     public void syncHeldItem() {
-        ((IPlayerControllerMP) mc.interactionManager).callSyncCurrentPlayItem();
+        ((IPlayerControllerMP) mc.gameMode).callSyncCurrentPlayItem();
     }
 
     @Override
     public boolean hasBrokenBlock() {
-        return !((IPlayerControllerMP) mc.interactionManager).isHittingBlock();
+        return !((IPlayerControllerMP) mc.gameMode).isHittingBlock();
     }
 
     @Override
     public boolean onPlayerDamageBlock(BlockPos pos, Direction side) {
-        return mc.interactionManager.updateBlockBreakingProgress(pos, side);
+        return mc.gameMode.continueDestroyBlock(pos, side);
     }
 
     @Override
     public void resetBlockRemoving() {
-        mc.interactionManager.cancelBlockBreaking();
+        mc.gameMode.stopDestroyBlock();
     }
 
     @Override
-    public void windowClick(int windowId, int slotId, int mouseButton, SlotActionType type, PlayerEntity player) {
-        mc.interactionManager.clickSlot(windowId, slotId, mouseButton, type, player);
+    public void windowClick(int windowId, int slotId, int mouseButton, ClickType type, Player player) {
+        mc.gameMode.handleInventoryMouseClick(windowId, slotId, mouseButton, type, player);
     }
 
     @Override
-    public GameMode getGameType() {
-        return mc.interactionManager.getCurrentGameMode();
+    public GameType getGameType() {
+        return mc.gameMode.getPlayerMode();
     }
 
     @Override
-    public ActionResult processRightClickBlock(ClientPlayerEntity player, World world, Hand hand, BlockHitResult result) {
+    public InteractionResult processRightClickBlock(LocalPlayer player, Level world, InteractionHand hand, BlockHitResult result) {
         // primaryplayercontroller is always in a ClientWorld so this is ok
-        return mc.interactionManager.interactBlock(player, hand, result);
+        return mc.gameMode.useItemOn(player, hand, result);
     }
 
     @Override
-    public ActionResult processRightClick(ClientPlayerEntity player, World world, Hand hand) {
-        return mc.interactionManager.interactItem(player, hand);
+    public InteractionResult processRightClick(LocalPlayer player, Level world, InteractionHand hand) {
+        return mc.gameMode.useItem(player, hand);
     }
 
     @Override
     public boolean clickBlock(BlockPos loc, Direction face) {
-        return mc.interactionManager.attackBlock(loc, face);
+        return mc.gameMode.startDestroyBlock(loc, face);
     }
 
     @Override
     public void setHittingBlock(boolean hittingBlock) {
-        ((IPlayerControllerMP) mc.interactionManager).setIsHittingBlock(hittingBlock);
+        ((IPlayerControllerMP) mc.gameMode).setIsHittingBlock(hittingBlock);
     }
 }

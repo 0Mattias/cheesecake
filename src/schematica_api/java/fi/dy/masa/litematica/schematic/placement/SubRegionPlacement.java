@@ -17,9 +17,9 @@
 
 package fi.dy.masa.litematica.schematic.placement;
 
-import net.minecraft.util.BlockMirror;
-import net.minecraft.util.BlockRotation;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.block.Mirror;
+import net.minecraft.world.level.block.Rotation;
 
 public class SubRegionPlacement {
 
@@ -27,11 +27,11 @@ public class SubRegionPlacement {
         throw new LinkageError();
     }
 
-    public BlockRotation getRotation() {
+    public Rotation getRotation() {
         throw new LinkageError();
     }
 
-    public BlockMirror getMirror() {
+    public Mirror getMirror() {
         throw new LinkageError();
     }
 }

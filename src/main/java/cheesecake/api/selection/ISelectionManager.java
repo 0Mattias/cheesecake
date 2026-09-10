@@ -18,7 +18,7 @@
 package cheesecake.api.selection;
 
 import cheesecake.api.utils.BetterBlockPos;
-import net.minecraft.util.math.Direction;
+import net.minecraft.core.Direction;
 
 /**
  * The selection manager handles setting Cheesecake's selections. You can set the selection here, as well as retrieving

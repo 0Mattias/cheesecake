@@ -25,23 +25,23 @@ import cheesecake.api.utils.IPlayerContext;
 import cheesecake.api.utils.interfaces.IGoalRenderPos;
 import cheesecake.behavior.PathingBehavior;
 import cheesecake.pathing.path.PathExecutor;
+import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.math.Axis;
 import java.awt.Color;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
-import net.minecraft.block.BlockState;
-import net.minecraft.client.render.BufferBuilder;
-import net.minecraft.client.render.block.entity.BeaconBlockEntityRenderer;
-import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.entity.Entity;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Box;
-import net.minecraft.util.math.MathHelper;
-import net.minecraft.util.math.RotationAxis;
-import net.minecraft.util.shape.VoxelShape;
-import net.minecraft.util.shape.VoxelShapes;
-import net.minecraft.world.dimension.DimensionType;
+import net.minecraft.client.renderer.blockentity.BeaconRenderer;
+import net.minecraft.core.BlockPos;
+import net.minecraft.util.Mth;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.dimension.DimensionType;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.shapes.Shapes;
+import net.minecraft.world.phys.shapes.VoxelShape;
 
 /**
  * @author Brady
@@ -73,16 +73,16 @@ public final class PathRenderer implements IRenderer {
         if (ctx.world() == null) {
             return;
         }
-        if (ctx.minecraft().currentScreen instanceof GuiClick) {
-            ((GuiClick) ctx.minecraft().currentScreen).onRender(event.getModelViewStack(), event.getProjectionMatrix());
+        if (ctx.minecraft().screen instanceof GuiClick) {
+            ((GuiClick) ctx.minecraft().screen).onRender(event.getModelViewStack(), event.getProjectionMatrix());
         }
 
         final float partialTicks = event.getPartialTicks();
         final Goal goal = behavior.getGoal();
 
-        final DimensionType thisPlayerDimension = ctx.world().getDimension();
+        final DimensionType thisPlayerDimension = ctx.world().dimensionType();
         final DimensionType currentRenderViewDimension = CheesecakeAPI.getProvider().getPrimaryCheesecake()
-                .getPlayerContext().world().getDimension();
+                .getPlayerContext().world().dimensionType();
 
         if (thisPlayerDimension != currentRenderViewDimension) {
             // this is a path for a bot in a different dimension, don't render it
@@ -141,12 +141,12 @@ public final class PathRenderer implements IRenderer {
         });
     }
 
-    public static void drawPath(MatrixStack stack, List<BetterBlockPos> positions, int startIndex, Color color,
+    public static void drawPath(PoseStack stack, List<BetterBlockPos> positions, int startIndex, Color color,
             boolean fadeOut, int fadeStart0, int fadeEnd0) {
         drawPath(stack, positions, startIndex, color, fadeOut, fadeStart0, fadeEnd0, 0.5D);
     }
 
-    public static void drawPath(MatrixStack stack, List<BetterBlockPos> positions, int startIndex, Color color,
+    public static void drawPath(PoseStack stack, List<BetterBlockPos> positions, int startIndex, Color color,
             boolean fadeOut, int fadeStart0, int fadeEnd0, double offset) {
         BufferBuilder bufferBuilder = IRenderer.startLines(color);
 
@@ -188,7 +188,7 @@ public final class PathRenderer implements IRenderer {
         IRenderer.endLines(bufferBuilder, settings.renderPathIgnoreDepth.value);
     }
 
-    private static void emitPathLine(BufferBuilder bufferBuilder, MatrixStack stack, double x1, double y1, double z1,
+    private static void emitPathLine(BufferBuilder bufferBuilder, PoseStack stack, double x1, double y1, double z1,
             double x2, double y2, double z2, double offset) {
         final double extraOffset = offset + 0.03D;
 
@@ -219,7 +219,7 @@ public final class PathRenderer implements IRenderer {
         }
     }
 
-    public static void drawManySelectionBoxes(MatrixStack stack, Entity player, Collection<BlockPos> positions,
+    public static void drawManySelectionBoxes(PoseStack stack, Entity player, Collection<BlockPos> positions,
             Color color) {
         BufferBuilder bufferBuilder = IRenderer.startLines(color);
 
@@ -232,20 +232,20 @@ public final class PathRenderer implements IRenderer {
 
         positions.forEach(pos -> {
             BlockState state = bsi.get0(pos);
-            VoxelShape shape = state.getOutlineShape(player.getEntityWorld(), pos);
-            Box toDraw = shape.isEmpty() ? VoxelShapes.fullCube().getBoundingBox() : shape.getBoundingBox();
-            toDraw = toDraw.offset(pos);
+            VoxelShape shape = state.getShape(player.level(), pos);
+            AABB toDraw = shape.isEmpty() ? Shapes.block().bounds() : shape.bounds();
+            toDraw = toDraw.move(pos);
             IRenderer.emitAABB(bufferBuilder, stack, toDraw, .002D, settings.pathRenderLineWidthPixels.value);
         });
 
         IRenderer.endLines(bufferBuilder, settings.renderSelectionBoxesIgnoreDepth.value);
     }
 
-    public static void drawGoal(MatrixStack stack, IPlayerContext ctx, Goal goal, float partialTicks, Color color) {
+    public static void drawGoal(PoseStack stack, IPlayerContext ctx, Goal goal, float partialTicks, Color color) {
         drawGoal(null, stack, ctx, goal, partialTicks, color, true);
     }
 
-    private static void drawGoal(BufferBuilder bufferBuilder, MatrixStack stack, IPlayerContext ctx, Goal goal,
+    private static void drawGoal(BufferBuilder bufferBuilder, PoseStack stack, IPlayerContext ctx, Goal goal,
             float partialTicks, Color color, boolean setupRender) {
         if (!setupRender && bufferBuilder == null) {
             throw new IllegalArgumentException("bufferBuilder must not be null if setupRender is false");
@@ -262,7 +262,7 @@ public final class PathRenderer implements IRenderer {
             // a block for some reason
             y = 0.999F;
         } else {
-            y = MathHelper.cos((float) (((float) ((System.nanoTime() / 100000L) % 20000L)) / 20000F * Math.PI * 2));
+            y = Mth.cos((float) (((float) ((System.nanoTime() / 100000L) % 20000L)) / 20000F * Math.PI * 2));
         }
         if (goal instanceof IGoalRenderPos) {
             BlockPos goalPos = ((IGoalRenderPos) goal).getGoalPos();
@@ -285,8 +285,8 @@ public final class PathRenderer implements IRenderer {
             drawDankLitGoalBox(bufferBuilder, stack, color, minX, maxX, minZ, maxZ, minY, maxY, y1, y2, setupRender);
         } else if (goal instanceof GoalXZ) {
             GoalXZ goalPos = (GoalXZ) goal;
-            minY = ctx.world().getBottomY() - renderPosY;
-            maxY = ctx.world().getTopYInclusive() - renderPosY;
+            minY = ctx.world().getMinY() - renderPosY;
+            maxY = ctx.world().getMaxY() - renderPosY;
 
             if (settings.renderGoalXZBeacon.value) {
                 // The beam replaces the box, as the setting says. Upstream's 1.21.11 branch draws the beam
@@ -334,7 +334,7 @@ public final class PathRenderer implements IRenderer {
         }
     }
 
-    private static void drawDankLitGoalBox(BufferBuilder bufferBuilder, MatrixStack stack, Color colorIn, double minX,
+    private static void drawDankLitGoalBox(BufferBuilder bufferBuilder, PoseStack stack, Color colorIn, double minX,
             double maxX, double minZ, double maxZ, double minY, double maxY, double y1, double y2, boolean setupRender) {
         final float lineWidth = settings.goalRenderLineWidthPixels.value;
         if (setupRender) {
@@ -357,7 +357,7 @@ public final class PathRenderer implements IRenderer {
         }
     }
 
-    private static void renderHorizontalQuad(BufferBuilder bufferBuilder, MatrixStack stack, double minX, double maxX,
+    private static void renderHorizontalQuad(BufferBuilder bufferBuilder, PoseStack stack, double minX, double maxX,
             double minZ, double maxZ, double y, float lineWidth) {
         if (y != 0) {
             IRenderer.emitLine(bufferBuilder, stack, minX, y, minZ, maxX, y, minZ, 1.0, 0.0, 0.0, lineWidth);
@@ -372,34 +372,34 @@ public final class PathRenderer implements IRenderer {
      * world to the top at the goal's column. {@code minY} and {@code maxY} are already relative to the render
      * position, like every other coordinate in this class.
      */
-    private static void drawGoalXZBeacon(MatrixStack stack, IPlayerContext ctx, GoalXZ goal, double minY, double maxY,
+    private static void drawGoalXZBeacon(PoseStack stack, IPlayerContext ctx, GoalXZ goal, double minY, double maxY,
             float partialTicks, Color color) {
-        float time = settings.renderGoalAnimated.value ? (float) ctx.world().getTime() + partialTicks : 0.0F;
+        float time = settings.renderGoalAnimated.value ? (float) ctx.world().getGameTime() + partialTicks : 0.0F;
         int glowColor = (color.getRGB() & 0x00FFFFFF) | GOAL_BEACON_GLOW_ALPHA << 24;
         double height = maxY - minY;
 
-        stack.push();
+        stack.pushPose();
         stack.translate(goal.getX() - posX(), minY, goal.getZ() - posZ());
         renderGoalXZBeaconLayer(stack, height, time, color.getRGB(), GOAL_BEACON_INNER_RADIUS, false);
         renderGoalXZBeaconLayer(stack, height, time, glowColor, GOAL_BEACON_GLOW_RADIUS, true);
-        stack.pop();
+        stack.popPose();
     }
 
-    private static void renderGoalXZBeaconLayer(MatrixStack stack, double height, float time, int color, float radius,
+    private static void renderGoalXZBeaconLayer(PoseStack stack, double height, float time, int color, float radius,
             boolean translucent) {
         BufferBuilder bufferBuilder = IRenderer.startBlockQuads();
-        float scroll = MathHelper.fractionalPart(-time * 0.2F - MathHelper.floor(-time * 0.1F));
+        float scroll = Mth.frac(-time * 0.2F - Mth.floor(-time * 0.1F));
 
-        stack.push();
+        stack.pushPose();
         stack.translate(0.5D, 0.0D, 0.5D);
         if (!translucent) {
-            stack.push();
-            stack.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(time * 2.25F - 45.0F));
+            stack.pushPose();
+            stack.mulPose(Axis.YP.rotationDegrees(time * 2.25F - 45.0F));
         }
 
         float v0 = -1.0F + scroll;
         float v1 = (float) (translucent ? height + v0 : height * (0.5F / radius) + v0);
-        MatrixStack.Entry entry = stack.peek();
+        PoseStack.Pose entry = stack.last();
         if (translucent) {
             emitBeaconShell(bufferBuilder, entry, color, 0.0F, (float) height,
                     -radius, -radius, radius, -radius, -radius, radius, radius, radius, v0, v1);
@@ -409,15 +409,15 @@ public final class PathRenderer implements IRenderer {
         }
 
         if (!translucent) {
-            stack.pop();
+            stack.popPose();
         }
-        stack.pop();
+        stack.popPose();
 
-        IRenderer.endBuffer(bufferBuilder, IRenderer.beaconBeam(BeaconBlockEntityRenderer.BEAM_TEXTURE, translucent,
+        IRenderer.endBuffer(bufferBuilder, IRenderer.beaconBeam(BeaconRenderer.BEAM_LOCATION, translucent,
                 settings.renderGoalIgnoreDepth.value));
     }
 
-    private static void emitBeaconShell(BufferBuilder bufferBuilder, MatrixStack.Entry entry, int color, float minY,
+    private static void emitBeaconShell(BufferBuilder bufferBuilder, PoseStack.Pose entry, int color, float minY,
             float maxY, float x1, float z1, float x2, float z2, float x3, float z3, float x4, float z4,
             float v0, float v1) {
         emitBeaconFace(bufferBuilder, entry, color, minY, maxY, x1, z1, x2, z2, 0.0F, 1.0F, v0, v1);
@@ -426,11 +426,11 @@ public final class PathRenderer implements IRenderer {
         emitBeaconFace(bufferBuilder, entry, color, minY, maxY, x3, z3, x1, z1, 0.0F, 1.0F, v0, v1);
     }
 
-    private static void emitBeaconFace(BufferBuilder bufferBuilder, MatrixStack.Entry entry, int color, float minY,
+    private static void emitBeaconFace(BufferBuilder bufferBuilder, PoseStack.Pose entry, int color, float minY,
             float maxY, float x1, float z1, float x2, float z2, float u0, float u1, float v0, float v1) {
         float nx = z2 - z1;
         float nz = x1 - x2;
-        float length = MathHelper.sqrt(nx * nx + nz * nz);
+        float length = Mth.sqrt(nx * nx + nz * nz);
         if (length != 0.0F) {
             nx /= length;
             nz /= length;

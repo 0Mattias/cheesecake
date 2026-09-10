@@ -26,10 +26,10 @@ import cheesecake.api.utils.input.Input;
 import cheesecake.behavior.PathingBehavior;
 import cheesecake.utils.BlockStateInterface;
 import java.util.*;
-import net.minecraft.entity.FallingBlockEntity;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Box;
-import net.minecraft.util.math.Direction;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.entity.item.FallingBlockEntity;
+import net.minecraft.world.phys.AABB;
 
 public abstract class Movement implements IMovement, MovementHelper {
 
@@ -126,7 +126,7 @@ public abstract class Movement implements IMovement, MovementHelper {
         if (MovementHelper.isLiquid(ctx, ctx.playerFeet()) && ctx.player().getY() < dest.y + 0.6) {
             currentState.setInput(Input.JUMP, true);
         }
-        if (ctx.player().isInsideWall()) {
+        if (ctx.player().isInWall()) {
             ctx.getSelectedBlock().ifPresent(pos -> MovementHelper.switchToBestToolFor(ctx, BlockStateInterface.get(ctx, pos)));
             currentState.setInput(Input.CLICK_LEFT, true);
         }
@@ -156,7 +156,7 @@ public abstract class Movement implements IMovement, MovementHelper {
         }
         boolean somethingInTheWay = false;
         for (BetterBlockPos blockPos : positionsToBreak) {
-            if (!ctx.world().getNonSpectatingEntities(FallingBlockEntity.class, new Box(0, 0, 0, 1, 1.1, 1).offset(blockPos)).isEmpty() && Cheesecake.settings().pauseMiningForFallingBlocks.value) {
+            if (!ctx.world().getEntitiesOfClass(FallingBlockEntity.class, new AABB(0, 0, 0, 1, 1.1, 1).move(blockPos)).isEmpty() && Cheesecake.settings().pauseMiningForFallingBlocks.value) {
                 return false;
             }
             if (!MovementHelper.canWalkThrough(ctx, blockPos)) { // can't break air, so don't try

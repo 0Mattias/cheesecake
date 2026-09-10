@@ -33,21 +33,21 @@ import org.spongepowered.asm.mixin.injection.Slice;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.util.function.BiFunction;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.client.world.ClientWorld;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.player.LocalPlayer;
 
 /**
  * @author Brady
  * @since 7/31/2018
  */
-@Mixin(MinecraftClient.class)
+@Mixin(Minecraft.class)
 public class MixinMinecraft {
 
         @Shadow
-        public ClientPlayerEntity player;
+        public LocalPlayer player;
         @Shadow
-        public ClientWorld world;
+        public ClientLevel level;
 
         @Unique
         private BiFunction<EventState, TickEvent.Type, TickEvent> tickProvider;
@@ -87,7 +87,7 @@ public class MixinMinecraft {
                 this.tickProvider = null;
         }
 
-        @Inject(method = "tick", at = @At(value = "INVOKE", target = "net/minecraft/client/world/ClientWorld.tickEntities()V", shift = At.Shift.AFTER))
+        @Inject(method = "tick", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/multiplayer/ClientLevel;tickEntities()V", shift = At.Shift.AFTER))
         private void postUpdateEntities(CallbackInfo ci) {
                 ICheesecake cheesecake = CheesecakeAPI.getProvider().getCheesecakeForPlayer(this.player);
                 if (cheesecake != null) {
@@ -98,10 +98,10 @@ public class MixinMinecraft {
                 }
         }
 
-        @Inject(method = "setWorld", at = @At("HEAD"))
-        private void preLoadWorld(ClientWorld world, CallbackInfo ci) {
+        @Inject(method = "updateLevelInEngines", at = @At("HEAD"))
+        private void preLoadWorld(ClientLevel world, CallbackInfo ci) {
                 // If we're unloading the world but one doesn't exist, ignore it
-                if (this.world == null && world == null) {
+                if (this.level == null && world == null) {
                         return;
                 }
 
@@ -113,8 +113,8 @@ public class MixinMinecraft {
                                                 EventState.PRE));
         }
 
-        @Inject(method = "setWorld", at = @At("RETURN"))
-        private void postLoadWorld(ClientWorld world, CallbackInfo ci) {
+        @Inject(method = "updateLevelInEngines", at = @At("RETURN"))
+        private void postLoadWorld(ClientLevel world, CallbackInfo ci) {
                 // still fire event for both null, as that means we've just finished exiting a
                 // world
 

@@ -32,22 +32,21 @@ import cheesecake.pathing.movement.MovementState;
 import cheesecake.utils.BlockStateInterface;
 import com.google.common.collect.ImmutableSet;
 import java.util.Set;
-import net.minecraft.block.AirBlock;
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.Blocks;
-import net.minecraft.block.CarpetBlock;
-import net.minecraft.block.FallingBlock;
-import net.minecraft.block.FenceGateBlock;
-import net.minecraft.block.SlabBlock;
-import net.minecraft.block.enums.SlabType;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.level.block.AirBlock;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.CarpetBlock;
+import net.minecraft.world.level.block.FallingBlock;
+import net.minecraft.world.level.block.FenceGateBlock;
+import net.minecraft.world.level.block.SlabBlock;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.SlabType;
+import net.minecraft.world.phys.Vec3;
 
 public class MovementPillar extends Movement {
 
     public MovementPillar(ICheesecake cheesecake, BetterBlockPos start, BetterBlockPos end) {
-        super(cheesecake, start, end, new BetterBlockPos[]{start.up(2)}, start);
+        super(cheesecake, start, end, new BetterBlockPos[]{start.above(2)}, start);
     }
 
     @Override
@@ -69,7 +68,7 @@ public class MovementPillar extends Movement {
             if (MovementHelper.isClimbable(fromDown.getBlock())) {
                 return COST_INF; // can't pillar from a ladder or vine onto something that isn't also climbable
             }
-            if (fromDown.getBlock() instanceof SlabBlock && fromDown.get(SlabBlock.TYPE) == SlabType.BOTTOM) {
+            if (fromDown.getBlock() instanceof SlabBlock && fromDown.getValue(SlabBlock.TYPE) == SlabType.BOTTOM) {
                 return COST_INF; // can't pillar up from a bottom slab onto a non ladder
             }
         }
@@ -155,7 +154,7 @@ public class MovementPillar extends Movement {
         if (MovementHelper.isWater(fromDown) && MovementHelper.isWater(ctx, dest)) {
             // stay centered while swimming up a water column
             state.setTarget(new MovementState.MovementTarget(RotationUtils.calcRotationFromVec3d(ctx.playerHead(), VecUtils.getBlockPosCenter(dest), ctx.playerRotations()), false));
-            Vec3d destCenter = VecUtils.getBlockPosCenter(dest);
+            Vec3 destCenter = VecUtils.getBlockPosCenter(dest);
             if (Math.abs(ctx.player().getX() - destCenter.x) > 0.2 || Math.abs(ctx.player().getZ() - destCenter.z) > 0.2) {
                 state.setInput(Input.MOVE_FORWARD, true);
             }
@@ -194,7 +193,7 @@ public class MovementPillar extends Movement {
             double diffX = ctx.player().getX() - (dest.getX() + 0.5);
             double diffZ = ctx.player().getZ() - (dest.getZ() + 0.5);
             double dist = Math.sqrt(diffX * diffX + diffZ * diffZ);
-            double flatMotion = Math.sqrt(ctx.player().getVelocity().getX() * ctx.player().getVelocity().getX() + ctx.player().getVelocity().getZ() * ctx.player().getVelocity().getZ());
+            double flatMotion = Math.sqrt(ctx.player().getDeltaMovement().x() * ctx.player().getDeltaMovement().x() + ctx.player().getDeltaMovement().z() * ctx.player().getDeltaMovement().z());
             if (dist > 0.17) {//why 0.17? because it seemed like a good number, that's why
                 //[explanation added after cheesecake port lol] also because it needs to be less than 0.2 because of the 0.3 sneak limit
                 //and 0.17 is reasonably less than 0.2
@@ -214,14 +213,14 @@ public class MovementPillar extends Movement {
                 BlockState frState = BlockStateInterface.get(ctx, src);
                 Block fr = frState.getBlock();
                 // TODO: Evaluate usage of getMaterial().isReplaceable()
-                if (!(fr instanceof AirBlock || frState.isReplaceable())) {
+                if (!(fr instanceof AirBlock || frState.canBeReplaced())) {
                     RotationUtils.reachable(ctx, src, ctx.playerController().getBlockReachDistance())
                             .map(rot -> new MovementState.MovementTarget(rot, true))
                             .ifPresent(state::setTarget);
                     state.setInput(Input.JUMP, false); // breaking is like 5x slower when you're jumping
                     state.setInput(Input.CLICK_LEFT, true);
                     blockIsThere = false;
-                } else if (ctx.player().isInSneakingPose() && (ctx.isLookingAt(src.down()) || ctx.isLookingAt(src)) && ctx.player().getY() > dest.getY() + 0.1) {
+                } else if (ctx.player().isCrouching() && (ctx.isLookingAt(src.below()) || ctx.isLookingAt(src)) && ctx.player().getY() > dest.getY() + 0.1) {
                     state.setInput(Input.CLICK_RIGHT, true);
                 }
             }
@@ -237,13 +236,13 @@ public class MovementPillar extends Movement {
 
     @Override
     protected boolean prepared(MovementState state) {
-        if (ctx.playerFeet().equals(src) || ctx.playerFeet().equals(src.down())) {
-            Block block = BlockStateInterface.getBlock(ctx, src.down());
+        if (ctx.playerFeet().equals(src) || ctx.playerFeet().equals(src.below())) {
+            Block block = BlockStateInterface.getBlock(ctx, src.below());
             if (MovementHelper.isClimbable(block)) {
                 state.setInput(Input.SNEAK, true);
             }
         }
-        if (MovementHelper.isWater(ctx, dest.up())) {
+        if (MovementHelper.isWater(ctx, dest.above())) {
             return true;
         }
         return super.prepared(state);

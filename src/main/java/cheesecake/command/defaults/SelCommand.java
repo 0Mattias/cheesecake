@@ -42,17 +42,17 @@ import cheesecake.api.utils.BlockOptionalMetaLookup;
 import cheesecake.utils.BlockStateInterface;
 import cheesecake.utils.IRenderer;
 import cheesecake.utils.schematic.StaticSchematic;
+import com.mojang.blaze3d.vertex.BufferBuilder;
 import java.awt.Color;
 import java.util.*;
 import java.util.function.Function;
 import java.util.function.UnaryOperator;
 import java.util.stream.Stream;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.Blocks;
-import net.minecraft.client.render.BufferBuilder;
-import net.minecraft.util.math.Box;
-import net.minecraft.util.math.Direction;
-import net.minecraft.util.math.Vec3i;
+import net.minecraft.core.Direction;
+import net.minecraft.core.Vec3i;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.AABB;
 
 public class SelCommand extends Command {
 
@@ -75,7 +75,7 @@ public class SelCommand extends Command {
                 boolean ignoreDepth = Cheesecake.settings().renderSelectionIgnoreDepth.value;
                 BufferBuilder bufferBuilder = IRenderer.startLines(color, opacity);
                 IRenderer.emitAABB(bufferBuilder, event.getModelViewStack(),
-                        new Box(pos1.x, pos1.y, pos1.z, pos1.x + 1, pos1.y + 1, pos1.z + 1), lineWidth);
+                        new AABB(pos1.x, pos1.y, pos1.z, pos1.x + 1, pos1.y + 1, pos1.z + 1), lineWidth);
                 IRenderer.endLines(bufferBuilder, ignoreDepth);
             }
         });
@@ -237,7 +237,7 @@ public class SelCommand extends Command {
             if (clipboard == null) {
                 throw new CommandInvalidStateException("You need to copy a selection first");
             }
-            cheesecake.getBuilderProcess().build("Fill", clipboard, pos.add(clipboardOffset));
+            cheesecake.getBuilderProcess().build("Fill", clipboard, pos.offset(clipboardOffset));
             logDirect("Building now");
         } else if (action == Action.EXPAND || action == Action.CONTRACT || action == Action.SHIFT) {
             args.requireExactly(3);

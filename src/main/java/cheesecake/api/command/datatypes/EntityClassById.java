@@ -20,9 +20,9 @@ package cheesecake.api.command.datatypes;
 import cheesecake.api.command.exception.CommandException;
 import cheesecake.api.command.helpers.TabCompleteHelper;
 import java.util.stream.Stream;
-import net.minecraft.entity.EntityType;
-import net.minecraft.registry.Registries;
-import net.minecraft.util.Identifier;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.entity.EntityType;
 
 @SuppressWarnings({"rawtypes"})
 public enum EntityClassById implements IDatatypeFor<EntityType> {
@@ -30,9 +30,9 @@ public enum EntityClassById implements IDatatypeFor<EntityType> {
 
     @Override
     public EntityType get(IDatatypeContext ctx) throws CommandException {
-        Identifier id = Identifier.of(ctx.getConsumer().getString());
+        Identifier id = Identifier.parse(ctx.getConsumer().getString());
         EntityType entity;
-        if ((entity = Registries.ENTITY_TYPE.getOptionalValue(id).orElse(null)) == null) {
+        if ((entity = BuiltInRegistries.ENTITY_TYPE.getOptional(id).orElse(null)) == null) {
             throw new IllegalArgumentException("no entity found by that id");
         }
         return entity;
@@ -41,7 +41,7 @@ public enum EntityClassById implements IDatatypeFor<EntityType> {
     @Override
     public Stream<String> tabComplete(IDatatypeContext ctx) throws CommandException {
         return new TabCompleteHelper()
-                .append(Registries.ENTITY_TYPE.stream().map(Object::toString))
+                .append(BuiltInRegistries.ENTITY_TYPE.stream().map(Object::toString))
                 .filterPrefixNamespaced(ctx.getConsumer().getString())
                 .sortAlphabetically()
                 .stream();

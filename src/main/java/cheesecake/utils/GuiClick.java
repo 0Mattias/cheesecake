@@ -22,28 +22,26 @@ import cheesecake.api.CheesecakeAPI;
 import cheesecake.api.pathing.goals.GoalBlock;
 import cheesecake.api.utils.BetterBlockPos;
 import cheesecake.api.utils.Helper;
+import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.PoseStack;
 import org.joml.Matrix4f;
 import org.joml.Vector4f;
 
 import java.awt.Color;
 import java.util.Collections;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.entity.Entity;
-import net.minecraft.text.ClickEvent;
-import net.minecraft.text.MutableText;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.hit.HitResult;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.client.render.BufferBuilder;
-import net.minecraft.util.math.Box;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.RaycastContext;
-// import net.minecraft.util.math.Vec3d;
-// import net.minecraft.world.RaycastContext;
+import net.minecraft.ChatFormatting;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.ClickEvent;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.Vec3;
 
 import static cheesecake.api.command.ICheesecakeChatControl.FORCE_COMMAND_PREFIX;
 
@@ -56,30 +54,30 @@ public class GuiClick extends Screen implements Helper {
     private BlockPos currentMouseOver;
 
     public GuiClick() {
-        super(Text.literal("CLICK"));
+        super(Component.literal("CLICK"));
     }
 
     @Override
-    public boolean shouldPause() {
+    public boolean isPauseScreen() {
         return false;
     }
 
     @Override
-    public void render(net.minecraft.client.gui.DrawContext context, int mouseX, int mouseY, float partialTicks) {
-        double mx = mc.mouse.getX();
-        double my = mc.mouse.getY();
+    public void render(net.minecraft.client.gui.GuiGraphics context, int mouseX, int mouseY, float partialTicks) {
+        double mx = mc.mouseHandler.xpos();
+        double my = mc.mouseHandler.ypos();
 
-        my = mc.getWindow().getHeight() - my;
-        my *= mc.getWindow().getFramebufferHeight() / (double) mc.getWindow().getHeight();
-        mx *= mc.getWindow().getFramebufferWidth() / (double) mc.getWindow().getWidth();
-        Vec3d near = toWorld(mx, my, 0);
-        Vec3d far = toWorld(mx, my, 1); // "Use 0.945 that's what stack overflow says" - leijurv
+        my = mc.getWindow().getScreenHeight() - my;
+        my *= mc.getWindow().getHeight() / (double) mc.getWindow().getScreenHeight();
+        mx *= mc.getWindow().getWidth() / (double) mc.getWindow().getScreenWidth();
+        Vec3 near = toWorld(mx, my, 0);
+        Vec3 far = toWorld(mx, my, 1); // "Use 0.945 that's what stack overflow says" - leijurv
 
         if (near != null && far != null) {
-            Vec3d viewerPos = new Vec3d(PathRenderer.posX(), PathRenderer.posY(), PathRenderer.posZ());
-            ClientPlayerEntity player = CheesecakeAPI.getProvider().getPrimaryCheesecake().getPlayerContext().player();
-            HitResult result = mc.world.raycast(new RaycastContext(near.add(viewerPos), far.add(viewerPos),
-                    RaycastContext.ShapeType.OUTLINE, RaycastContext.FluidHandling.NONE, player));
+            Vec3 viewerPos = new Vec3(PathRenderer.posX(), PathRenderer.posY(), PathRenderer.posZ());
+            LocalPlayer player = CheesecakeAPI.getProvider().getPrimaryCheesecake().getPlayerContext().player();
+            HitResult result = mc.level.clip(new ClipContext(near.add(viewerPos), far.add(viewerPos),
+                    ClipContext.Block.OUTLINE, ClipContext.Fluid.NONE, player));
             if (result != null && result.getType() == HitResult.Type.BLOCK) {
                 currentMouseOver = ((BlockHitResult) result).getBlockPos();
             }
@@ -87,14 +85,14 @@ public class GuiClick extends Screen implements Helper {
     }
 
     @Override
-    public void renderBackground(net.minecraft.client.gui.DrawContext context, int mouseX, int mouseY,
+    public void renderBackground(net.minecraft.client.gui.GuiGraphics context, int mouseX, int mouseY,
             float partialTicks) {
         // Deliberately empty: vanilla would blur and darken the world behind the screen, which makes it
         // impossible to see the blocks you are trying to click.
     }
 
     @Override
-    public boolean mouseReleased(net.minecraft.client.gui.Click click) {
+    public boolean mouseReleased(net.minecraft.client.input.MouseButtonEvent click) {
         int mouseButton = click.button();
         if (currentMouseOver != null) { // Catch this, or else a click into void will result in a crash
             if (mouseButton == 0) {
@@ -103,10 +101,10 @@ public class GuiClick extends Screen implements Helper {
                     CheesecakeAPI.getProvider().getPrimaryCheesecake().getSelectionManager().removeAllSelections();
                     CheesecakeAPI.getProvider().getPrimaryCheesecake().getSelectionManager()
                             .addSelection(BetterBlockPos.from(clickStart), BetterBlockPos.from(currentMouseOver));
-                    MutableText component = Text
+                    MutableComponent component = Component
                             .literal("Selection made! For usage: " + Cheesecake.settings().prefix.value + "help sel");
                     component.setStyle(component.getStyle()
-                            .withColor(Formatting.WHITE)
+                            .withColor(ChatFormatting.WHITE)
                             .withClickEvent(new ClickEvent.RunCommand(
                                     FORCE_COMMAND_PREFIX + "help sel")));
                     Helper.HELPER.logDirect(component);
@@ -117,7 +115,7 @@ public class GuiClick extends Screen implements Helper {
                 }
             } else if (mouseButton == 1) {
                 CheesecakeAPI.getProvider().getPrimaryCheesecake().getCustomGoalProcess()
-                        .setGoalAndPath(new GoalBlock(currentMouseOver.up()));
+                        .setGoalAndPath(new GoalBlock(currentMouseOver.above()));
             }
         }
         clickStart = null;
@@ -125,14 +123,14 @@ public class GuiClick extends Screen implements Helper {
     }
 
     @Override
-    public boolean mouseClicked(net.minecraft.client.gui.Click click, boolean bl) {
+    public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent click, boolean bl) {
         clickStart = currentMouseOver;
         return super.mouseClicked(click, bl);
     }
 
-    public void onRender(MatrixStack modelViewStack, Matrix4f projectionMatrix) {
+    public void onRender(PoseStack modelViewStack, Matrix4f projectionMatrix) {
         this.projectionViewMatrix = new Matrix4f(projectionMatrix);
-        this.projectionViewMatrix.mul(modelViewStack.peek().getPositionMatrix());
+        this.projectionViewMatrix.mul(modelViewStack.last().pose());
         this.projectionViewMatrix.invert();
 
         if (currentMouseOver != null) {
@@ -145,7 +143,7 @@ public class GuiClick extends Screen implements Helper {
                 BetterBlockPos a = new BetterBlockPos(currentMouseOver);
                 BetterBlockPos b = new BetterBlockPos(clickStart);
                 IRenderer.emitAABB(bufferBuilder, modelViewStack,
-                        new Box(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.min(a.z, b.z),
+                        new AABB(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.min(a.z, b.z),
                                 Math.max(a.x, b.x) + 1, Math.max(a.y, b.y) + 1, Math.max(a.z, b.z) + 1),
                         Cheesecake.settings().pathRenderLineWidthPixels.value);
                 IRenderer.endLines(bufferBuilder, true);
@@ -153,13 +151,13 @@ public class GuiClick extends Screen implements Helper {
         }
     }
 
-    private Vec3d toWorld(double x, double y, double z) {
+    private Vec3 toWorld(double x, double y, double z) {
         if (this.projectionViewMatrix == null) {
             return null;
         }
 
-        x /= mc.getWindow().getFramebufferWidth();
-        y /= mc.getWindow().getFramebufferHeight();
+        x /= mc.getWindow().getWidth();
+        y /= mc.getWindow().getHeight();
         x = x * 2 - 1;
         y = y * 2 - 1;
 
@@ -171,6 +169,6 @@ public class GuiClick extends Screen implements Helper {
         }
 
         pos.mul(1 / pos.w());
-        return new Vec3d(pos.x(), pos.y(), pos.z());
+        return new Vec3(pos.x(), pos.y(), pos.z());
     }
 }

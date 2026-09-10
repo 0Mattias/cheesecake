@@ -30,32 +30,32 @@ import cheesecake.utils.BlockStateInterface;
 import cheesecake.utils.IRenderer;
 import cheesecake.utils.PathRenderer;
 import cheesecake.utils.accessor.IFireworkRocketEntity;
+import com.mojang.blaze3d.vertex.BufferBuilder;
 import it.unimi.dsi.fastutil.floats.FloatArrayList;
 import it.unimi.dsi.fastutil.floats.FloatIterator;
-import net.minecraft.client.render.BufferBuilder;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.Blocks;
-import net.minecraft.entity.EquipmentSlot;
-import net.minecraft.entity.projectile.FireworkRocketEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.network.packet.s2c.play.PlayerPositionLookS2CPacket;
-import net.minecraft.screen.slot.SlotActionType;
-import net.minecraft.util.Hand;
-import net.minecraft.util.collection.DefaultedList;
-import net.minecraft.util.hit.HitResult;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Box;
-import net.minecraft.util.math.ChunkPos;
-import net.minecraft.util.math.MathHelper;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.RaycastContext;
-import net.minecraft.world.World;
-import net.minecraft.world.chunk.WorldChunk;
 import java.awt.Color;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.function.UnaryOperator;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.NonNullList;
+import net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket;
+import net.minecraft.util.Mth;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.projectile.FireworkRocketEntity;
+import net.minecraft.world.inventory.ClickType;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.Vec3;
 
 import static cheesecake.utils.CheesecakeMath.fastCeil;
 import static cheesecake.utils.CheesecakeMath.fastFloor;
@@ -65,9 +65,9 @@ public final class ElytraBehavior implements Helper {
     private final IPlayerContext ctx;
 
     // Render stuff
-    private final List<Pair<Vec3d, Vec3d>> clearLines;
-    private final List<Pair<Vec3d, Vec3d>> blockedLines;
-    private List<Vec3d> simulationLine;
+    private final List<Pair<Vec3, Vec3>> clearLines;
+    private final List<Pair<Vec3, Vec3>> blockedLines;
+    private List<Vec3> simulationLine;
     private BlockPos aimPos;
     private List<BetterBlockPos> visiblePath;
 
@@ -131,7 +131,7 @@ public final class ElytraBehavior implements Helper {
 
         this.npfContext = npf;
 
-        if (ctx.world().getRegistryKey() == World.NETHER) {
+        if (ctx.world().dimension() == Level.NETHER) {
             this.pathFinder = Cheesecake.settings().elytraAllowAboveRoof.value && Cheesecake.settings().elytraAllowAboveBuildLimit.value
                     ? new BuildLimitPathFinder(ctx, npfContext)
                     : npfContext;
@@ -161,7 +161,7 @@ public final class ElytraBehavior implements Helper {
             final int prevMaxNear = this.maxPlayerNear;
             this.maxPlayerNear = Math.max(this.maxPlayerNear, this.playerNear);
 
-            if (this.maxPlayerNear == prevMaxNear && ctx.player().isGliding()) {
+            if (this.maxPlayerNear == prevMaxNear && ctx.player().isFallFlying()) {
                 this.ticksNearUnchanged++;
             } else {
                 this.ticksNearUnchanged = 0;
@@ -265,7 +265,7 @@ public final class ElytraBehavior implements Helper {
                             final Throwable cause = ex.getCause();
                             if (cause instanceof PathCalculationException) {
                                 logDirect("Failed to compute next segment");
-                                if (ctx.player().squaredDistanceTo(pathStart.toCenterPos()) < 16 * 16) {
+                                if (ctx.player().distanceToSqr(pathStart.getCenter()) < 16 * 16) {
                                     logVerbose(
                                             "Player is near the segment start, therefore repeating this calculation is pointless. Marking as complete");
                                     completePath = true;
@@ -291,7 +291,7 @@ public final class ElytraBehavior implements Helper {
             if (ElytraBehavior.this.appendDestination) {
                 BlockPos dest = destinationFixed();
                 BlockPos last = !path.isEmpty() ? path.get(path.size() - 1) : null;
-                if (last != null && ElytraBehavior.this.clearView(Vec3d.of(dest), Vec3d.of(last), false)) {
+                if (last != null && ElytraBehavior.this.clearView(Vec3.atLowerCornerOf(dest), Vec3.atLowerCornerOf(last), false)) {
                     path.add(new BetterBlockPos(dest));
                 } else {
                     logDirect("unable to land at " + dest);
@@ -403,7 +403,7 @@ public final class ElytraBehavior implements Helper {
             final int last = this.path.size() - 1;
             final BetterBlockPos lastPos = this.path.get(last);
             // `ctx.world().isPosLoaded` cannot be used here as it returns false if the y-value is beyond the build limits.
-            if (!this.completePath && ctx.world().getChunkManager().isChunkLoaded(lastPos.x >> 4, lastPos.z >> 4)) {
+            if (!this.completePath && ctx.world().getChunkSource().hasChunk(lastPos.x >> 4, lastPos.z >> 4)) {
                 this.pathNextSegment(last);
             }
         }
@@ -455,7 +455,7 @@ public final class ElytraBehavior implements Helper {
         }
         if (!this.clearLines.isEmpty() && settings.elytraRenderRaytraces.value) {
             BufferBuilder bufferBuilder = IRenderer.startLines(Color.GREEN);
-            for (Pair<Vec3d, Vec3d> line : this.clearLines) {
+            for (Pair<Vec3, Vec3> line : this.clearLines) {
                 IRenderer.emitLine(bufferBuilder, event.getModelViewStack(), line.first(), line.second(),
                         settings.pathRenderLineWidthPixels.value);
             }
@@ -463,7 +463,7 @@ public final class ElytraBehavior implements Helper {
         }
         if (!this.blockedLines.isEmpty() && Cheesecake.settings().elytraRenderRaytraces.value) {
             BufferBuilder bufferBuilder = IRenderer.startLines(Color.BLUE);
-            for (Pair<Vec3d, Vec3d> line : this.blockedLines) {
+            for (Pair<Vec3, Vec3> line : this.blockedLines) {
                 IRenderer.emitLine(bufferBuilder, event.getModelViewStack(), line.first(), line.second(),
                         settings.pathRenderLineWidthPixels.value);
             }
@@ -471,10 +471,10 @@ public final class ElytraBehavior implements Helper {
         }
         if (this.simulationLine != null && Cheesecake.settings().elytraRenderSimulation.value) {
             BufferBuilder bufferBuilder = IRenderer.startLines(new Color(0x36CCDC));
-            final Vec3d offset = ctx.player().getLerpedPos(event.getPartialTicks());
+            final Vec3 offset = ctx.player().getPosition(event.getPartialTicks());
             for (int i = 0; i < this.simulationLine.size() - 1; i++) {
-                final Vec3d src = this.simulationLine.get(i).add(offset);
-                final Vec3d dst = this.simulationLine.get(i + 1).add(offset);
+                final Vec3 src = this.simulationLine.get(i).add(offset);
+                final Vec3 dst = this.simulationLine.get(i + 1).add(offset);
                 IRenderer.emitLine(bufferBuilder, event.getModelViewStack(), src, dst,
                         settings.pathRenderLineWidthPixels.value);
             }
@@ -484,7 +484,7 @@ public final class ElytraBehavior implements Helper {
 
     public void onChunkEvent(ChunkEvent event) {
         if (event.isPostPopulate() && this.npfContext != null) {
-            final WorldChunk chunk = ctx.world().getChunk(event.getX(), event.getZ());
+            final LevelChunk chunk = ctx.world().getChunk(event.getX(), event.getZ());
             npfContext.queueForPacking(chunk);
         }
     }
@@ -494,7 +494,7 @@ public final class ElytraBehavior implements Helper {
     }
 
     public void onReceivePacket(PacketEvent event) {
-        if (event.getPacket() instanceof PlayerPositionLookS2CPacket) {
+        if (event.getPacket() instanceof ClientboundPlayerPositionPacket) {
             ctx.minecraft().execute(() -> {
                 this.remainingSetBackTicks = Cheesecake.settings().elytraFireworkSetbackUseDelay.value;
             });
@@ -502,7 +502,7 @@ public final class ElytraBehavior implements Helper {
     }
 
     public void pathTo() {
-        if (!Cheesecake.settings().elytraAutoJump.value || ctx.player().isGliding()) {
+        if (!Cheesecake.settings().elytraAutoJump.value || ctx.player().isFallFlying()) {
             this.pathManager.pathToDestination();
         }
     }
@@ -530,7 +530,7 @@ public final class ElytraBehavior implements Helper {
         }
         final long now = System.currentTimeMillis();
         if ((now - this.timeLastCacheCull) / 1000 > Cheesecake.settings().elytraTimeBetweenCacheCullSecs.value) {
-            npfContext.queueCacheCulling(ctx.player().getChunkPos().x, ctx.player().getChunkPos().z, Cheesecake.settings().elytraCacheCullDistance.value);
+            npfContext.queueCacheCulling(ctx.player().chunkPosition().x, ctx.player().chunkPosition().z, Cheesecake.settings().elytraCacheCullDistance.value);
             this.timeLastCacheCull = now;
         }
     }
@@ -678,7 +678,7 @@ public final class ElytraBehavior implements Helper {
     private Solution solveAngles(final SolverContext context) {
         final NetherPath path = context.path;
         final int playerNear = landingMode ? path.size() - 1 : context.playerNear;
-        final Vec3d start = context.start;
+        final Vec3 start = context.start;
         Solution solution = null;
 
         for (int relaxation = 0; relaxation < 3; relaxation++) { // try for a strict solution first, then relax more and
@@ -696,7 +696,7 @@ public final class ElytraBehavior implements Helper {
 
             for (int i = Math.min(playerNear + 20, path.size() - 1); i >= minStep; i--) {
                 if (Thread.interrupted()) return null; // cancelled by the game thread
-                final List<Pair<Vec3d, Integer>> candidates = new ArrayList<>();
+                final List<Pair<Vec3, Integer>> candidates = new ArrayList<>();
                 for (int dy : heights) {
                     if (relaxation == 0 || i == minStep) {
                         // no interp
@@ -704,17 +704,17 @@ public final class ElytraBehavior implements Helper {
                     } else if (relaxation == 1) {
                         final double[] interps = new double[] { 1.0, 0.75, 0.5, 0.25 };
                         for (double interp : interps) {
-                            final Vec3d dest = interp == 1.0
+                            final Vec3 dest = interp == 1.0
                                     ? path.getVec(i)
-                                    : path.getVec(i).multiply(interp).add(path.getVec(i - 1).multiply(1.0 - interp));
+                                    : path.getVec(i).scale(interp).add(path.getVec(i - 1).scale(1.0 - interp));
                             candidates.add(new Pair<>(dest, dy));
                         }
                     } else {
                         // Create a point along the segment every block
-                        final Vec3d delta = path.getVec(i).subtract(path.getVec(i - 1));
+                        final Vec3 delta = path.getVec(i).subtract(path.getVec(i - 1));
                         final int steps = fastFloor(delta.length());
-                        final Vec3d step = delta.normalize();
-                        Vec3d stepped = path.getVec(i);
+                        final Vec3 step = delta.normalize();
+                        Vec3 stepped = path.getVec(i);
                         for (int interp = 0; interp < steps; interp++) {
                             candidates.add(new Pair<>(stepped, dy));
                             stepped = stepped.subtract(step);
@@ -722,9 +722,9 @@ public final class ElytraBehavior implements Helper {
                     }
                 }
 
-                for (final Pair<Vec3d, Integer> candidate : candidates) {
+                for (final Pair<Vec3, Integer> candidate : candidates) {
                     final Integer augment = candidate.second();
-                    Vec3d dest = candidate.first().add(0, augment, 0);
+                    Vec3 dest = candidate.first().add(0, augment, 0);
                     if (landingMode) {
                         dest = dest.add(0.5, 0.5, 0.5);
                     }
@@ -774,7 +774,7 @@ public final class ElytraBehavior implements Helper {
         return solution;
     }
 
-    private void tickUseFireworks(final Vec3d start, final Vec3d goingTo, final boolean isBoosted,
+    private void tickUseFireworks(final Vec3 start, final Vec3 goingTo, final boolean isBoosted,
             final boolean forceUseFirework) {
         if (this.remainingSetBackTicks > 0) {
             logDebug("waiting for elytraFireworkSetbackUseDelay: " + this.remainingSetBackTicks);
@@ -785,18 +785,18 @@ public final class ElytraBehavior implements Helper {
         }
         final boolean useOnDescend = !Cheesecake.settings().elytraConserveFireworks.value
                 || ctx.player().getY() < goingTo.y + 5;
-        final double currentSpeed = new Vec3d(
-                ctx.player().getVelocity().getX(),
+        final double currentSpeed = new Vec3(
+                ctx.player().getDeltaMovement().x(),
                 // ignore y component if we are BOTH below where we want to be AND descending
-                ctx.player().getY() < goingTo.y ? Math.max(0, ctx.player().getVelocity().getY())
-                        : ctx.player().getVelocity().getY(),
-                ctx.player().getVelocity().getZ()).lengthSquared();
+                ctx.player().getY() < goingTo.y ? Math.max(0, ctx.player().getDeltaMovement().y())
+                        : ctx.player().getDeltaMovement().y(),
+                ctx.player().getDeltaMovement().z()).lengthSqr();
 
         final double elytraFireworkSpeed = Cheesecake.settings().elytraFireworkSpeed.value;
         if (this.remainingFireworkTicks <= 0 && (forceUseFirework || (!isBoosted
                 && useOnDescend
                 && (ctx.player().getY() < goingTo.y - 5
-                        || start.distanceTo(new Vec3d(goingTo.x + 0.5, ctx.player().getY(), goingTo.z + 0.5)) > 5) // UGH!!!!!!!
+                        || start.distanceTo(new Vec3(goingTo.x + 0.5, ctx.player().getY(), goingTo.z + 0.5)) > 5) // UGH!!!!!!!
                 && currentSpeed < elytraFireworkSpeed * elytraFireworkSpeed))) {
             // Prioritize boosting fireworks over regular ones
             // TODO: Take the minimum boost time into account?
@@ -806,8 +806,8 @@ public final class ElytraBehavior implements Helper {
                 return;
             }
             logVerbose("attempting to use firework" + (forceUseFirework ? " (forced)" : ""));
-            ctx.playerController().processRightClick(ctx.player(), ctx.world(), Hand.MAIN_HAND);
-            this.minimumBoostTicks = 10 * (1 + getFireworkBoost(ctx.player().getStackInHand(Hand.MAIN_HAND)).orElse(0));
+            ctx.playerController().processRightClick(ctx.player(), ctx.world(), InteractionHand.MAIN_HAND);
+            this.minimumBoostTicks = 10 * (1 + getFireworkBoost(ctx.player().getItemInHand(InteractionHand.MAIN_HAND)).orElse(0));
             this.remainingFireworkTicks = 10;
             this.deployedFireworkLastTick = true;
         }
@@ -817,9 +817,9 @@ public final class ElytraBehavior implements Helper {
 
         public final NetherPath path;
         public final int playerNear;
-        public final Vec3d start;
-        public final Vec3d motion;
-        public final Box boundingBox;
+        public final Vec3 start;
+        public final Vec3 motion;
+        public final AABB boundingBox;
         public final boolean ignoreLava;
         public final FireworkBoost boost;
         public final IAimProcessor aimProcessor;
@@ -846,7 +846,7 @@ public final class ElytraBehavior implements Helper {
                 final int[] counter = ElytraBehavior.this.nextTickBoostCounter;
                 fireworkTicksExisted = counter[1] > counter[0] ? 0 : null;
             } else {
-                fireworkTicksExisted = ElytraBehavior.this.getAttachedFirework().map(e -> e.age).orElse(null);
+                fireworkTicksExisted = ElytraBehavior.this.getAttachedFirework().map(e -> e.tickCount).orElse(null);
             }
             this.boost = new FireworkBoost(fireworkTicksExisted, ElytraBehavior.this.minimumBoostTicks);
 
@@ -942,9 +942,9 @@ public final class ElytraBehavior implements Helper {
 
         public final float pitch;
         public final double dot;
-        public final List<Vec3d> steps;
+        public final List<Vec3> steps;
 
-        public PitchResult(float pitch, double dot, List<Vec3d> steps) {
+        public PitchResult(float pitch, double dot, List<Vec3> steps) {
             this.pitch = pitch;
             this.dot = dot;
             this.steps = steps;
@@ -955,11 +955,11 @@ public final class ElytraBehavior implements Helper {
 
         public final SolverContext context;
         public final Rotation rotation;
-        public final Vec3d goingTo;
+        public final Vec3 goingTo;
         public final boolean solvedPitch;
         public final boolean forceUseFirework;
 
-        public Solution(SolverContext context, Rotation rotation, Vec3d goingTo, boolean solvedPitch,
+        public Solution(SolverContext context, Rotation rotation, Vec3 goingTo, boolean solvedPitch,
                 boolean forceUseFirework) {
             this.context = context;
             this.rotation = rotation;
@@ -973,8 +973,8 @@ public final class ElytraBehavior implements Helper {
         if (itemStack.getItem() != Items.FIREWORK_ROCKET) {
             return false;
         }
-        net.minecraft.component.type.FireworksComponent fireworks = itemStack
-                .get(net.minecraft.component.DataComponentTypes.FIREWORKS);
+        net.minecraft.world.item.component.Fireworks fireworks = itemStack
+                .get(net.minecraft.core.component.DataComponents.FIREWORKS);
         return fireworks == null || fireworks.explosions().isEmpty();
     }
 
@@ -984,8 +984,8 @@ public final class ElytraBehavior implements Helper {
 
     private static OptionalInt getFireworkBoost(final ItemStack itemStack) {
         if (isFireworks(itemStack)) {
-            net.minecraft.component.type.FireworksComponent fireworks = itemStack
-                    .get(net.minecraft.component.DataComponentTypes.FIREWORKS);
+            net.minecraft.world.item.component.Fireworks fireworks = itemStack
+                    .get(net.minecraft.core.component.DataComponents.FIREWORKS);
             if (fireworks != null) {
                 return OptionalInt.of(fireworks.flightDuration());
             }
@@ -1001,8 +1001,8 @@ public final class ElytraBehavior implements Helper {
                 .findFirst();
     }
 
-    private boolean isHitboxClear(final SolverContext context, final Vec3d dest, final Double growAmount) {
-        final Vec3d start = context.start;
+    private boolean isHitboxClear(final SolverContext context, final Vec3 dest, final Double growAmount) {
+        final Vec3 start = context.start;
         final boolean ignoreLava = context.ignoreLava;
 
         if (!this.clearView(start, dest, ignoreLava)) {
@@ -1012,7 +1012,7 @@ public final class ElytraBehavior implements Helper {
             return true;
         }
 
-        final Box bb = context.boundingBox.expand(growAmount);
+        final AABB bb = context.boundingBox.inflate(growAmount);
 
         final double ox = dest.x - start.x;
         final double oy = dest.y - start.y;
@@ -1043,8 +1043,8 @@ public final class ElytraBehavior implements Helper {
         if (Cheesecake.settings().elytraRenderHitboxRaytraces.value) {
             boolean clear = true;
             for (int i = 0; i < 8; i++) {
-                final Vec3d s = new Vec3d(src[i * 3], src[i * 3 + 1], src[i * 3 + 2]);
-                final Vec3d d = new Vec3d(dst[i * 3], dst[i * 3 + 1], dst[i * 3 + 2]);
+                final Vec3 s = new Vec3(src[i * 3], src[i * 3 + 1], src[i * 3 + 2]);
+                final Vec3 d = new Vec3(dst[i * 3], dst[i * 3 + 1], dst[i * 3 + 2]);
                 // Don't forward ignoreLava since the batch call doesn't care about it
                 if (!this.clearView(s, d, false)) {
                     clear = false;
@@ -1056,14 +1056,14 @@ public final class ElytraBehavior implements Helper {
         return raytrace(8, src, dst, NetherPathfinderContext.Visibility.ALL);
     }
 
-    public boolean clearView(Vec3d start, Vec3d dest, boolean ignoreLava) {
+    public boolean clearView(Vec3 start, Vec3 dest, boolean ignoreLava) {
         final boolean clear;
         if (!ignoreLava) {
             // if start == dest then the cpp raytracer dies
             clear = start.equals(dest) || raytrace(start, dest);
         } else {
-            clear = ctx.world().raycast(new RaycastContext(start, dest, RaycastContext.ShapeType.COLLIDER,
-                    RaycastContext.FluidHandling.NONE, ctx.player())).getType() == HitResult.Type.MISS;
+            clear = ctx.world().clip(new ClipContext(start, dest, ClipContext.Block.COLLIDER,
+                    ClipContext.Fluid.NONE, ctx.player())).getType() == HitResult.Type.MISS;
         }
 
         if (Cheesecake.settings().elytraRenderRaytraces.value) {
@@ -1105,7 +1105,7 @@ public final class ElytraBehavior implements Helper {
         }
     }
 
-    private Pair<Float, Boolean> solvePitch(final SolverContext context, final Vec3d goal, final int relaxation) {
+    private Pair<Float, Boolean> solvePitch(final SolverContext context, final Vec3 goal, final int relaxation) {
         final boolean desperate = relaxation == 2;
         final float goodPitch = RotationUtils.calcRotationFromVec3d(context.start, goal, ctx.playerRotations())
                 .getPitch();
@@ -1165,21 +1165,21 @@ public final class ElytraBehavior implements Helper {
         return null;
     }
 
-    private PitchResult solvePitch(final SolverContext context, final Vec3d goal, final int relaxation,
+    private PitchResult solvePitch(final SolverContext context, final Vec3 goal, final int relaxation,
             final FloatIterator pitches, final int ticks, final int ticksBoosted,
             final int ticksBoostDelay) {
         // we are at a certain velocity, but we have a target velocity
         // what pitch would get us closest to our target velocity?
         // yaw is easy so we only care about pitch
 
-        final Vec3d goalDelta = goal.subtract(context.start);
-        final Vec3d goalDirection = goalDelta.normalize();
+        final Vec3 goalDelta = goal.subtract(context.start);
+        final Vec3 goalDirection = goalDelta.normalize();
 
         final Deque<PitchResult> bestResults = new ArrayDeque<>();
 
         while (pitches.hasNext()) {
             final float pitch = pitches.nextFloat();
-            final List<Vec3d> displacement = this.simulate(
+            final List<Vec3> displacement = this.simulate(
                     context,
                     goalDelta,
                     pitch,
@@ -1189,8 +1189,8 @@ public final class ElytraBehavior implements Helper {
             if (displacement == null) {
                 continue;
             }
-            final Vec3d last = displacement.get(displacement.size() - 1);
-            double goodness = goalDirection.dotProduct(last.normalize());
+            final Vec3 last = displacement.get(displacement.size() - 1);
+            double goodness = goalDirection.dot(last.normalize());
             if (landingMode) {
                 goodness = -goalDelta.subtract(last).length();
             }
@@ -1223,25 +1223,25 @@ public final class ElytraBehavior implements Helper {
         return null;
     }
 
-    private List<Vec3d> simulate(final SolverContext context, final Vec3d goalDelta, final float pitch, final int ticks,
+    private List<Vec3> simulate(final SolverContext context, final Vec3 goalDelta, final float pitch, final int ticks,
             final int ticksBoosted, final int ticksBoostDelay) {
         final ITickableAimProcessor aimProcessor = context.aimProcessor.fork();
-        Vec3d delta = goalDelta;
-        Vec3d motion = context.motion;
-        Box hitbox = context.boundingBox;
-        List<Vec3d> displacement = new ArrayList<>(ticks + 1);
-        displacement.add(Vec3d.ZERO);
+        Vec3 delta = goalDelta;
+        Vec3 motion = context.motion;
+        AABB hitbox = context.boundingBox;
+        List<Vec3> displacement = new ArrayList<>(ticks + 1);
+        displacement.add(Vec3.ZERO);
         int remainingTicksBoosted = ticksBoosted;
 
         for (int i = 0; i < ticks; i++) {
 //             final double cx = hitbox.minX + (hitbox.maxX - hitbox.minX) * 0.5D;
 //             final double cz = hitbox.minZ + (hitbox.maxZ - hitbox.minZ) * 0.5D;
-            if (delta.lengthSquared() < 1) {
+            if (delta.lengthSqr() < 1) {
                 break;
             }
             final Rotation rotation = aimProcessor.nextRotation(
-                    RotationUtils.calcRotationFromVec3d(Vec3d.ZERO, delta, ctx.playerRotations()).withPitch(pitch));
-            final Vec3d lookDirection = RotationUtils.calcLookDirectionFromRotation(rotation);
+                    RotationUtils.calcRotationFromVec3d(Vec3.ZERO, delta, ctx.playerRotations()).withPitch(pitch));
+            final Vec3 lookDirection = RotationUtils.calcLookDirectionFromRotation(rotation);
 
             motion = step(motion, lookDirection, rotation.getPitch());
             delta = delta.subtract(motion);
@@ -1249,7 +1249,7 @@ public final class ElytraBehavior implements Helper {
             // Collision box while the player is in motion, with additional padding for safety.
             // stretch is the directional swept volume (upstream #5049): unlike expand it handles
             // negative motion correctly, and unlike offset it covers the whole travelled volume.
-            final Box inMotion = hitbox.stretch(motion.x, motion.y, motion.z).expand(0.01);
+            final AABB inMotion = hitbox.expandTowards(motion.x, motion.y, motion.z).inflate(0.01);
 
             int xmin = fastFloor(inMotion.minX);
             int xmax = fastCeil(inMotion.maxX);
@@ -1267,7 +1267,7 @@ public final class ElytraBehavior implements Helper {
                 }
             }
 
-            hitbox = hitbox.offset(motion);
+            hitbox = hitbox.move(motion);
             displacement.add(displacement.get(displacement.size() - 1).add(motion));
 
             if (i >= ticksBoostDelay && remainingTicksBoosted-- > 0) {
@@ -1282,7 +1282,7 @@ public final class ElytraBehavior implements Helper {
         return displacement;
     }
 
-    private static Vec3d step(final Vec3d motion, final Vec3d lookDirection, final float pitch) {
+    private static Vec3 step(final Vec3 motion, final Vec3 lookDirection, final float pitch) {
         double motionX = motion.x;
         double motionY = motion.y;
         double motionZ = motion.z;
@@ -1291,7 +1291,7 @@ public final class ElytraBehavior implements Helper {
         double pitchBase2 = Math.sqrt(lookDirection.x * lookDirection.x + lookDirection.z * lookDirection.z);
         double flatMotion = Math.sqrt(motionX * motionX + motionZ * motionZ);
         double thisIsAlwaysOne = lookDirection.length();
-        float pitchBase3 = MathHelper.cos(pitchRadians);
+        float pitchBase3 = Mth.cos(pitchRadians);
         // System.out.println("always the same lol " + -pitchBase + " " + pitchBase3);
         // System.out.println("always the same lol " + Math.abs(pitchBase3) + " " +
         // pitchBase2);
@@ -1305,7 +1305,7 @@ public final class ElytraBehavior implements Helper {
             motionZ += lookDirection.z * speedModifier / pitchBase2;
         }
         if (pitchRadians < 0) { // if you are looking down (below level)
-            double anotherSpeedModifier = flatMotion * (double) (-MathHelper.sin(pitchRadians)) * 0.04;
+            double anotherSpeedModifier = flatMotion * (double) (-Mth.sin(pitchRadians)) * 0.04;
             motionY += anotherSpeedModifier * 3.2;
             motionX -= lookDirection.x * anotherSpeedModifier / pitchBase2;
             motionZ -= lookDirection.z * anotherSpeedModifier / pitchBase2;
@@ -1320,14 +1320,14 @@ public final class ElytraBehavior implements Helper {
         motionZ *= 0.99f;
         // System.out.println(motionX + " " + motionY + " " + motionZ);
 
-        return new Vec3d(motionX, motionY, motionZ);
+        return new Vec3(motionX, motionY, motionZ);
     }
 
     // any call to this must be done with the lock held
     private boolean passable(int x, int y, int z, boolean ignoreLava) {
         if (ignoreLava) {
             final BlockState state = this.bsi.get0(x, y, z);
-            return state.isAir() || state.isOf(Blocks.LAVA);
+            return state.isAir() || state.is(Blocks.LAVA);
         } else {
             return passable(x, y, z);
         }
@@ -1345,16 +1345,16 @@ public final class ElytraBehavior implements Helper {
             invTickCountdown--;
     }
 
-    private void queueWindowClick(int windowId, int slotId, int button, SlotActionType type) {
+    private void queueWindowClick(int windowId, int slotId, int button, ClickType type) {
         invTransactionQueue.add(() -> ctx.playerController().windowClick(windowId, slotId, button, type, ctx.player()));
     }
 
     private int findGoodElytra() {
-        DefaultedList<ItemStack> invy = ctx.player().getInventory().getMainStacks();
+        NonNullList<ItemStack> invy = ctx.player().getInventory().getNonEquipmentItems();
         for (int i = 0; i < invy.size(); i++) {
             ItemStack slot = invy.get(i);
             if (slot.getItem() == Items.ELYTRA && (slot.getMaxDamage()
-                    - slot.getDamage()) > Cheesecake.settings().elytraMinimumDurability.value) {
+                    - slot.getDamageValue()) > Cheesecake.settings().elytraMinimumDurability.value) {
                 return i;
             }
         }
@@ -1366,10 +1366,10 @@ public final class ElytraBehavior implements Helper {
             return;
         }
 
-        ItemStack chest = ctx.player().getEquippedStack(EquipmentSlot.CHEST);
+        ItemStack chest = ctx.player().getItemBySlot(EquipmentSlot.CHEST);
         if (chest.getItem() != Items.ELYTRA
                 || chest.getMaxDamage()
-                        - chest.getDamage() > Cheesecake.settings().elytraMinimumDurability.value) {
+                        - chest.getDamageValue() > Cheesecake.settings().elytraMinimumDurability.value) {
             return;
         }
 
@@ -1377,9 +1377,9 @@ public final class ElytraBehavior implements Helper {
         if (goodElytraSlot != -1) {
             final int CHEST_SLOT = 6;
             final int slotId = goodElytraSlot < 9 ? goodElytraSlot + 36 : goodElytraSlot;
-            queueWindowClick(ctx.player().playerScreenHandler.syncId, slotId, 0, SlotActionType.PICKUP);
-            queueWindowClick(ctx.player().playerScreenHandler.syncId, CHEST_SLOT, 0, SlotActionType.PICKUP);
-            queueWindowClick(ctx.player().playerScreenHandler.syncId, slotId, 0, SlotActionType.PICKUP);
+            queueWindowClick(ctx.player().inventoryMenu.containerId, slotId, 0, ClickType.PICKUP);
+            queueWindowClick(ctx.player().inventoryMenu.containerId, CHEST_SLOT, 0, ClickType.PICKUP);
+            queueWindowClick(ctx.player().inventoryMenu.containerId, slotId, 0, ClickType.PICKUP);
         }
     }
 
@@ -1391,7 +1391,7 @@ public final class ElytraBehavior implements Helper {
 
     // so we don't get stuck trying to pathfind through the roof
     private BetterBlockPos fixDestination(BetterBlockPos dst) {
-        if (ctx.world().getRegistryKey() == World.NETHER) {
+        if (ctx.world().dimension() == Level.NETHER) {
             if (ctx.player().getY() >= 128 && dst.y < 128) {
                 return new BetterBlockPos(dst.x, 128, dst.z);
             } else if (ctx.player().getY() < 128 && dst.y >= 128) {
@@ -1405,24 +1405,24 @@ public final class ElytraBehavior implements Helper {
         return fixDestination(this.destination);
     }
 
-    private boolean vanillaClear(Vec3d start, Vec3d end) {
-        return ctx.world().raycast(new RaycastContext(start, end, RaycastContext.ShapeType.COLLIDER, RaycastContext.FluidHandling.NONE, ctx.player())).getType() == HitResult.Type.MISS;
+    private boolean vanillaClear(Vec3 start, Vec3 end) {
+        return ctx.world().clip(new ClipContext(start, end, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, ctx.player())).getType() == HitResult.Type.MISS;
     }
 
     public boolean raytrace(double startX, double startY, double startZ, double endX, double endY, double endZ) {
-        final int maxHeight = npfContext.getMaxHeight() + ctx.world().getBottomY();
-        final int minHeight = ctx.world().getBottomY();
+        final int maxHeight = npfContext.getMaxHeight() + ctx.world().getMinY();
+        final int minHeight = ctx.world().getMinY();
         final boolean isOOB = startY >= maxHeight || endY >= maxHeight || startY < minHeight || endY < minHeight;
         if (isOOB) {
-            return vanillaClear(new Vec3d(startX, startY, startZ), new Vec3d(endX, endY, endZ));
+            return vanillaClear(new Vec3(startX, startY, startZ), new Vec3(endX, endY, endZ));
         }
 
         return npfContext.raytrace(startX, startY, startZ, endX, endY, endZ);
     }
 
-    public boolean raytrace(Vec3d start, Vec3d end) {
-        final int maxHeight = npfContext.getMaxHeight() + ctx.world().getBottomY();
-        final int minHeight = ctx.world().getBottomY();
+    public boolean raytrace(Vec3 start, Vec3 end) {
+        final int maxHeight = npfContext.getMaxHeight() + ctx.world().getMinY();
+        final int minHeight = ctx.world().getMinY();
         final boolean isOOB = start.y >= maxHeight || end.y >= maxHeight || start.y < minHeight || end.y < minHeight;
         if (isOOB) {
             return vanillaClear(start, end);
@@ -1434,8 +1434,8 @@ public final class ElytraBehavior implements Helper {
         if (src.length != count * 3 || src.length != dst.length) {
             throw new IllegalArgumentException("Expected source and dst to have length of " + (count * 3));
         }
-        final int maxHeight = npfContext.getMaxHeight() + ctx.world().getBottomY();
-        final int minHeight = ctx.world().getBottomY();
+        final int maxHeight = npfContext.getMaxHeight() + ctx.world().getMinY();
+        final int minHeight = ctx.world().getMinY();
 
         boolean isOOB = false;
         for (int i = 1; i < src.length; i += 3) {
@@ -1447,8 +1447,8 @@ public final class ElytraBehavior implements Helper {
 
         if (isOOB) {
             for (int i = 0; i < count; i++) {
-                Vec3d start = new Vec3d(src[i * 3], src[i * 3 + 1], src[i * 3 + 2]);
-                Vec3d end = new Vec3d(dst[i * 3], dst[i * 3 + 1], dst[i * 3 + 2]);
+                Vec3 start = new Vec3(src[i * 3], src[i * 3 + 1], src[i * 3 + 2]);
+                Vec3 end = new Vec3(dst[i * 3], dst[i * 3 + 1], dst[i * 3 + 2]);
                 if (!vanillaClear(start, end)) {
                     return false;
                 }
@@ -1460,7 +1460,7 @@ public final class ElytraBehavior implements Helper {
     }
 
     public boolean passable(int x, int y, int z) {
-        if (y > ctx.world().getTopYInclusive() || y < ctx.world().getBottomY()) {
+        if (y > ctx.world().getMaxY() || y < ctx.world().getMinY()) {
             return true;
         }
         return npfContext.passable(x, y, z);

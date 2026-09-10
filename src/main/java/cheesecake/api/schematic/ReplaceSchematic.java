@@ -18,7 +18,7 @@
 package cheesecake.api.schematic;
 
 import cheesecake.api.utils.BlockOptionalMetaLookup;
-import net.minecraft.block.BlockState;
+import net.minecraft.world.level.block.state.BlockState;
 
 public class ReplaceSchematic extends MaskSchematic {
 

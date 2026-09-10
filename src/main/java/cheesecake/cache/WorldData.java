@@ -22,7 +22,7 @@ import cheesecake.api.cache.ICachedWorld;
 import cheesecake.api.cache.IWaypointCollection;
 import cheesecake.api.cache.IWorldData;
 import java.nio.file.Path;
-import net.minecraft.world.dimension.DimensionType;
+import net.minecraft.world.level.dimension.DimensionType;
 
 /**
  * Data about a world, from cheesecake's point of view. Includes cached chunks, waypoints, and map data.

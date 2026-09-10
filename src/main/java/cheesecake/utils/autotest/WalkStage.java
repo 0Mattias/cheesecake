@@ -19,11 +19,10 @@ package cheesecake.utils.autotest;
 
 import cheesecake.api.pathing.goals.GoalXZ;
 import cheesecake.api.utils.BetterBlockPos;
-import net.minecraft.client.texture.NativeImage;
-import net.minecraft.client.util.ScreenshotRecorder;
-
+import com.mojang.blaze3d.platform.NativeImage;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import net.minecraft.client.Screenshot;
 
 /**
  * Walks a fixed distance along +x from wherever the world put the player. The goal is drawn as the
@@ -113,15 +112,15 @@ public final class WalkStage extends Stage {
         this.screenshot = 1;
         this.t.log("taking a screenshot of the beam");
         try {
-            Path dir = this.t.mc.runDirectory.toPath().resolve("screenshots");
+            Path dir = this.t.mc.gameDirectory.toPath().resolve("screenshots");
             Files.createDirectories(dir);
             Path file = dir.resolve("goal-beacon.png");
-            ScreenshotRecorder.takeScreenshot(this.t.mc.getFramebuffer(), image -> {
+            Screenshot.takeScreenshot(this.t.mc.getMainRenderTarget(), image -> {
                 try (NativeImage img = image) {
                     int count = 0;
                     for (int y = 0; y < img.getHeight(); y++) {
                         for (int x = 0; x < img.getWidth(); x++) {
-                            int argb = img.getColorArgb(x, y);
+                            int argb = img.getPixel(x, y);
                             int r = (argb >> 16) & 0xFF;
                             int g = (argb >> 8) & 0xFF;
                             int b = argb & 0xFF;
@@ -130,7 +129,7 @@ public final class WalkStage extends Stage {
                             }
                         }
                     }
-                    img.writeTo(file);
+                    img.writeToFile(file);
                     this.beamPixels = count;
                     this.screenshotFile = file;
                 } catch (Exception e) {

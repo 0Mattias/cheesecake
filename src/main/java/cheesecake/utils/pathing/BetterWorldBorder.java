@@ -17,7 +17,7 @@
 
 package cheesecake.utils.pathing;
 
-import net.minecraft.world.border.WorldBorder;
+import net.minecraft.world.level.border.WorldBorder;
 
 /**
  * Essentially, a "rule" for the path finder, prevents proposed movements from attempting to venture
@@ -31,10 +31,10 @@ public class BetterWorldBorder {
     private final double maxZ;
 
     public BetterWorldBorder(WorldBorder border) {
-        this.minX = border.getBoundWest();
-        this.maxX = border.getBoundEast();
-        this.minZ = border.getBoundNorth();
-        this.maxZ = border.getBoundSouth();
+        this.minX = border.getMinX();
+        this.maxX = border.getMaxX();
+        this.minZ = border.getMinZ();
+        this.maxZ = border.getMaxZ();
     }
 
     public boolean entirelyContains(int x, int z) {

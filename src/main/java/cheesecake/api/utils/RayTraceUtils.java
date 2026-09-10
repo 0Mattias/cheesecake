@@ -17,11 +17,11 @@
 
 package cheesecake.api.utils;
 
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.EntityPose;
-import net.minecraft.util.hit.HitResult;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.RaycastContext;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.Pose;
+import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * @author Brady
@@ -51,23 +51,23 @@ public final class RayTraceUtils {
 
     public static HitResult rayTraceTowards(Entity entity, Rotation rotation, double blockReachDistance,
             boolean wouldSneak) {
-        Vec3d start;
+        Vec3 start;
         if (wouldSneak) {
             start = inferSneakingEyePosition(entity);
         } else {
-            start = entity.getCameraPosVec(1.0F); // do whatever is correct
+            start = entity.getEyePosition(1.0F); // do whatever is correct
         }
 
-        Vec3d direction = RotationUtils.calcLookDirectionFromRotation(rotation);
-        Vec3d end = start.add(
+        Vec3 direction = RotationUtils.calcLookDirectionFromRotation(rotation);
+        Vec3 end = start.add(
                 direction.x * blockReachDistance,
                 direction.y * blockReachDistance,
                 direction.z * blockReachDistance);
-        return entity.getEntityWorld().raycast(new RaycastContext(start, end, RaycastContext.ShapeType.OUTLINE,
-                RaycastContext.FluidHandling.NONE, entity));
+        return entity.level().clip(new ClipContext(start, end, ClipContext.Block.OUTLINE,
+                ClipContext.Fluid.NONE, entity));
     }
 
-    public static Vec3d inferSneakingEyePosition(Entity entity) {
-        return new Vec3d(entity.getX(), entity.getY() + entity.getEyeHeight(EntityPose.CROUCHING), entity.getZ());
+    public static Vec3 inferSneakingEyePosition(Entity entity) {
+        return new Vec3(entity.getX(), entity.getY() + entity.getEyeHeight(Pose.CROUCHING), entity.getZ());
     }
 }

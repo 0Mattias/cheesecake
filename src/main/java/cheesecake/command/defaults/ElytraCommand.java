@@ -30,12 +30,12 @@ import cheesecake.api.process.IElytraProcess;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Stream;
-import net.minecraft.client.network.ServerInfo;
-import net.minecraft.text.ClickEvent;
-import net.minecraft.text.HoverEvent;
-import net.minecraft.text.MutableText;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
+import net.minecraft.ChatFormatting;
+import net.minecraft.client.multiplayer.ServerData;
+import net.minecraft.network.chat.ClickEvent;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.HoverEvent;
+import net.minecraft.network.chat.MutableComponent;
 
 import static cheesecake.api.command.ICheesecakeChatControl.FORCE_COMMAND_PREFIX;
 
@@ -103,31 +103,31 @@ public class ElytraCommand extends Command {
         if (Cheesecake.settings().elytraPredictTerrain.value) {
             long seed = Cheesecake.settings().elytraNetherSeed.value;
             if (seed != NEW_2B2T_SEED && seed != OLD_2B2T_SEED) {
-                logDirect(Text.literal("It looks like you're on 2b2t, but elytraNetherSeed is incorrect.")); // match
+                logDirect(Component.literal("It looks like you're on 2b2t, but elytraNetherSeed is incorrect.")); // match
                                                                                                              // color
                 logDirect(suggest2b2tSeeds());
             }
         }
     }
 
-    private Text suggest2b2tSeeds() {
-        MutableText clippy = Text.literal("");
+    private Component suggest2b2tSeeds() {
+        MutableComponent clippy = Component.literal("");
         clippy.append(
                 "Within a few hundred blocks of spawn/axis/highways/etc, the terrain is too fragmented to be predictable. Cheesecake Elytra will still work, just with backtracking. ");
         clippy.append("However, once you get more than a few thousand blocks out, you should try ");
-        MutableText olderSeed = Text.literal("the older seed (click here)");
-        olderSeed.setStyle(olderSeed.getStyle().withUnderline(true).withBold(true)
+        MutableComponent olderSeed = Component.literal("the older seed (click here)");
+        olderSeed.setStyle(olderSeed.getStyle().withUnderlined(true).withBold(true)
                 .withHoverEvent(new HoverEvent.ShowText(
-                        Text.literal(Cheesecake.settings().prefix.value + "set elytraNetherSeed " + OLD_2B2T_SEED)))
+                        Component.literal(Cheesecake.settings().prefix.value + "set elytraNetherSeed " + OLD_2B2T_SEED)))
                 .withClickEvent(
                         new ClickEvent.RunCommand(FORCE_COMMAND_PREFIX + "set elytraNetherSeed " + OLD_2B2T_SEED)));
         clippy.append(olderSeed);
         clippy.append(
                 ". Once you're further out into newer terrain generation (this includes everything up through 1.12), you should try ");
-        MutableText newerSeed = Text.literal("the newer seed (click here)");
-        newerSeed.setStyle(newerSeed.getStyle().withUnderline(true).withBold(true)
+        MutableComponent newerSeed = Component.literal("the newer seed (click here)");
+        newerSeed.setStyle(newerSeed.getStyle().withUnderlined(true).withBold(true)
                 .withHoverEvent(new HoverEvent.ShowText(
-                        Text.literal(Cheesecake.settings().prefix.value + "set elytraNetherSeed " + NEW_2B2T_SEED)))
+                        Component.literal(Cheesecake.settings().prefix.value + "set elytraNetherSeed " + NEW_2B2T_SEED)))
                 .withClickEvent(
                         new ClickEvent.RunCommand(FORCE_COMMAND_PREFIX + "set elytraNetherSeed " + NEW_2B2T_SEED)));
         clippy.append(newerSeed);
@@ -137,36 +137,36 @@ public class ElytraCommand extends Command {
     }
 
     private void gatekeep() {
-        MutableText gatekeep = Text.literal("");
+        MutableComponent gatekeep = Component.literal("");
         gatekeep.append("To disable this message, enable the setting elytraTermsAccepted\n");
         gatekeep.append(
                 "Cheesecake Elytra is an experimental feature. It is intended for long distance travel in the Nether but will also work in the Overworld, using fireworks for vanilla boost. It will not work with any other mods (\"hacks\") for non-vanilla boost. ");
-        MutableText gatekeep2 = Text.literal(
+        MutableComponent gatekeep2 = Component.literal(
                 "If you want Cheesecake to attempt to take off from the ground for you, you can enable the elytraAutoJump setting (not advisable on laggy servers!). ");
         gatekeep2.setStyle(gatekeep2.getStyle().withHoverEvent(
-                new HoverEvent.ShowText(Text.literal(Cheesecake.settings().prefix.value + "set elytraAutoJump true"))));
+                new HoverEvent.ShowText(Component.literal(Cheesecake.settings().prefix.value + "set elytraAutoJump true"))));
         gatekeep.append(gatekeep2);
-        MutableText gatekeep3 = Text.literal(
+        MutableComponent gatekeep3 = Component.literal(
                 "If you want Cheesecake to go slower, enable the elytraConserveFireworks setting and/or decrease the elytraFireworkSpeed setting. ");
         gatekeep3.setStyle(gatekeep3.getStyle()
-                .withHoverEvent(new HoverEvent.ShowText(Text.literal(Cheesecake.settings().prefix.value
+                .withHoverEvent(new HoverEvent.ShowText(Component.literal(Cheesecake.settings().prefix.value
                         + "set elytraConserveFireworks true\n" + Cheesecake.settings().prefix.value
                         + "set elytraFireworkSpeed 0.6\n(the 0.6 number is just an example, tweak to your liking)"))));
         gatekeep.append(gatekeep3);
-        MutableText gatekeep4 = Text.literal("Cheesecake Elytra for use in the ");
-        MutableText red1 = Text.literal("Nether");
-        red1.setStyle(red1.getStyle().withColor(Formatting.RED).withUnderline(true).withBold(true));
+        MutableComponent gatekeep4 = Component.literal("Cheesecake Elytra for use in the ");
+        MutableComponent red1 = Component.literal("Nether");
+        red1.setStyle(red1.getStyle().withColor(ChatFormatting.RED).withUnderlined(true).withBold(true));
         gatekeep4.append(red1);
         gatekeep4.append(", ");
-        MutableText red2 = Text.literal("wants to know the seed");
-        red2.setStyle(red2.getStyle().withColor(Formatting.RED).withUnderline(true).withBold(true));
+        MutableComponent red2 = Component.literal("wants to know the seed");
+        red2.setStyle(red2.getStyle().withColor(ChatFormatting.RED).withUnderlined(true).withBold(true));
         gatekeep4.append(red2);
         gatekeep4.append(
                 " of the world you are in. If it doesn't have the correct seed, it will frequently backtrack. It uses the seed to generate terrain far beyond what you can see, since terrain obstacles in the Nether can be much larger than your render distance. ");
         gatekeep.append(gatekeep4);
         gatekeep.append("\n");
         if (detectOn2b2t()) {
-            MutableText gatekeep5 = Text.literal("It looks like you're on 2b2t. Terrain prediction can be used but new nether terrain can not be predicted on 2b2t. ");
+            MutableComponent gatekeep5 = Component.literal("It looks like you're on 2b2t. Terrain prediction can be used but new nether terrain can not be predicted on 2b2t. ");
             gatekeep5.append(suggest2b2tSeeds());
             if (!Cheesecake.settings().elytraPredictTerrain.value) {
                 gatekeep5.append(Cheesecake.settings().prefix.value + "elytraPredictTerrain is currently disabled. ");
@@ -183,7 +183,7 @@ public class ElytraCommand extends Command {
             gatekeep.append(gatekeep5);
         } else {
             if (Cheesecake.settings().elytraNetherSeed.value == NEW_2B2T_SEED) {
-                MutableText gatekeep5 = Text.literal("Cheesecake doesn't know the seed of your world. Set it with: "
+                MutableComponent gatekeep5 = Component.literal("Cheesecake doesn't know the seed of your world. Set it with: "
                         + Cheesecake.settings().prefix.value + "set elytraNetherSeed seedgoeshere\n");
                 gatekeep5.append(
                         "For the time being, elytraPredictTerrain is defaulting to false since the seed is unknown.");
@@ -191,14 +191,14 @@ public class ElytraCommand extends Command {
                 Cheesecake.settings().elytraPredictTerrain.value = false;
             } else {
                 if (Cheesecake.settings().elytraPredictTerrain.value) {
-                    MutableText gatekeep5 = Text.literal("Cheesecake Elytra is predicting terrain assuming that "
+                    MutableComponent gatekeep5 = Component.literal("Cheesecake Elytra is predicting terrain assuming that "
                             + Cheesecake.settings().elytraNetherSeed.value + " is the correct seed. Change that with "
                             + Cheesecake.settings().prefix.value
                             + "set elytraNetherSeed seedgoeshere, or disable it with "
                             + Cheesecake.settings().prefix.value + "set elytraPredictTerrain false");
                     gatekeep.append(gatekeep5);
                 } else {
-                    MutableText gatekeep5 = Text.literal(
+                    MutableComponent gatekeep5 = Component.literal(
                             "Cheesecake Elytra is not predicting terrain. If you don't know the seed, this is the correct thing to do. If you do know the seed, input it with "
                                     + Cheesecake.settings().prefix.value
                                     + "set elytraNetherSeed seedgoeshere, and then enable it with "
@@ -211,8 +211,8 @@ public class ElytraCommand extends Command {
     }
 
     private boolean detectOn2b2t() {
-        ServerInfo data = ctx.minecraft().getCurrentServerEntry();
-        return data != null && data.address.toLowerCase().contains("2b2t.org");
+        ServerData data = ctx.minecraft().getCurrentServer();
+        return data != null && data.ip.toLowerCase().contains("2b2t.org");
     }
 
     private static final long OLD_2B2T_SEED = -4100785268875389365L;

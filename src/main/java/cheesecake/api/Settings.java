@@ -37,15 +37,15 @@ import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
-import net.minecraft.block.Block;
-import net.minecraft.block.Blocks;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.hud.MessageIndicator;
-import net.minecraft.item.Item;
-import net.minecraft.text.Text;
-import net.minecraft.util.BlockMirror;
-import net.minecraft.util.BlockRotation;
-import net.minecraft.util.math.Vec3i;
+import net.minecraft.client.GuiMessageTag;
+import net.minecraft.client.Minecraft;
+import net.minecraft.core.Vec3i;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.Mirror;
+import net.minecraft.world.level.block.Rotation;
 
 /**
  * Cheesecake's settings. Settings apply to all Cheesecake instances.
@@ -1260,7 +1260,7 @@ public final class Settings {
      * <li>COUNTERCLOCKWISE_90 - Rotate 270° clockwise</li>
      * </ul>
      */
-    public final Setting<BlockRotation> buildSchematicRotation = new Setting<>(BlockRotation.NONE);
+    public final Setting<Rotation> buildSchematicRotation = new Setting<>(Rotation.NONE);
 
     /**
      * Mirrors the schematic before building it.
@@ -1270,7 +1270,7 @@ public final class Settings {
      * <li>LEFT_RIGHT - mirror the schematic along its local z axis</li>
      * </ul>
      */
-    public final Setting<BlockMirror> buildSchematicMirror = new Setting<>(BlockMirror.NONE);
+    public final Setting<Mirror> buildSchematicMirror = new Setting<>(Mirror.NONE);
 
     /**
      * The fallback used by the build command when no extension is specified. This
@@ -1465,10 +1465,10 @@ public final class Settings {
      * {@link Setting#value};
      */
     @JavaOnly
-    public final Setting<Consumer<Text>> logger = new Setting<>((msg) -> {
+    public final Setting<Consumer<Component>> logger = new Setting<>((msg) -> {
         try {
-            final MessageIndicator tag = useMessageTag.value ? Helper.MESSAGE_TAG : null;
-            MinecraftClient.getInstance().inGameHud.getChatHud().addMessage(msg, null, tag);
+            final GuiMessageTag tag = useMessageTag.value ? Helper.MESSAGE_TAG : null;
+            Minecraft.getInstance().gui.getChat().addMessage(msg, null, tag);
         } catch (Throwable t) {
             LOGGER.warn("Failed to log message to chat: " + msg.getString(), t);
         }
@@ -1492,7 +1492,7 @@ public final class Settings {
      * {@link Setting#value};
      */
     @JavaOnly
-    public final Setting<BiConsumer<Text, Text>> toaster = new Setting<>(CheesecakeToast::addOrUpdate);
+    public final Setting<BiConsumer<Component, Component>> toaster = new Setting<>(CheesecakeToast::addOrUpdate);
 
     /**
      * Print out ALL command exceptions as a stack trace to stdout, even simple

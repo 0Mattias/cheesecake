@@ -21,20 +21,19 @@ import cheesecake.api.utils.BlockUtils;
 import cheesecake.pathing.movement.MovementHelper;
 import cheesecake.utils.pathing.PathingBlockType;
 import java.util.*;
-import net.minecraft.block.AirBlock;
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.Blocks;
-import net.minecraft.block.FlowerBlock;
-import net.minecraft.block.ShortPlantBlock;
-import net.minecraft.block.TallPlantBlock;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.chunk.ChunkSection;
-import net.minecraft.world.chunk.PalettedContainer;
-import net.minecraft.world.chunk.WorldChunk;
-import net.minecraft.world.dimension.DimensionType;
-// import net.minecraft.world.dimension.DimensionTypes;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.block.AirBlock;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.DoublePlantBlock;
+import net.minecraft.world.level.block.FlowerBlock;
+import net.minecraft.world.level.block.TallGrassBlock;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.chunk.LevelChunkSection;
+import net.minecraft.world.level.chunk.PalettedContainer;
+import net.minecraft.world.level.dimension.DimensionType;
+import net.minecraft.world.phys.Vec3;
 
 import static cheesecake.utils.BlockStateInterface.getFromChunk;
 
@@ -47,16 +46,16 @@ public final class ChunkPacker {
     private ChunkPacker() {
     }
 
-    public static CachedChunk pack(WorldChunk chunk) {
+    public static CachedChunk pack(LevelChunk chunk) {
         // long start = System.nanoTime() / 1000000L;
 
         Map<String, List<BlockPos>> specialBlocks = new HashMap<>();
-        final int height = chunk.getWorld().getDimension().height();
+        final int height = chunk.getLevel().dimensionType().height();
         BitSet bitSet = new BitSet(CachedChunk.size(height));
         try {
-            ChunkSection[] chunkInternalStorageArray = chunk.getSectionArray();
+            LevelChunkSection[] chunkInternalStorageArray = chunk.getSections();
             for (int y0 = 0; y0 < height / 16; y0++) {
-                ChunkSection extendedblockstorage = chunkInternalStorageArray[y0];
+                LevelChunkSection extendedblockstorage = chunkInternalStorageArray[y0];
                 if (extendedblockstorage == null) {
                     // any 16x16x16 area that's all air will have null storage
                     // for example, in an ocean biome, with air from y=64 to y=256
@@ -68,7 +67,7 @@ public final class ChunkPacker {
                     // since a bitset is initialized to all zero, and air is saved as zeros
                     continue;
                 }
-                PalettedContainer<BlockState> bsc = extendedblockstorage.getBlockStateContainer();
+                PalettedContainer<BlockState> bsc = extendedblockstorage.getStates();
                 int yReal = y0 << 4;
                 // the mapping of BlockStateContainer.getIndex from xyz to index is y << 8 | z
                 // << 4 | x;
@@ -79,14 +78,14 @@ public final class ChunkPacker {
                         for (int x = 0; x < 16; x++) {
                             int index = CachedChunk.getPositionIndex(x, y, z);
                             BlockState state = bsc.get(x, y1, z);
-                            boolean[] bits = getPathingBlockType(state, chunk, x, y + chunk.getBottomY(), z).getBits();
+                            boolean[] bits = getPathingBlockType(state, chunk, x, y + chunk.getMinY(), z).getBits();
                             bitSet.set(index, bits[0]);
                             bitSet.set(index + 1, bits[1]);
                             Block block = state.getBlock();
                             if (CachedChunk.BLOCKS_TO_KEEP_TRACK_OF.contains(block)) {
                                 String name = BlockUtils.blockToString(block);
                                 specialBlocks.computeIfAbsent(name, b -> new ArrayList<>())
-                                        .add(new BlockPos(x, y + chunk.getBottomY(), z));
+                                        .add(new BlockPos(x, y + chunk.getMinY(), z));
                             }
                         }
                     }
@@ -112,7 +111,7 @@ public final class ChunkPacker {
                         continue https;
                     }
                 }
-                blocks[z << 4 | x] = Blocks.AIR.getDefaultState();
+                blocks[z << 4 | x] = Blocks.AIR.defaultBlockState();
             }
         }
         // @formatter:on
@@ -120,7 +119,7 @@ public final class ChunkPacker {
                 System.currentTimeMillis());
     }
 
-    private static PathingBlockType getPathingBlockType(BlockState state, WorldChunk chunk, int x, int y, int z) {
+    private static PathingBlockType getPathingBlockType(BlockState state, LevelChunk chunk, int x, int y, int z) {
         Block block = state.getBlock();
         if (MovementHelper.isWater(state)) {
             // only water source blocks are plausibly usable, flowing water should be avoid
@@ -129,7 +128,7 @@ public final class ChunkPacker {
             if (MovementHelper.possiblyFlowing(state)) {
                 return PathingBlockType.AVOID;
             }
-            int adjY = y - chunk.getWorld().getDimension().minY();
+            int adjY = y - chunk.getLevel().dimensionType().minY();
             if ((x != 15 && MovementHelper.possiblyFlowing(getFromChunk(chunk, x + 1, adjY, z)))
                     || (x != 0 && MovementHelper.possiblyFlowing(getFromChunk(chunk, x - 1, adjY, z)))
                     || (z != 15 && MovementHelper.possiblyFlowing(getFromChunk(chunk, x, adjY, z + 1)))
@@ -137,7 +136,7 @@ public final class ChunkPacker {
                 return PathingBlockType.AVOID;
             }
             if (x == 0 || x == 15 || z == 0 || z == 15) {
-                Vec3d flow = state.getFluidState().getVelocity(chunk.getWorld(),
+                Vec3 flow = state.getFluidState().getFlow(chunk.getLevel(),
                         new BlockPos(x + (chunk.getPos().x << 4), y, z + (chunk.getPos().z << 4)));
                 if (flow.x != 0.0 || flow.z != 0.0) {
                     return PathingBlockType.WATER;
@@ -156,7 +155,7 @@ public final class ChunkPacker {
         // connection status to determine AABB shape
         // this caused a nullpointerexception when we saved chunks on unload, because
         // they were unable to check their neighbors
-        if (block instanceof AirBlock || block instanceof ShortPlantBlock || block instanceof TallPlantBlock
+        if (block instanceof AirBlock || block instanceof TallGrassBlock || block instanceof DoublePlantBlock
                 || block instanceof FlowerBlock) {
             return PathingBlockType.AIR;
         }
@@ -167,20 +166,20 @@ public final class ChunkPacker {
     public static BlockState pathingTypeToBlock(PathingBlockType type, DimensionType dimension) {
         switch (type) {
             case AIR:
-                return Blocks.AIR.getDefaultState();
+                return Blocks.AIR.defaultBlockState();
             case WATER:
-                return Blocks.WATER.getDefaultState();
+                return Blocks.WATER.defaultBlockState();
             case AVOID:
-                return Blocks.LAVA.getDefaultState();
+                return Blocks.LAVA.defaultBlockState();
             case SOLID:
                 // Dimension solid types
                 if (dimension.hasSkyLight()) {
-                    return Blocks.STONE.getDefaultState();
+                    return Blocks.STONE.defaultBlockState();
                 }
                 if (dimension.hasCeiling()) {
-                    return Blocks.NETHERRACK.getDefaultState();
+                    return Blocks.NETHERRACK.defaultBlockState();
                 }
-                return Blocks.END_STONE.getDefaultState();
+                return Blocks.END_STONE.defaultBlockState();
             default:
                 return null;
         }

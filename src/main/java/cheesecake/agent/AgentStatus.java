@@ -30,13 +30,12 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
-import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.registry.Registries;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
-
 import java.util.Optional;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
 
 /**
  * Builds the JSON status snapshot used by {@code #status} and the agent API. Must be called on the
@@ -51,26 +50,26 @@ public final class AgentStatus {
         status.addProperty("version", version());
 
         IPlayerContext ctx = cheesecake.getPlayerContext();
-        ClientPlayerEntity player = ctx.player();
-        World world = ctx.world();
+        LocalPlayer player = ctx.player();
+        Level world = ctx.world();
         boolean inWorld = player != null && world != null;
         status.addProperty("inWorld", inWorld);
         if (inWorld) {
-            status.addProperty("dimension", world.getRegistryKey().getValue().toString());
+            status.addProperty("dimension", world.dimension().identifier().toString());
             status.add("position", vec(player.getX(), player.getY(), player.getZ()));
             BetterBlockPos feet = ctx.playerFeet();
             status.add("feet", pos(feet));
-            status.addProperty("yaw", round(player.getYaw()));
-            status.addProperty("pitch", round(player.getPitch()));
+            status.addProperty("yaw", round(player.getYRot()));
+            status.addProperty("pitch", round(player.getXRot()));
             status.addProperty("health", round(player.getHealth()));
-            status.addProperty("food", player.getHungerManager().getFoodLevel());
-            status.addProperty("onGround", player.isOnGround());
-            status.addProperty("gliding", player.isGliding());
-            status.addProperty("inWater", player.isTouchingWater());
+            status.addProperty("food", player.getFoodData().getFoodLevel());
+            status.addProperty("onGround", player.onGround());
+            status.addProperty("gliding", player.isFallFlying());
+            status.addProperty("inWater", player.isInWater());
             status.addProperty("inLava", player.isInLava());
-            status.add("mainHand", stack(player.getMainHandStack()));
+            status.add("mainHand", stack(player.getMainHandItem()));
             int empty = 0;
-            for (ItemStack stack : player.getInventory().getMainStacks()) {
+            for (ItemStack stack : player.getInventory().getNonEquipmentItems()) {
                 if (stack.isEmpty()) {
                     empty++;
                 }
@@ -140,7 +139,7 @@ public final class AgentStatus {
             return JsonNull.INSTANCE;
         }
         JsonObject o = new JsonObject();
-        o.addProperty("item", Registries.ITEM.getId(stack.getItem()).toString());
+        o.addProperty("item", BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
         o.addProperty("count", stack.getCount());
         return o;
     }

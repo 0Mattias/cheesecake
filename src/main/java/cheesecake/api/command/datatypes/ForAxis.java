@@ -21,7 +21,7 @@ import cheesecake.api.command.exception.CommandException;
 import cheesecake.api.command.helpers.TabCompleteHelper;
 import java.util.Locale;
 import java.util.stream.Stream;
-import net.minecraft.util.math.Direction;
+import net.minecraft.core.Direction;
 
 public enum ForAxis implements IDatatypeFor<Direction.Axis> {
     INSTANCE;
@@ -35,7 +35,7 @@ public enum ForAxis implements IDatatypeFor<Direction.Axis> {
     public Stream<String> tabComplete(IDatatypeContext ctx) throws CommandException {
         return new TabCompleteHelper()
                 .append(Stream.of(Direction.Axis.values())
-                        .map(Direction.Axis::getId).map(String::toLowerCase))
+                        .map(Direction.Axis::getName).map(String::toLowerCase))
                 .filterPrefix(ctx.getConsumer().getString())
                 .stream();
     }

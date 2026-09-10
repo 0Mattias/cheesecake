@@ -34,18 +34,17 @@ import cheesecake.command.argument.ArgConsumer;
 import cheesecake.command.argument.CommandArguments;
 import cheesecake.command.manager.CommandManager;
 import cheesecake.utils.accessor.IGuiScreen;
-// import net.minecraft.text.*;
-import net.minecraft.text.ClickEvent;
-import net.minecraft.text.HoverEvent;
-import net.minecraft.text.MutableText;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
-import net.minecraft.util.Pair;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.List;
 import java.util.Locale;
 import java.util.stream.Stream;
+import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.ClickEvent;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.HoverEvent;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.util.Tuple;
 
 import static cheesecake.api.command.ICheesecakeChatControl.FORCE_COMMAND_PREFIX;
 
@@ -69,7 +68,7 @@ public class ExampleCheesecakeControl extends Behavior implements Helper {
             event.cancel();
             String commandStr = msg.substring(forceRun ? FORCE_COMMAND_PREFIX.length() : prefix.length());
             if (!runCommand(commandStr) && !commandStr.trim().isEmpty()) {
-                new CommandNotFoundException(CommandManager.expand(commandStr).getLeft()).handle(null, null);
+                new CommandNotFoundException(CommandManager.expand(commandStr).getA()).handle(null, null);
             }
         } else if ((settings.chatControl.value || settings.chatControlAnyway.value) && runCommand(msg)) {
             event.cancel();
@@ -80,11 +79,11 @@ public class ExampleCheesecakeControl extends Behavior implements Helper {
         if (settings.echoCommands.value) {
             String msg = command + rest;
             String toDisplay = settings.censorRanCommands.value ? command + " ..." : msg;
-            MutableText component = Text.literal(String.format("> %s", toDisplay));
+            MutableComponent component = Component.literal(String.format("> %s", toDisplay));
             component.setStyle(component.getStyle()
-                    .withColor(Formatting.WHITE)
+                    .withColor(ChatFormatting.WHITE)
                     .withHoverEvent(new HoverEvent.ShowText(
-                            Text.literal("Click to rerun command")))
+                            Component.literal("Click to rerun command")))
                     .withClickEvent(new ClickEvent.RunCommand(
                             FORCE_COMMAND_PREFIX + msg + " ")))
                     .append(" ");
@@ -98,7 +97,7 @@ public class ExampleCheesecakeControl extends Behavior implements Helper {
             return false;
         } else if (msg.trim().equalsIgnoreCase("orderpizza")) {
             try {
-                ((IGuiScreen) ctx.minecraft().currentScreen)
+                ((IGuiScreen) ctx.minecraft().screen)
                         .openLinkInvoker(new URI("https://www.dominos.com/en/pages/order/"));
             } catch (NullPointerException | URISyntaxException ignored) {
             }
@@ -107,10 +106,10 @@ public class ExampleCheesecakeControl extends Behavior implements Helper {
         if (msg.isEmpty()) {
             return this.runCommand("help");
         }
-        Pair<String, List<ICommandArgument>> pair = CommandManager.expand(msg);
-        String command = pair.getLeft();
-        String rest = msg.substring(pair.getLeft().length());
-        ArgConsumer argc = new ArgConsumer(this.manager, pair.getRight());
+        Tuple<String, List<ICommandArgument>> pair = CommandManager.expand(msg);
+        String command = pair.getA();
+        String rest = msg.substring(pair.getA().length());
+        ArgConsumer argc = new ArgConsumer(this.manager, pair.getB());
         if (!argc.hasAny()) {
             Settings.Setting setting = settings.byLowerName.get(command.toLowerCase(Locale.US));
             if (setting != null) {
@@ -127,7 +126,7 @@ public class ExampleCheesecakeControl extends Behavior implements Helper {
                 if (setting.isJavaOnly()) {
                     continue;
                 }
-                if (setting.getName().equalsIgnoreCase(pair.getLeft())) {
+                if (setting.getName().equalsIgnoreCase(pair.getA())) {
                     logRanCommand(command, rest);
                     try {
                         this.manager.execute(String.format("set %s %s", setting.getName(), argc.getString()));
@@ -139,7 +138,7 @@ public class ExampleCheesecakeControl extends Behavior implements Helper {
         }
 
         // If the command exists, then handle echoing the input
-        if (this.manager.getCommand(pair.getLeft()) != null) {
+        if (this.manager.getCommand(pair.getA()) != null) {
             logRanCommand(command, rest);
         }
 
