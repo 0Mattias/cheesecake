@@ -20,10 +20,15 @@ package cheesecake.utils.accessor;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 
 /**
- * Exposes the private vanilla lines pipeline snippet so our line render layers inherit the vanilla
- * shaders and vertex format instead of guessing at them.
+ * Exposes the private vanilla pipeline snippets so our render layers inherit the vanilla shaders and
+ * vertex formats instead of guessing at them, and the private registration method so our pipelines
+ * sit in the same registry as vanilla's.
  */
 public interface IRenderPipelines {
 
     RenderPipeline.Snippet cheesecake$getLinesSnippet();
+
+    RenderPipeline.Snippet cheesecake$getTransformsProjectionFogSnippet();
+
+    RenderPipeline cheesecake$registerPipeline(RenderPipeline pipeline);
 }
