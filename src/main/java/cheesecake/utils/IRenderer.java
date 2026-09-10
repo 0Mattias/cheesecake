@@ -32,16 +32,22 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gl.RenderPipelines;
 import net.minecraft.client.render.BufferBuilder;
 import net.minecraft.client.render.BuiltBuffer;
+import net.minecraft.client.render.LightmapTextureManager;
+import net.minecraft.client.render.OverlayTexture;
 import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.RenderLayers;
 import net.minecraft.client.render.RenderSetup;
 import net.minecraft.client.render.Tessellator;
+import net.minecraft.client.render.VertexFormats;
 import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.util.Identifier;
+import net.minecraft.util.Util;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
 import org.joml.Matrix4f;
 
 import java.awt.Color;
+import java.util.function.BiFunction;
 
 public interface IRenderer {
 
@@ -67,6 +73,35 @@ public interface IRenderer {
             .buildSnippet();
 
     /**
+     * Vanilla's beacon beam pipeline, rebuilt from the same snippet, shaders and vertex format the beacon
+     * block entity uses, so the two pipelines below can drop the depth test the way the line layers do.
+     */
+    RenderPipeline.Snippet CHEESECAKE_BEACON_BEAM_SNIPPET = RenderPipeline
+            .builder(((IRenderPipelines) new RenderPipelines()).cheesecake$getTransformsProjectionFogSnippet())
+            .withVertexShader("core/rendertype_beacon_beam")
+            .withFragmentShader("core/rendertype_beacon_beam")
+            .withSampler("Sampler0")
+            .withVertexFormat(VertexFormats.POSITION_COLOR_TEXTURE_LIGHT_NORMAL, VertexFormat.DrawMode.QUADS)
+            .buildSnippet();
+
+    RenderPipeline BEACON_BEAM_OPAQUE = ((IRenderPipelines) new RenderPipelines()).cheesecake$registerPipeline(
+            RenderPipeline.builder(CHEESECAKE_BEACON_BEAM_SNIPPET)
+                    .withLocation("pipeline/cheesecake_beacon_beam_opaque")
+                    .withDepthWrite(false)
+                    .withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+                    .withCull(true)
+                    .build());
+
+    RenderPipeline BEACON_BEAM_TRANSLUCENT = ((IRenderPipelines) new RenderPipelines()).cheesecake$registerPipeline(
+            RenderPipeline.builder(CHEESECAKE_BEACON_BEAM_SNIPPET)
+                    .withLocation("pipeline/cheesecake_beacon_beam_translucent")
+                    .withDepthWrite(false)
+                    .withBlend(BlendFunction.TRANSLUCENT)
+                    .withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+                    .withCull(true)
+                    .build());
+
+    /**
      * The two layers only differ in their depth test function. Prior to 1.21.5 the "ignore depth" settings
      * were implemented by toggling GL_DEPTH_TEST around the draw call, but the render pipeline owns that
      * state now, so the toggle silently did nothing (and left vanilla's state tracker out of sync).
@@ -88,6 +123,19 @@ public interface IRenderer {
                     .build())
                     .expectedBufferSize(256)
                     .build());
+
+    /**
+     * Beacon beam layers that ignore depth, keyed by texture and translucency like vanilla's
+     * {@link RenderLayers#beaconBeam(Identifier, boolean)}.
+     */
+    BiFunction<Identifier, Boolean, RenderLayer> BEACON_BEAM = Util.memoize(
+            (texture, translucent) -> ((IRenderLayer) RenderLayers.LINES).cheesecake$createRenderLayer(
+                    translucent ? "renderLayer/cheesecake_beacon_beam_translucent"
+                            : "renderLayer/cheesecake_beacon_beam_opaque",
+                    RenderSetup.builder(translucent ? BEACON_BEAM_TRANSLUCENT : BEACON_BEAM_OPAQUE)
+                            .texture("Sampler0", texture)
+                            .translucent()
+                            .build()));
 
     float[] color = new float[] { 1.0F, 1.0F, 1.0F, 255.0F };
 
@@ -112,6 +160,17 @@ public interface IRenderer {
         BuiltBuffer builtBuffer = bufferBuilder.endNullable();
         if (builtBuffer != null) {
             (ignoreDepth ? linesNoDepthRenderLayer : linesWithDepthRenderLayer).draw(builtBuffer);
+        }
+    }
+
+    static BufferBuilder startBlockQuads() {
+        return tessellator.begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_COLOR_TEXTURE_LIGHT_NORMAL);
+    }
+
+    static void endBuffer(BufferBuilder bufferBuilder, RenderLayer renderLayer) {
+        BuiltBuffer builtBuffer = bufferBuilder.endNullable();
+        if (builtBuffer != null) {
+            renderLayer.draw(builtBuffer);
         }
     }
 
@@ -196,5 +255,23 @@ public interface IRenderer {
                 start.x - vpX, start.y - vpY, start.z - vpZ,
                 end.x - vpX, end.y - vpY, end.z - vpZ,
                 lineWidth);
+    }
+
+    static void emitTexturedVertex(BufferBuilder bufferBuilder, MatrixStack.Entry entry, float x, float y, float z,
+            int color, float u, float v, float nx, float ny, float nz) {
+        bufferBuilder.vertex(entry, x, y, z)
+                .color(color)
+                .texture(u, v)
+                .overlay(OverlayTexture.DEFAULT_UV)
+                .light(LightmapTextureManager.MAX_LIGHT_COORDINATE)
+                .normal(entry, nx, ny, nz);
+    }
+
+    static RenderLayer beaconBeam(Identifier texture, boolean translucent) {
+        return BEACON_BEAM.apply(texture, translucent);
+    }
+
+    static RenderLayer beaconBeam(Identifier texture, boolean translucent, boolean ignoreDepth) {
+        return ignoreDepth ? beaconBeam(texture, translucent) : RenderLayers.beaconBeam(texture, translucent);
     }
 }

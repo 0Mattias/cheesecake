@@ -31,8 +31,27 @@ public class MixinRenderPipelines implements IRenderPipelines {
     @Shadow
     private static RenderPipeline.Snippet RENDERTYPE_LINES_SNIPPET;
 
+    @Final
+    @Shadow
+    private static RenderPipeline.Snippet TRANSFORMS_PROJECTION_FOG_SNIPPET;
+
+    @Shadow
+    private static RenderPipeline register(RenderPipeline pipeline) {
+        return null;
+    }
+
     @Override
     public RenderPipeline.Snippet cheesecake$getLinesSnippet() {
         return RENDERTYPE_LINES_SNIPPET;
+    }
+
+    @Override
+    public RenderPipeline.Snippet cheesecake$getTransformsProjectionFogSnippet() {
+        return TRANSFORMS_PROJECTION_FOG_SNIPPET;
+    }
+
+    @Override
+    public RenderPipeline cheesecake$registerPipeline(RenderPipeline pipeline) {
+        return register(pipeline);
     }
 }

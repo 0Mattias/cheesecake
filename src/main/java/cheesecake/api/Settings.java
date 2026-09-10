@@ -815,12 +815,8 @@ public final class Settings {
     public final Setting<Boolean> renderGoalIgnoreDepth = new Setting<>(true);
 
     /**
-     * Renders X/Z type Goals with the vanilla beacon beam effect. Combining this
-     * with
-     * {@link #renderGoalIgnoreDepth} will cause strange render clipping.
-     * <p>
-     * NOT IMPLEMENTED on this fork: the beacon beam was not carried over in the port to 1.21.11,
-     * so this setting currently has no effect and the goal box is drawn either way.
+     * Renders X/Z type Goals as a beacon beam instead of the full-height goal box. Like the box, the
+     * beam ignores depth when {@link #renderGoalIgnoreDepth} is on.
      */
     public final Setting<Boolean> renderGoalXZBeacon = new Setting<>(false);
 

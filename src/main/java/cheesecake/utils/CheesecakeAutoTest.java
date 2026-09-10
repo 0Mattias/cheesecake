@@ -62,6 +62,11 @@ public final class CheesecakeAutoTest implements AbstractGameEventListener {
      */
     private static final int DISTANCE = 120;
     private static final int WARMUP_TICKS = 100;
+    /**
+     * Tick in the world at which the goal rendering switches from the box to the beacon beam, so a
+     * single run draws both. The trip takes about 600 ticks on CI.
+     */
+    private static final int BEACON_TICKS = 300;
     private static final int MAX_TICKS = 4800;
     private static final int MAX_TICKS_BEFORE_START = 6000;
     private static final int MAX_CALC_FAILURES = 8;
@@ -140,6 +145,12 @@ public final class CheesecakeAutoTest implements AbstractGameEventListener {
             log("starting at " + this.start + ", goal " + this.goal);
             this.cheesecake.getCustomGoalProcess().setGoalAndPath(this.goal);
             return;
+        }
+        if (this.ticksInWorld == BEACON_TICKS) {
+            // The goal is a GoalXZ, so from here on every frame draws the beam through the custom
+            // pipelines instead of the box through the line layers.
+            log("switching the goal rendering from the box to the beacon beam");
+            Cheesecake.settings().renderGoalXZBeacon.value = true;
         }
 
         BetterBlockPos feet = ctx.playerFeet();

@@ -59,12 +59,12 @@ Cheesecake began as a port of Baritone's 1.19.4 branch to Minecraft 1.21.11. Ups
 
 - Cheesecake is one Fabric project. There are no Forge, NeoForge or launchwrapper builds, no ProGuard pass, and no separate API jar for other mods to compile against.
 - Block drops are resolved by reading the loot tables shipped inside the game and mod jars, rather than by rolling them through a simulated server. As a result `#mine` knows what modded blocks drop as well. Loot tables defined only in a server-side data pack cannot be seen from the client; blocks that use one are assumed to drop themselves.
-- The `renderGoalXZBeacon` setting has no effect. The goal box is rendered instead of the beacon beam.
+- The `renderGoalXZBeacon` setting draws the beacon beam instead of the goal box, as its description says. Upstream's 1.21.11 branch draws the beam on top of the box for every X/Z goal and never reads the setting.
 - The `shortBaritonePrefix` setting is called `shortCheesecakePrefix`.
 
 ### Verification
 
-Every push is compiled against Minecraft 1.21.11, the unit tests are run, the jar is checked for correct remapping and packaging, and a client is launched under a virtual display to confirm that every mixin applies. A second client then creates a survival world from a fixed seed and walks a fixed distance with the pathfinder, which exercises world loading, chunk caching, path calculation and movement end to end. What that does not cover is the rest of the feature set in play: elytra flight and the item counts used by `#mine` are the most recently changed parts, and reports on either are welcome.
+Every push is compiled against Minecraft 1.21.11, the unit tests are run, the jar is checked for correct remapping and packaging, and a client is launched under a virtual display to confirm that every mixin applies. A second client then creates a survival world from a fixed seed and walks a fixed distance with the pathfinder, which exercises world loading, chunk caching, path calculation and movement end to end, and switches the goal from the box to the beacon beam partway so both render paths run. What that does not cover is the rest of the feature set in play: elytra flight and the item counts used by `#mine` are the most recently changed parts, and reports on either are welcome.
 
 ## Building
 
