@@ -5,24 +5,35 @@ on:
     branches:
       - main
       - 'claude/**'
+    tags:
+      - 'v*'
   pull_request:
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+        with:
+          # The mod's version comes from `git describe --tags`, so the build needs the tags and
+          # enough history to reach one. A tag push therefore produces cheesecake-X.Y.Z.jar and a
+          # branch push cheesecake-X.Y.Z-N-gSHA.jar, which keeps snapshots distinguishable.
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Set up JDK 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '21'
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Build
         run: ./gradlew build --stacktrace --no-daemon
@@ -57,18 +68,28 @@ jobs:
           # The icon fabric.mod.json points at has to actually be in the jar.
           unzip -l "$jar" | grep -q 'assets/cheesecake/icon.png'
 
+          # A tag build must be named after the tag, otherwise the tags were not fetched and the
+          # jar would silently carry the fallback version from gradle.properties.
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            expected="cheesecake-${GITHUB_REF_NAME#v}.jar"
+            if [ "$(basename "$jar")" != "$expected" ]; then
+              echo "::error::expected $expected for tag ${GITHUB_REF_NAME}, got $(basename "$jar")"
+              exit 1
+            fi
+          fi
+
           echo "jar checks passed"
 
       - name: Upload mod jar
         if: success()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: cheesecake-jar
           path: build/libs/*.jar
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-results
           path: build/reports/tests/test
@@ -83,16 +104,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up JDK 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '21'
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Install a headless GL stack
         run: |
@@ -139,8 +160,70 @@ jobs:
 
       - name: Upload client log
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: client-log
           path: client.log
           if-no-files-found: ignore
+
+  # A pushed vX.Y.Z tag becomes a GitHub release, but only once the jar has been built, checked
+  # and loaded by a real client above. The tag message's body is the release notes; a tag with
+  # no body gets GitHub's generated notes. A pre-release suffix (v0.3.0-rc.1) publishes a
+  # pre-release.
+  release:
+    name: publish release
+    if: github.ref_type == 'tag'
+    needs: [build, smoke]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Download the built jar
+        uses: actions/download-artifact@v8
+        with:
+          name: cheesecake-jar
+          path: dist
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          version="${tag#v}"
+          jar=$(ls dist/*.jar | grep -v -- '-sources' | head -1)
+          name=$(basename "$jar")
+          if [ "$name" != "cheesecake-${version}.jar" ]; then
+            echo "::error::built jar $name does not match tag $tag"
+            exit 1
+          fi
+
+          (cd dist && sha256sum "$name" > SHA256SUMS)
+          sum=$(cut -d' ' -f1 dist/SHA256SUMS)
+
+          body=$(git tag -l --format='%(contents:body)' "$tag")
+          if [ -z "$(printf '%s' "$body" | tr -d '[:space:]')" ]; then
+            body=$(gh api "repos/${GITHUB_REPOSITORY}/releases/generate-notes" -f tag_name="$tag" --jq .body)
+          fi
+
+          {
+            printf '%s\n\n' "$body"
+            printf 'Requires Minecraft 1.21.11, Fabric Loader and Java 21. Copy the jar into the `mods` folder of a Fabric profile.\n\n'
+            printf 'SHA-256 of `%s`: `%s`\n' "$name" "$sum"
+          } > notes.md
+
+          prerelease=()
+          case "$version" in *-*) prerelease=(--prerelease) ;; esac
+
+          gh release create "$tag" "$jar" dist/SHA256SUMS \
+            --verify-tag \
+            --title "Cheesecake ${version}" \
+            --notes-file notes.md \
+            "${prerelease[@]}"
+          echo "published ${tag}: ${name} (${sum})"
