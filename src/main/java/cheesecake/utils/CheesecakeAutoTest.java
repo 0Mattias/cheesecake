@@ -43,7 +43,6 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.LevelSettings;
 import net.minecraft.world.level.WorldDataConfiguration;
-import net.minecraft.world.level.gamerules.GameRules;
 import net.minecraft.world.level.levelgen.WorldOptions;
 import net.minecraft.world.level.levelgen.presets.WorldPresets;
 import java.util.ArrayDeque;
@@ -156,30 +155,33 @@ public final class CheesecakeAutoTest implements AbstractGameEventListener {
             // nothing would ever dismiss it. Opt out before the client picks its first screen, and if
             // it is already up, do what its Continue button does.
             mc.options.onboardAccessibility = false;
-            if (mc.screen instanceof AccessibilityOnboardingScreen) {
+            if (mc.gui.screen() instanceof AccessibilityOnboardingScreen) {
                 log("dismissing the accessibility onboarding screen");
                 mc.options.onboardingAccessibilityFinished();
-                mc.setScreen(new TitleScreen());
+                mc.gui.setScreen(new TitleScreen());
                 return;
             }
-            if (mc.screen instanceof TitleScreen && mc.getOverlay() == null) {
+            if (mc.gui.screen() instanceof TitleScreen && mc.gui.overlay() == null) {
                 this.started = true;
                 configureOptions(mc.options);
+                if (!mc.gui.hud.isHidden()) {
+                    mc.gui.hud.toggle(); // what F1 does; keeps the HUD out of the screenshots
+                }
                 createWorld(mc);
             } else if (this.ticksBeforeStart % 100 == 0) {
-                log("waiting for the title screen, tick " + this.ticksBeforeStart + ", screen=" + name(mc.screen) + ", overlay=" + name(mc.getOverlay()));
+                log("waiting for the title screen, tick " + this.ticksBeforeStart + ", screen=" + name(mc.gui.screen()) + ", overlay=" + name(mc.gui.overlay()));
             }
             if (this.ticksBeforeStart > MAX_TICKS_BEFORE_START) {
-                fail("never reached the title screen; screen=" + name(mc.screen) + ", overlay=" + name(mc.getOverlay()), null);
+                fail("never reached the title screen; screen=" + name(mc.gui.screen()) + ", overlay=" + name(mc.gui.overlay()), null);
             }
             return;
         }
         if (event.getType() != TickEvent.Type.IN || mc.player == null || mc.level == null) {
             return;
         }
-        if (mc.screen instanceof PauseScreen) {
+        if (mc.gui.screen() instanceof PauseScreen) {
             // The pause menu would stop the integrated server ticking.
-            mc.setScreen(null);
+            mc.gui.setScreen(null);
         }
         this.ticksInWorld++;
         if (this.ticksInWorld < WARMUP_TICKS) {
@@ -239,7 +241,6 @@ public final class CheesecakeAutoTest implements AbstractGameEventListener {
         options.particles().set(ParticleStatus.MINIMAL);
         options.biomeBlendRadius().set(0);
         options.pauseOnLostFocus = false;
-        options.hideGui = true;
     }
 
     private static void createWorld(Minecraft mc) {
@@ -248,10 +249,8 @@ public final class CheesecakeAutoTest implements AbstractGameEventListener {
         LevelSettings info = new LevelSettings(
                 name,
                 GameType.SURVIVAL,
-                false,
-                Difficulty.PEACEFUL,
+                new LevelSettings.DifficultySettings(Difficulty.PEACEFUL, false, false),
                 true,
-                new GameRules(WorldDataConfiguration.DEFAULT.enabledFeatures()),
                 WorldDataConfiguration.DEFAULT
         );
         mc.createWorldOpenFlows().createFreshLevel(
@@ -259,7 +258,7 @@ public final class CheesecakeAutoTest implements AbstractGameEventListener {
                 info,
                 new WorldOptions(AutoTestContext.SEED, true, false),
                 WorldPresets::createNormalWorldDimensions,
-                mc.screen
+                mc.gui.screen()
         );
     }
 

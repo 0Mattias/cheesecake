@@ -26,6 +26,6 @@ public class CheesecakeToast {
     private static final SystemToast.SystemToastId CHEESECAKE_TOAST_TYPE = new SystemToast.SystemToastId(5000L);
 
     public static void addOrUpdate(Component title, Component subtitle) {
-        SystemToast.add(Minecraft.getInstance().getToastManager(), CHEESECAKE_TOAST_TYPE, title, subtitle);
+        SystemToast.add(Minecraft.getInstance().gui.toastManager(), CHEESECAKE_TOAST_TYPE, title, subtitle);
     }
 }

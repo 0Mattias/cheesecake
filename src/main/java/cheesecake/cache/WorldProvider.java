@@ -29,9 +29,9 @@ import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import cheesecake.api.utils.Pair;
 import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.resources.Identifier;
-import net.minecraft.util.Tuple;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.storage.LevelResource;
 
@@ -72,8 +72,8 @@ public class WorldProvider implements IWorldProvider {
      */
     public final void initWorld(Level world) {
         this.getSaveDirectories(world).ifPresent(dirs -> {
-            final Path worldDir = dirs.getA();
-            final Path readmeDir = dirs.getB();
+            final Path worldDir = dirs.first();
+            final Path readmeDir = dirs.second();
 
             try {
                 // lol wtf is this cheesecake folder in my minecraft save?
@@ -123,7 +123,7 @@ public class WorldProvider implements IWorldProvider {
      *         dir, or {@link Optional#empty()} if
      *         the world isn't valid for caching.
      */
-    private Optional<Tuple<Path, Path>> getSaveDirectories(Level world) {
+    private Optional<Pair<Path, Path>> getSaveDirectories(Level world) {
         Path worldDir;
         Path readmeDir;
 
@@ -163,7 +163,7 @@ public class WorldProvider implements IWorldProvider {
             readmeDir = cheesecake.getDirectory();
         }
 
-        return Optional.of(new Tuple<>(worldDir, readmeDir));
+        return Optional.of(new Pair<>(worldDir, readmeDir));
     }
 
     /**

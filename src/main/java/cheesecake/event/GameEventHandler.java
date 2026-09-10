@@ -119,7 +119,7 @@ public final class GameEventHandler implements IEventBus, Helper {
                 cheesecake.getWorldProvider().ifWorldLoaded(worldData -> {
                     final Level world = cheesecake.getPlayerContext().world();
                     ChunkPos pos = event.getChunkPos();
-                    worldData.getCachedWorld().queueForPacking(world.getChunk(pos.x, pos.z));
+                    worldData.getCachedWorld().queueForPacking(world.getChunk(pos.x(), pos.z()));
                 });
             }
         }

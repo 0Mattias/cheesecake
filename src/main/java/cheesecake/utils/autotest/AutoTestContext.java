@@ -25,7 +25,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
-import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.server.IntegratedServer;
@@ -118,7 +117,7 @@ public final class AutoTestContext {
                     log("server: " + text);
                     // sendError wraps its message in red; plain feedback carries no colour.
                     TextColor color = message.getStyle().getColor();
-                    if (color != null && color.getValue() == ChatFormatting.RED.getColor()) {
+                    if (color != null && color.getValue() == TextColor.RED.getValue()) {
                         errors.add(text);
                     }
                 }

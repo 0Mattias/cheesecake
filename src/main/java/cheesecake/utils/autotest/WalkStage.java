@@ -115,7 +115,7 @@ public final class WalkStage extends Stage {
             Path dir = this.t.mc.gameDirectory.toPath().resolve("screenshots");
             Files.createDirectories(dir);
             Path file = dir.resolve("goal-beacon.png");
-            Screenshot.takeScreenshot(this.t.mc.getMainRenderTarget(), image -> {
+            Screenshot.takeScreenshot(this.t.mc.gameRenderer.mainRenderTarget(), image -> {
                 try (NativeImage img = image) {
                     int count = 0;
                     for (int y = 0; y < img.getHeight(); y++) {

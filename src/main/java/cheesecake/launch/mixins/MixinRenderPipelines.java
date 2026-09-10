@@ -46,7 +46,7 @@ public class MixinRenderPipelines implements IRenderPipelines {
     }
 
     @Override
-    public RenderPipeline.Snippet cheesecake$getTransformsProjectionFogSnippet() {
+    public RenderPipeline.Snippet cheesecake$getMatricesFogSnippet() {
         return MATRICES_FOG_SNIPPET;
     }
 

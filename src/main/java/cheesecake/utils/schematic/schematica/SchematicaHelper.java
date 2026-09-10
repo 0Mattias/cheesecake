@@ -22,7 +22,7 @@ import com.github.lunatrius.schematica.Schematica;
 import com.github.lunatrius.schematica.proxy.ClientProxy;
 import java.util.Optional;
 import net.minecraft.core.BlockPos;
-import net.minecraft.util.Tuple;
+import cheesecake.api.utils.Pair;
 
 public enum SchematicaHelper {
     ;
@@ -36,9 +36,9 @@ public enum SchematicaHelper {
         }
     }
 
-    public static Optional<Tuple<IStaticSchematic, BlockPos>> getOpenSchematic() {
+    public static Optional<Pair<IStaticSchematic, BlockPos>> getOpenSchematic() {
         return Optional.ofNullable(ClientProxy.schematic)
-                .map(world -> new Tuple<>(new SchematicAdapter(world), world.position));
+                .map(world -> new Pair<>(new SchematicAdapter(world), world.position));
     }
 
 }

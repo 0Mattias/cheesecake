@@ -28,7 +28,7 @@ public interface IRenderPipelines {
 
     RenderPipeline.Snippet cheesecake$getLinesSnippet();
 
-    RenderPipeline.Snippet cheesecake$getTransformsProjectionFogSnippet();
+    RenderPipeline.Snippet cheesecake$getMatricesFogSnippet();
 
     RenderPipeline cheesecake$registerPipeline(RenderPipeline pipeline);
 }

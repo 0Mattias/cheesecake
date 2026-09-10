@@ -23,7 +23,7 @@ import cheesecake.api.command.argument.ICommandArgument;
 import cheesecake.api.command.registry.Registry;
 import java.util.List;
 import java.util.stream.Stream;
-import net.minecraft.util.Tuple;
+import cheesecake.api.utils.Pair;
 
 /**
  * @author Brady
@@ -43,9 +43,9 @@ public interface ICommandManager {
 
     boolean execute(String string);
 
-    boolean execute(Tuple<String, List<ICommandArgument>> expanded);
+    boolean execute(Pair<String, List<ICommandArgument>> expanded);
 
-    Stream<String> tabComplete(Tuple<String, List<ICommandArgument>> expanded);
+    Stream<String> tabComplete(Pair<String, List<ICommandArgument>> expanded);
 
     Stream<String> tabComplete(String prefix);
 }

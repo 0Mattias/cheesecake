@@ -188,7 +188,7 @@ public class ElytraProcess extends CheesecakeProcessHelper implements IElytraPro
         }
         if (ctx.player().isFallFlying() && this.state != State.LANDING && (this.behavior.pathManager.isComplete() || safetyLanding)) {
             final BetterBlockPos last = this.behavior.pathManager.path.getLast();
-            if (last != null && (playerPos().distanceToSqr(last.getCenter()) < (48 * 48) || safetyLanding) && (!goingToLandingSpot || (safetyLanding && this.landingSpot == null))) {
+            if (last != null && (last.distToCenterSqr(playerPos()) < (48 * 48) || safetyLanding) && (!goingToLandingSpot || (safetyLanding && this.landingSpot == null))) {
                 if (this.landingSearchState == null) {
                     logDirect("Path complete, searching for safe landing spot...");
                 }
@@ -204,7 +204,7 @@ public class ElytraProcess extends CheesecakeProcessHelper implements IElytraPro
                 }
             }
 
-            if (last != null && playerPos().distanceToSqr(last.getCenter()) < 1) {
+            if (last != null && last.distToCenterSqr(playerPos()) < 1) {
                 if (Cheesecake.settings().notificationOnPathComplete.value && !reachedGoal) {
                     logNotification("Pathing complete", false);
                 }

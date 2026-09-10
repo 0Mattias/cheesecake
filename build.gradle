@@ -16,13 +16,13 @@
  */
 
 plugins {
-    id 'fabric-loom' version '1.15-SNAPSHOT'
+    id 'net.fabricmc.fabric-loom' version "${loom_version}"
     id 'maven-publish'
 }
 
 allprojects {
     apply plugin: 'java'
-    apply plugin: 'fabric-loom'
+    apply plugin: 'net.fabricmc.fabric-loom'
     apply plugin: "maven-publish"
 
     base { archivesName = rootProject.archives_base_name }
@@ -51,10 +51,10 @@ allprojects {
         }
     }
 
-    // Only what a Fabric + yarn build actually needs. The parchment, multimc, impact and
-    // spongepowered repos were inherited from upstream's multi-loader build; parchmentmc in
-    // particular now refuses connections, and Gradle treats that as a hard failure rather than
-    // moving on to the next repository.
+    // Only what a Fabric build actually needs. The parchment, multimc, impact and spongepowered
+    // repos were inherited from upstream's multi-loader build; parchmentmc in particular now
+    // refuses connections, and Gradle treats that as a hard failure rather than moving on to the
+    // next repository.
     repositories {
         maven {
             name = 'fabric-maven'
@@ -68,10 +68,10 @@ allprojects {
     }
 
     dependencies {
-    implementation 'com.google.code.findbugs:jsr305:3.0.2'
+        implementation 'com.google.code.findbugs:jsr305:3.0.2'
+        // Minecraft ships with Mojang's names since 26.1, so there are no mappings to apply.
         minecraft "com.mojang:minecraft:${project.minecraft_version}"
-        mappings loom.officialMojangMappings()
-        
+
         implementation "dev.babbaj:nether-pathfinder:${project.nether_pathfinder_version}"
         include "dev.babbaj:nether-pathfinder:${project.nether_pathfinder_version}"
     }
@@ -92,8 +92,8 @@ base { archivesName = rootProject.archives_base_name }
 
 dependencies {
     implementation 'com.google.code.findbugs:jsr305:3.0.2'
-    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
-    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+    implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
 
     testImplementation 'junit:junit:4.13.2'
 }

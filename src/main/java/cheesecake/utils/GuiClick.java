@@ -63,15 +63,15 @@ public class GuiClick extends Screen implements Helper {
     }
 
     @Override
-    public void render(net.minecraft.client.gui.GuiGraphics context, int mouseX, int mouseY, float partialTicks) {
+    public void extractRenderState(net.minecraft.client.gui.GuiGraphicsExtractor context, int mouseX, int mouseY, float partialTicks) {
         double mx = mc.mouseHandler.xpos();
         double my = mc.mouseHandler.ypos();
 
         my = mc.getWindow().getScreenHeight() - my;
         my *= mc.getWindow().getHeight() / (double) mc.getWindow().getScreenHeight();
         mx *= mc.getWindow().getWidth() / (double) mc.getWindow().getScreenWidth();
-        Vec3 near = toWorld(mx, my, 0);
-        Vec3 far = toWorld(mx, my, 1); // "Use 0.945 that's what stack overflow says" - leijurv
+        Vec3 near = toWorld(mx, my, 1);
+        Vec3 far = toWorld(mx, my, 0); // "Use 0.945 that's what stack overflow says" - leijurv
 
         if (near != null && far != null) {
             Vec3 viewerPos = new Vec3(PathRenderer.posX(), PathRenderer.posY(), PathRenderer.posZ());
@@ -85,7 +85,7 @@ public class GuiClick extends Screen implements Helper {
     }
 
     @Override
-    public void renderBackground(net.minecraft.client.gui.GuiGraphics context, int mouseX, int mouseY,
+    public void extractBackground(net.minecraft.client.gui.GuiGraphicsExtractor context, int mouseX, int mouseY,
             float partialTicks) {
         // Deliberately empty: vanilla would blur and darken the world behind the screen, which makes it
         // impossible to see the blocks you are trying to click.

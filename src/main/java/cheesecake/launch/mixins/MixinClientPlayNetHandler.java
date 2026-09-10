@@ -118,7 +118,7 @@ public class MixinClientPlayNetHandler {
             LocalPlayer player = icheesecake.getPlayerContext().player();
             if (player != null && player.connection == (ClientPacketListener) (Object) this) {
                 icheesecake.getGameEventHandler().onChunkEvent(
-                        new ChunkEvent(EventState.PRE, ChunkEvent.Type.UNLOAD, packet.pos().x, packet.pos().z));
+                        new ChunkEvent(EventState.PRE, ChunkEvent.Type.UNLOAD, packet.pos().x(), packet.pos().z()));
             }
         }
     }
@@ -129,7 +129,7 @@ public class MixinClientPlayNetHandler {
             LocalPlayer player = icheesecake.getPlayerContext().player();
             if (player != null && player.connection == (ClientPacketListener) (Object) this) {
                 icheesecake.getGameEventHandler().onChunkEvent(
-                        new ChunkEvent(EventState.POST, ChunkEvent.Type.UNLOAD, packet.pos().x, packet.pos().z));
+                        new ChunkEvent(EventState.POST, ChunkEvent.Type.UNLOAD, packet.pos().x(), packet.pos().z()));
             }
         }
     }
@@ -171,7 +171,7 @@ public class MixinClientPlayNetHandler {
             return;
         }
         cheesecake.getGameEventHandler().onBlockChange(new BlockChangeEvent(
-                new ChunkPos(changes.get(0).first()),
+                ChunkPos.containing(changes.get(0).first()),
                 changes));
     }
 
