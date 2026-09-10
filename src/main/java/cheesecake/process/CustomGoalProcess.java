@@ -103,6 +103,13 @@ public final class CustomGoalProcess extends CheesecakeProcessHelper implements 
                     return new PathingCommand(this.goal, PathingCommandType.CANCEL_AND_SET_GOAL);
                 }
                 if (this.goal == null || (this.goal.isInGoal(ctx.playerFeet()) && this.goal.isInGoal(cheesecake.getPathingBehavior().pathStart()))) {
+                    if (this.goal != null && cheesecake.getPathingBehavior().getCurrent() != null) {
+                        // The feet are in the goal but the executor has not reported the path finished:
+                        // it does that later this tick, after the processes have run. Cancelling now
+                        // would turn the AT_GOAL event into CANCELED for everyone listening, so leave
+                        // the segment alone; next tick there is nothing left to cancel.
+                        return new PathingCommand(this.goal, PathingCommandType.SET_GOAL_AND_PATH);
+                    }
                     onLostControl(); // we're there xd
                     if (Cheesecake.settings().disconnectOnArrival.value) {
                         ctx.player().networkHandler.getConnection().disconnect(net.minecraft.text.Text.literal("Disconnected by Baritone"));

@@ -6,7 +6,7 @@ Cheesecake is Baritone for Minecraft 1.21.11 on Fabric: a single Fabric project 
 
 - JDK 21 is required and Gradle fetches everything else. With Homebrew's formula on macOS: `export JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home`.
 - `./gradlew build` compiles, runs the unit tests and writes `build/libs/cheesecake-<version>.jar`; `./gradlew test` runs only the tests. About a minute once dependencies are cached.
-- `CHEESECAKE_AUTO_TEST=true ./gradlew runClient` runs the in-world test locally: a game window opens, a world is created under `run/saves`, the pathfinder walks 120 blocks, and the client exits by itself. Leave the window alone. The routine is `CheesecakeAutoTest`.
+- `CHEESECAKE_AUTO_TEST=true ./gradlew runClient` runs the in-world test locally: a game window opens, a world is created under `run/saves`, the stages in `cheesecake.utils.autotest` run one after another (a walk, the control socket, vine climbs, two `#mine` runs, four elytra flights) and the client exits by itself after several minutes. Leave the window alone. The driver is `CheesecakeAutoTest`; a stage builds its scenario with server commands and fails with a message that names the stage. `CHEESECAKE_AUTO_TEST_ONLY=elytra-nether-below-roof` (comma-separated stage names) runs only those stages after the world is prepared and the platform built, which is the way to iterate on one of them.
 - Unit tests are JUnit 4 under `src/test/java`. The mapped Minecraft jar is on the test classpath, so tests can read game data (`LootTableDropsTest` reads the vanilla loot tables) but cannot bootstrap the registries.
 
 ## Mappings
@@ -42,7 +42,7 @@ Set `mod_version` in `gradle.properties`, commit and push, then `git tag -a vX.Y
 - Keep upstream's structure and names so future backports diff cleanly; do not reformat files wholesale.
 - `src/schematica_api` is compile-only. CI fails the build if those classes reach the jar.
 - Documentation has one home per audience: README.md and USAGE.md for players, FEATURES.md for what the pathfinder can do, SETUP.md for developers, AI_AGENT_README.md for programs driving the bot through chat or the control socket.
-- Deliberate differences from upstream are recorded in the README's status section. Two to know about: block drops come from the loot-table JSON in the jars (`LootTableDrops`) rather than from rolling tables through a faked server, and the `CANCELED` path event fires only when a path or calculation was actually cancelled.
+- Deliberate differences from upstream are recorded in the README's status section. Three to know about: block drops come from the loot-table JSON in the jars (`LootTableDrops`) rather than from rolling tables through a faked server; the `CANCELED` path event fires only when a path or calculation was actually cancelled; and `CustomGoalProcess` lets a finishing path report `AT_GOAL` instead of cancelling it in the same tick, which is what upstream does.
 
 ## Things that cost time once
 
@@ -54,4 +54,4 @@ Set `mod_version` in `gradle.properties`, commit and push, then `git tag -a vX.Y
 
 ## Open work
 
-Follow-ups are tracked as GitHub issues rather than in this file. The ones that need a person in the game are the elytra flights, the `#mine` item counts and vine climbing, because the in-world test only covers walking.
+Follow-ups are tracked as GitHub issues rather than in this file. The in-world test covers walking, the control socket, vines, `#mine` counts and elytra flights; building, farming and following still have only unit tests.

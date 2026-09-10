@@ -166,13 +166,13 @@ jobs:
           path: client.log
           if-no-files-found: ignore
 
-  # A pushed vX.Y.Z tag becomes a GitHub release, but only once the jar has been built, checked,
-  # loaded by a real client and driven through the pathing test above. The tag message's body is the release notes; a tag with
-  # no body gets GitHub's generated notes. A pre-release suffix (v0.3.0-rc.1) publishes a
-  # pre-release.
   # The smoke test proves the mod loads. This proves it works: the client creates a survival world
-  # from a fixed seed, the pathfinder walks a fixed distance, and the game exits when the goal is
-  # reached. See CheesecakeAutoTest for the routine.
+  # from a fixed seed and runs the stages in cheesecake.utils.autotest one after another. A walk
+  # with the goal drawn as the box and then as the beacon beam, with a screenshot that has to show
+  # the beam; a trip driven over the control socket; climbs up free-hanging, twisting and weeping
+  # vines; two #mine runs that have to count what the blocks drop; and elytra flights above the
+  # build limit, through the Nether and over its roof. Each stage builds what it needs with server
+  # commands. The game exits with PASS once every stage passed. See CheesecakeAutoTest.
   autotest:
     name: in-world pathing test
     runs-on: ubuntu-latest
@@ -194,7 +194,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y xvfb libgl1-mesa-dri libglx-mesa0 mesa-utils libopenal1
 
-      - name: Create a world and path through it
+      - name: Create a world and run the stages
         env:
           LIBGL_ALWAYS_SOFTWARE: '1'
           GALLIUM_DRIVER: llvmpipe
@@ -206,21 +206,22 @@ jobs:
           code=$?
           echo "$code" > autotest.exit
           echo "gradle exited $code"
-          grep -n "\[cheesecake-autotest\]" autotest.log | tail -60 || true
+          grep -nE "\[cheesecake-autotest\] (stage |PASS|FAIL)" autotest.log || true
 
-      - name: Assert the goal was reached
+      - name: Assert every stage passed
         run: |
           set -euo pipefail
           if ! grep -q "\[cheesecake-autotest\] PASS" autotest.log; then
-            echo "::error::the pathing test did not pass - see the autotest lines above and the uploaded log"
-            grep -nE "FAIL|Exception|Caused by" autotest.log | head -40 || true
+            echo "::error::the in-world test did not pass - see the stage lines above and the uploaded log"
+            grep -nE "\[cheesecake-autotest\] FAIL|Exception|Caused by" autotest.log | head -40 || true
+            grep -n "\[cheesecake-autotest\]" autotest.log | tail -80 || true
             exit 1
           fi
           if [ "$(cat autotest.exit)" != "0" ]; then
             echo "::error::the client exited with status $(cat autotest.exit) after passing"
             exit 1
           fi
-          echo "pathing test passed"
+          echo "in-world test passed"
 
       - name: Upload client log
         if: always()
@@ -230,6 +231,20 @@ jobs:
           path: autotest.log
           if-no-files-found: ignore
 
+      # The walk stage photographs the goal beacon beam; the picture is the one visual check a
+      # person can still make from a CI run.
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: autotest-screenshots
+          path: run/screenshots/*.png
+          if-no-files-found: ignore
+
+  # A pushed vX.Y.Z tag becomes a GitHub release, but only once the jar has been built, checked,
+  # loaded by a real client and driven through the in-world test above. The tag message's body is
+  # the release notes; a tag with no body gets GitHub's generated notes. A pre-release suffix
+  # (v0.3.0-rc.1) publishes a pre-release.
   release:
     name: publish release
     if: github.ref_type == 'tag'

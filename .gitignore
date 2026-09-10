@@ -2,7 +2,7 @@
 **/*.swp
 
 run/
-autotest/
+/autotest/
 dist/
 volderyarn/
 
