@@ -16,11 +16,9 @@ Fabric API is not needed. The mod runs on the client only and does nothing when 
 
 ## Installation
 
-No releases have been tagged yet. Every push to `main` builds the mod and launches a headless client to confirm that it loads, and the resulting jar is attached to the run.
+Download the jar from the most recent entry on the [Releases](https://github.com/0Mattias/cheesecake/releases) page and copy it into the `mods` folder of a Fabric 1.21.11 profile.
 
-1. Open the [Actions](https://github.com/0Mattias/cheesecake/actions) page and select the most recent successful run on `main`.
-2. Download the `cheesecake-jar` artifact and unpack it.
-3. Copy the jar into the `mods` folder of a Fabric 1.21.11 profile.
+Every push to `main` also builds the mod and launches a headless client to confirm that it loads. To try a change that has not been released yet, open the [Actions](https://github.com/0Mattias/cheesecake/actions) page, select the most recent successful run on `main`, and download the `cheesecake-jar` artifact.
 
 Alternatively, build the jar yourself as described under [Building](#building).
 
