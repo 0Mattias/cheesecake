@@ -189,14 +189,17 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
         final BlockPos adjustedSrc = src.below(minY);
         final BlockPos adjustedDst = dst.below(minY);
         boolean generate = Cheesecake.settings().elytraPredictTerrain.value && this.dimension == Level.NETHER;
-        // A search that generates terrain inserts the chunks it makes, so it is a writer. So is
-        // one that has a region cache to read from: the first time it touches a region it parses
-        // the file and inserts every chunk in it, and the library takes no lock of its own for
-        // that -- this lock is the only thing between those inserts and the solver's lookups.
-        // Only a search with neither is a pure reader that can run beside them.
-        boolean writes = generate || this.cached;
-        Lock l = writes ? writeLock : readLock;
-        ExecutorService exec = writes ? writeExecutor : readExecutor;
+        // A search that generates terrain inserts the chunks it makes, so it is a writer. A search
+        // that does not is treated as a reader, as upstream treats it, although it is not quite
+        // one: with a region cache the library parses and inserts a region's chunks the first time
+        // a search reaches it, and the air-node lookup for the start and goal goes through the
+        // chunk table without the library's own mutex. That is a race with the solver's lookups
+        // and belongs to the library. Taking the write lock for these searches instead was tried
+        // and grounded the in-world test's return flight in four runs of ten: while a writer holds
+        // the lock the game thread cannot take the read side, so the player is not steered, and a
+        // flight recalculates its segments far too often to be blind for each one.
+        Lock l = generate ? writeLock : readLock;
+        ExecutorService exec = generate ? writeExecutor : readExecutor;
         return CompletableFuture.supplyAsync(() -> {
             l.lock();
             try {
