@@ -233,7 +233,8 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
         }
         final double adjustedStartY = startY - this.minY;
         final double adjustedEndY = endY - this.minY;
-        return NetherPathfinder.isVisible(this.context, NetherPathfinder.CACHE_MISS_SOLID, startX, adjustedStartY, startZ, endX, adjustedEndY, endZ);
+        return NetherPathfinder.isVisible(this.context, NetherPathfinder.CACHE_MISS_SOLID, startX, adjustedStartY, startZ,
+                UnusableRays.offBoundary(endX, startX), UnusableRays.offBoundary(adjustedEndY, adjustedStartY), UnusableRays.offBoundary(endZ, startZ));
     }
 
     /**
@@ -253,7 +254,8 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
         }
         final Vec3 adjustedStart = start.subtract(0, this.minY, 0);
         final Vec3 adjustedEnd = end.subtract(0, this.minY, 0);
-        return NetherPathfinder.isVisible(this.context, NetherPathfinder.CACHE_MISS_SOLID, adjustedStart.x, adjustedStart.y, adjustedStart.z, adjustedEnd.x, adjustedEnd.y, adjustedEnd.z);
+        return NetherPathfinder.isVisible(this.context, NetherPathfinder.CACHE_MISS_SOLID, adjustedStart.x, adjustedStart.y, adjustedStart.z,
+                UnusableRays.offBoundary(adjustedEnd.x, adjustedStart.x), UnusableRays.offBoundary(adjustedEnd.y, adjustedStart.y), UnusableRays.offBoundary(adjustedEnd.z, adjustedStart.z));
     }
 
     public boolean raytrace(final int count, final double[] src, final double[] dst, final int visibility) {
@@ -287,6 +289,7 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
         final double[] keptSrc = degenerate == 0 ? src : UnusableRays.withoutZeroLength(count, src, dst, src, degenerate);
         final double[] keptDst = degenerate == 0 ? dst : UnusableRays.withoutZeroLength(count, src, dst, dst, degenerate);
         final int kept = count - degenerate;
+        UnusableRays.endsOffBoundary(kept, keptSrc, keptDst);
 
         switch (visibility) {
             case Visibility.ALL:
@@ -319,6 +322,7 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
         }
         final int degenerate = UnusableRays.countZeroLength(count, src, dst);
         if (degenerate == 0) {
+            UnusableRays.endsOffBoundary(count, src, dst);
             NetherPathfinder.raytrace(this.context, NetherPathfinder.CACHE_MISS_SOLID, count, src, dst, hitsOut, hitPosOut);
             return;
         }
@@ -328,6 +332,7 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
         final boolean[] keptHits = new boolean[kept];
         final double[] keptHitPos = new double[kept * 3];
         if (kept > 0) {
+            UnusableRays.endsOffBoundary(kept, keptSrc, keptDst);
             NetherPathfinder.raytrace(this.context, NetherPathfinder.CACHE_MISS_SOLID, kept, keptSrc, keptDst, keptHits, keptHitPos);
         }
         int at = 0;

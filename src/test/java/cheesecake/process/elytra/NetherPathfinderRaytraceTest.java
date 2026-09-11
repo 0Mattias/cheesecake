@@ -90,6 +90,35 @@ public class NetherPathfinderRaytraceTest {
         assertEquals(0, UnusableRays.countZeroLength(1, src, new double[] { Double.POSITIVE_INFINITY, 64.0, -2.5 }));
     }
 
+    /**
+     * The ray that ended CI run 34632119143, with the read lock held and nothing else wrong: it
+     * ends exactly on the corner where two chunk boundaries meet, and the library exits. Moving
+     * that end a billionth of a block on any axis returns true, so the end is moved a millionth,
+     * towards the start on every axis it sits on a boundary in.
+     */
+    @Test
+    public void testAnEndOnAVoxelBoundaryIsMovedTowardsTheStart() {
+        final double sx = 386.7112215521066, sy = 137.40911926818373, sz = 7.0554159455922285;
+        assertEquals(416.0 - UnusableRays.OFF_BOUNDARY, UnusableRays.offBoundary(416.0, sx), 0.0);
+        assertEquals(142.0 - UnusableRays.OFF_BOUNDARY, UnusableRays.offBoundary(142.0, sy), 0.0);
+        assertEquals(0.0 + UnusableRays.OFF_BOUNDARY, UnusableRays.offBoundary(0.0, sz), 0.0);
+        // and from the other side it moves the other way, including at a negative boundary
+        assertEquals(-16.0 + UnusableRays.OFF_BOUNDARY, UnusableRays.offBoundary(-16.0, -3.5), 0.0);
+        assertEquals(-16.0 - UnusableRays.OFF_BOUNDARY, UnusableRays.offBoundary(-16.0, -20.25), 0.0);
+    }
+
+    /** An end inside a voxel, or one the ray does not move towards, is left exactly as it is. */
+    @Test
+    public void testEndsOffBoundariesAreLeftAlone() {
+        assertEquals(416.5, UnusableRays.offBoundary(416.5, 3.0), 0.0);
+        assertEquals(0.25, UnusableRays.offBoundary(0.25, -8.0), 0.0);
+        assertEquals(64.0, UnusableRays.offBoundary(64.0, 64.0), 0.0); // no extent along this axis
+        final double[] src = { 1.5, 64.0, -2.5, 10.0, 70.0, 20.0 };
+        final double[] dst = { 1.5, 66.0, -2.5, 16.0, 70.0, 32.5 };
+        UnusableRays.endsOffBoundary(2, src, dst);
+        assertArrayEquals(new double[] { 1.5, 66.0 - UnusableRays.OFF_BOUNDARY, -2.5, 16.0 - UnusableRays.OFF_BOUNDARY, 70.0, 32.5 }, dst, 0.0);
+    }
+
     /** The largest coordinates a world can hold are ordinary rays and must still be asked about. */
     @Test
     public void testFiniteExtremesAreStillUsable() {
