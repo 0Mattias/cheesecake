@@ -306,10 +306,17 @@ jobs:
           echo "$code" > autotest.exit
           echo "gradle exited $code"
 
-          # 137 is SIGKILL. Gradle exits 1 whether a stage failed or the client was killed under it,
-          # so the kill only shows in the task failure Gradle reports.
+          # Gradle exits 1 whether a stage failed or the client died under it, so the client's own
+          # status only shows in the task failure Gradle reports. Take whatever it says rather than
+          # looking for one number: 137 is SIGKILL (and is also what the pathfinder's exit(696969)
+          # leaves behind, which the next check sorts out), 134 is SIGABRT -- the C runtime aborting
+          # on a corrupted heap -- and 139 is SIGSEGV. A run that died on 134 used to fall through
+          # to the stage-failure message and say nothing about the crash at all.
+          client_status=$(grep -a "finished with non-zero exit value" autotest.log |
+            tail -1 | sed -E 's/.*exit value ([0-9]+).*/\1/')
+          echo "${client_status:-}" > autotest.client-status
           killed=no
-          if grep -qa "finished with non-zero exit value 137" autotest.log; then killed=yes; fi
+          case "${client_status:-}" in 134|137|139) killed=yes;; esac
           echo "$killed" > autotest.killed
 
           # ...but 137 is also what nether-pathfinder leaves behind. Given a ray it will not
@@ -337,9 +344,13 @@ jobs:
             grep -iE 'killed process|out of memory|oom' >> oomd.txt
           echo "systemd-oomd / journal records: $(wc -l < oomd.txt)"
           cat oomd.txt
+          # head -40 stops just short of the only part that names anything: the crashing thread
+          # and its frames. Print the header for the signal and then that section.
           ls -1 hs_err_pid*.log run/hs_err_pid*.log 2>/dev/null | while read -r f; do
             echo "--- JVM crash log $f"
-            head -40 "$f"
+            head -20 "$f"
+            echo "--- crashing thread and frames"
+            sed -n '/^Current thread/,/^siginfo/p' "$f"
           done
           ls -1 run/crash-reports/*.txt 2>/dev/null | while read -r f; do
             echo "--- game crash report $f"
@@ -366,7 +377,11 @@ jobs:
           if [ "$(cat autotest.killed 2>/dev/null || echo no)" = "yes" ]; then
             during=$(grep -a "cheesecake-autotest\] stage [0-9]* of" autotest.log |
               tail -1 | sed -E 's/.*stage ([0-9]+ of [0-9]+: [a-z0-9-]+).*/stage \1/')
-            if [ "$(cat autotest.whiffed 2>/dev/null || echo no)" = "yes" ]; then
+            status=$(cat autotest.client-status 2>/dev/null || echo "")
+            if [ "$status" = "134" ] || [ "$status" = "139" ]; then
+              echo "::error::the client crashed in native code during ${during:-startup} (exit $status, $([ "$status" = 134 ] && echo SIGABRT || echo SIGSEGV)). This is not a kill and not the runner running out of memory. The JVM crash log names the thread and the frames -- see \"crashing thread and frames\" above, and the hs_err log in the uploaded artifact."
+              grep -aE "malloc\(\)|free\(\)|corrupted|double free|Aborted" autotest.log | tail -5 || true
+            elif [ "$(cat autotest.whiffed 2>/dev/null || echo no)" = "yes" ]; then
               echo "::error::nether-pathfinder ended the client during ${during:-startup}: it printed \"raytrace whiffed\" and called exit(696969), which leaves status 137. Nothing killed anything -- 137 here is the library's own exit code, not SIGKILL, which is why there is no crash report, no JVM error log and nothing in the kernel log. The ray it refused is the bug; see the lines before the whiff."
               grep -na -B 12 "raytrace whiffed" autotest.log | tail -20
             elif [ -s oom.txt ]; then
