@@ -756,9 +756,12 @@ public class ElytraProcess extends CheesecakeProcessHelper implements IElytraPro
         }
 
         BetterBlockPos landingSpot = this.landingSearchState.advance();
-        if (landingSpot != null || this.landingSearchState.exhausted) {
+        if (landingSpot != null) {
             this.landingSearchState = null;
         }
+        // An exhausted search is kept until the player has moved on or the ground under them has
+        // changed. Thrown away, it was rebuilt and run again every tick to the same end -- and
+        // announced every tick, since the announcement keys on there being no search.
         return landingSpot;
     }
 
@@ -772,8 +775,18 @@ public class ElytraProcess extends CheesecakeProcessHelper implements IElytraPro
      */
     private final class LandingSearchState {
         private final BetterBlockPos origin;
-        private final boolean useHeightmap;
+        private boolean useHeightmap;
+        /**
+         * Whether the search below ran out and the surface is being searched instead. Below is
+         * seeded at the destination's nominal height, and when that is inside the ground nothing
+         * is queued from it and the search is over at once; that left a player over hills, under a
+         * platform in the sky they were meant to land on, circling with nowhere to go. What is on
+         * top of the terrain is always somewhere to come down.
+         */
+        private boolean surfaceFallback;
         private final Queue<BetterBlockPos> queue;
+        /** Where the search is seeded and what it orders by: the destination when loaded. */
+        private final BetterBlockPos target;
         private final Set<BetterBlockPos> visited = new HashSet<>();
         private final LongOpenHashSet checkedPositions = new LongOpenHashSet();
         private boolean exhausted;
@@ -783,13 +796,14 @@ public class ElytraProcess extends CheesecakeProcessHelper implements IElytraPro
             this.useHeightmap = useHeightmap;
 
             final BetterBlockPos target = isChunkLoaded(dest) ? dest : origin;
+            this.target = target;
             this.queue = new PriorityQueue<>(Comparator.<BetterBlockPos>comparingInt(pos -> (pos.x - target.x) * (pos.x - target.x) + (pos.z - target.z) * (pos.z - target.z)).thenComparingInt(pos -> -pos.y));
             this.queue.add(target);
         }
 
         private boolean isCompatible(BetterBlockPos start, boolean useHeightmap) {
             // Restart if we've moved more than a chunk so the priority adjusts and newly loaded chunks get revisited
-            return this.useHeightmap == useHeightmap && this.origin.distanceSq(start) <= (16 * 16);
+            return (this.useHeightmap == useHeightmap || this.surfaceFallback) && this.origin.distanceSq(start) <= (16 * 16);
         }
 
         private void updateStartPosition(BetterBlockPos start) {
@@ -812,6 +826,14 @@ public class ElytraProcess extends CheesecakeProcessHelper implements IElytraPro
                 if (landing != null) {
                     return landing;
                 }
+            }
+            if (!this.useHeightmap && !this.surfaceFallback) {
+                this.useHeightmap = true;
+                this.surfaceFallback = true;
+                this.visited.clear();
+                this.checkedPositions.clear();
+                this.queue.add(this.target);
+                return null; // the surface next tick, within the same budget
             }
             this.exhausted = true;
             return null;
