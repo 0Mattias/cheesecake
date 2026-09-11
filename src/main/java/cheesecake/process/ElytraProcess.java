@@ -198,7 +198,14 @@ public class ElytraProcess extends CheesecakeProcessHelper implements IElytraPro
         }
         if (ctx.player().isFallFlying() && this.state != State.LANDING && (this.behavior.pathManager.isComplete() || safetyLanding)) {
             final BetterBlockPos last = this.behavior.pathManager.path.getLast();
-            if (last != null && (last.distToCenterSqr(playerPos()) < (48 * 48) || safetyLanding) && (!goingToLandingSpot || (safetyLanding && this.landingSpot == null))) {
+            // Near the end of the path is measured across the ground only. The last node is at
+            // the altitude the path was flown at, and a player who arrives under it -- by more
+            // than 48 blocks, on a long glide that used one rocket -- never came within 48 blocks
+            // of it in three dimensions and never began looking for somewhere to land: one run
+            // flew 1800 blocks past its goal, descending the whole way, and finished on the
+            // ground with the process still "beginning to fly". Where to come down is the
+            // landing search's question, not this one's.
+            if (last != null && (xzDistSqr(last, playerPos()) < (48 * 48) || safetyLanding) && (!goingToLandingSpot || (safetyLanding && this.landingSpot == null))) {
                 if (this.landingSearchState == null) {
                     logDirect("Path complete, searching for safe landing spot...");
                 }
@@ -379,6 +386,12 @@ public class ElytraProcess extends CheesecakeProcessHelper implements IElytraPro
 
     private Vec3 playerPos() {
         return new Vec3(ctx.player().getX(), ctx.player().getY(), ctx.player().getZ());
+    }
+
+    private static double xzDistSqr(BetterBlockPos node, Vec3 pos) {
+        final double dx = node.x + 0.5 - pos.x;
+        final double dz = node.z + 0.5 - pos.z;
+        return dx * dx + dz * dz;
     }
 
     public void landingSpotIsBad(BetterBlockPos endPos) {
