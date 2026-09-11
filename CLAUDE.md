@@ -6,7 +6,7 @@ Cheesecake is Baritone for Minecraft 26.2 on Fabric: a single Fabric project por
 
 - JDK 25 is required and Gradle fetches everything else. With Homebrew's formula on macOS: `export JAVA_HOME=/opt/homebrew/opt/openjdk@25/libexec/openjdk.jdk/Contents/Home`.
 - `./gradlew build` compiles, runs the unit tests and writes `build/libs/cheesecake-<version>.jar`; `./gradlew test` runs only the tests. About a minute once dependencies are cached.
-- `CHEESECAKE_AUTO_TEST=true ./gradlew runClient` runs the in-world test locally: a game window opens, a world is created under `run/saves`, the stages in `cheesecake.utils.autotest` run one after another (a walk, the control socket, vine climbs, two `#mine` runs, four elytra flights) and the client exits by itself after several minutes. Leave the window alone. The driver is `CheesecakeAutoTest`; a stage builds its scenario with server commands and fails with a message that names the stage. `CHEESECAKE_AUTO_TEST_ONLY=elytra-nether-below-roof` (comma-separated stage names) runs only those stages after the world is prepared and the platform built, which is the way to iterate on one of them.
+- `CHEESECAKE_AUTO_TEST=true ./gradlew runClient` runs the in-world test locally: a game window opens, a world is created under `run/saves`, the stages in `cheesecake.utils.autotest` run one after another (a walk, the control socket, vine climbs, two `#mine` runs, a `#sel` build, a `#follow`, a `#farm`, four elytra flights) and the client exits by itself after several minutes. Leave the window alone. The driver is `CheesecakeAutoTest`; a stage builds its scenario with server commands and fails with a message that names the stage. `CHEESECAKE_AUTO_TEST_ONLY=elytra-nether-below-roof` (comma-separated stage names) runs only those stages after the world is prepared and the platform built, which is the way to iterate on one of them.
 - Unit tests are JUnit 4 under `src/test/java`. The mapped Minecraft jar is on the test classpath, so tests can read game data (`LootTableDropsTest` reads the vanilla loot tables) but cannot bootstrap the registries.
 
 ## Names
@@ -54,4 +54,4 @@ Set `mod_version` in `gradle.properties`, commit and push, then `git tag -a vX.Y
 
 ## Open work
 
-Follow-ups are tracked as GitHub issues rather than in this file. The in-world test covers walking, the control socket, vines, `#mine` counts and elytra flights; building, farming and following still have only unit tests.
+Follow-ups are tracked as GitHub issues rather than in this file. The in-world test covers walking, the control socket, vines, `#mine` counts, building from a selection, following an animal, harvesting a field and elytra flights.
