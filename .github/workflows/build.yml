@@ -225,56 +225,75 @@ jobs:
             echo "dmesg: NOT readable, the kernel's record of a kill will not be available"
           fi
 
-          # Sample twice a second and tag each sample with the stage that was running. Twice a
-          # second rather than every few, because what this has to be able to see is a spike: a
-          # sampler slower than the thing it measures cannot tell a run that sat at its peak from
-          # one that shot past it between two samples. VmHWM is the kernel's own high-water mark
-          # for the process, so it catches a spike even if no sample lands on top of it. Loom
-          # launches the game through DevLaunchInjector, so -Dfabric.dli.config names the client
-          # exactly and everything else on the JVM side is the build around it.
+          # Sample once a second, and do it with shell builtins only. The first version of this
+          # forked pgrep, ps, awk, sed, grep and date on every sample; on a four-core runner that
+          # is already saturated by software rendering, that load landed on the thing being
+          # measured and took the in-world job from an eight percent failure rate to eighty. A
+          # measurement that changes the result is worse than no measurement. So: /proc read
+          # through bash's own read, the clock from SECONDS against a base taken once instead of
+          # a date per sample, the client looked up once rather than every sample, and no stage
+          # tagging here at all -- the report correlates samples with stages afterwards, when the
+          # game is gone and forks are free.
+          #
+          # VmHWM is the kernel's own high-water mark for the process, so the peak survives even
+          # if no sample lands on top of a spike. That is what makes one hertz enough.
+          #
+          # The fifo is the timer: read -t on a pipe that never carries anything waits without
+          # forking, which plain sleep cannot do.
+          #
+          # Each sample is appended rather than written down a redirect held open by the subshell,
+          # so that every sample is on disk the moment it is taken: the samples worth having are
+          # the last ones before a kill, and those are exactly the ones a buffer would eat.
+          mkfifo tick.fifo
+          exec 9<> tick.fifo
+          epoch_base=$(($(date +%s) - SECONDS))
           : > memory.tsv
           (
-            stage=starting
-            n=0
-            while true; do
-              read -r avail swap <<< "$(awk '
-                /^MemAvailable:/ { a = $2 }
-                /^SwapTotal:/    { t = $2 }
-                /^SwapFree:/     { f = $2 }
-                END { print a, t - f }' /proc/meminfo)"
-              # Matched on the full option so that it cannot also match this sampler's own awk,
-              # whose pattern argument would otherwise put "fabric.dli" in its command line too.
-              # Loom runs the game under its own xvfb-run, and that shell carries the entire java
-              # command line in its argv, so the match alone finds a two-megabyte shell first --
-              # take the one that is actually a JVM.
-              pid=""
-              for candidate in $(pgrep -f 'fabric[.]dli[.]config'); do
-                if [ "$(cat "/proc/$candidate/comm" 2>/dev/null)" = "java" ]; then
-                  pid=$candidate
-                  break
+            pid=""
+            looking=1
+            while :; do
+              avail=0; swaptotal=0; swapfree=0
+              while read -r key value _; do
+                case "$key" in
+                  MemAvailable:) avail=$value ;;
+                  SwapTotal:)    swaptotal=$value ;;
+                  SwapFree:)     swapfree=$value ;;
+                esac
+              done < /proc/meminfo
+
+              # Loom runs the game under its own xvfb-run, and that shell carries the whole java
+              # command line in its argv, so the match alone finds a two-megabyte shell first.
+              # Take the candidate that is actually a JVM, and only look until it is found.
+              if [ -z "$pid" ] && [ "$looking" = 1 ]; then
+                for candidate in $(pgrep -f 'fabric[.]dli[.]config' 2>/dev/null); do
+                  comm=""
+                  read -r comm < "/proc/$candidate/comm" 2>/dev/null
+                  if [ "$comm" = "java" ]; then
+                    pid=$candidate
+                    break
+                  fi
+                done
+              fi
+
+              rss=0; hwm=0
+              if [ -n "$pid" ]; then
+                if [ -r "/proc/$pid/status" ]; then
+                  while read -r key value _; do
+                    case "$key" in
+                      VmRSS:) rss=$value ;;
+                      VmHWM:) hwm=$value ;;
+                    esac
+                  done < "/proc/$pid/status"
+                else
+                  # It has gone; the run is over. Stop looking, so the search costs nothing more.
+                  pid=""
+                  looking=0
                 fi
-              done
-              client=0
-              hwm=0
-              if [ -n "$pid" ] && [ -r "/proc/$pid/status" ]; then
-                read -r client hwm <<< "$(awk '
-                  /^VmRSS:/ { r = $2 }
-                  /^VmHWM:/ { h = $2 }
-                  END { print r + 0, h + 0 }' "/proc/$pid/status" 2>/dev/null)"
               fi
-              gradle=$(ps -eo rss=,args= | awk '
-                /[j]ava/ { if ($0 !~ /fabric\.dli/) { g += $1 } }
-                END { print g + 0 }')
-              # Re-reading the log twice a second would cost more than it tells us; once a second
-              # is finer than a stage boundary anyway.
-              n=$((n + 1))
-              if [ $((n % 2)) -eq 0 ]; then
-                stage=$(grep -a "cheesecake-autotest\] stage [0-9]* of" autotest.log 2>/dev/null |
-                  tail -1 | sed -E 's/.*stage ([0-9]+ of [0-9]+: [a-z0-9-]+).*/\1/')
-              fi
-              printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
-                "$(date -u +%H:%M:%S.%2N)" "$avail" "$swap" "${gradle:-0}" "${client:-0}" "${hwm:-0}" "${stage:-starting}" >> memory.tsv
-              sleep 0.5
+
+              printf '%s\t%s\t%s\t%s\t%s\n' \
+                "$((epoch_base + SECONDS))" "$avail" "$((swaptotal - swapfree))" "$rss" "$hwm" >> memory.tsv
+              read -t 1 -u 9 _ || true
             done
           ) &
           sampler=$!
@@ -320,36 +339,13 @@ jobs:
           grep -nE "\[cheesecake-autotest\] (stage |PASS|FAIL)" autotest.log || true
 
       # The numbers the kill has to be read against: how close the runner came to having nothing
-      # left, and which stage the client was biggest in.
+      # left, and which stage the client was biggest in. Diagnostics only -- continue-on-error,
+      # because a failure here would skip the assert step below and turn a run that passed every
+      # stage red, which is exactly what happened the first time this was not marked.
       - name: Report the memory ceiling
         if: always()
-        # Diagnostics only. Never let this fail the job: a failure here skips the assert step
-        # below, which would turn a run that passed every stage red for no reason.
         continue-on-error: true
-        run: |
-          set -uo pipefail
-          if [ ! -s memory.tsv ]; then
-            echo "no samples were taken"
-            exit 0
-          fi
-          awk '/^MemTotal:/ { printf "runner memory: %d MiB total\n", $2 / 1024 }' /proc/meminfo
-          echo
-          echo "samples: $(wc -l < memory.tsv), twice a second"
-          awk -F'\t' '
-            { if ($6 + 0 > h) h = $6 + 0 }
-            END { printf "client high-water (VmHWM, the kernel\047s own peak for the process): %d MiB\n", h / 1024 }' memory.tsv
-          echo
-          echo "tightest ten samples (client is the game, gradle is the build around it):"
-          # Written out rather than piped into head: head closing the pipe kills sort with SIGPIPE,
-          # which under pipefail fails the step once there are more samples than head wants.
-          sort -t"$(printf '\t')" -k2 -n memory.tsv > tightest.tsv
-          awk -F'\t' 'NR <= 10 { printf "  %s  available %6d MiB  swap used %5d MiB  gradle %5d MiB  client %5d MiB  %s\n", $1, $2/1024, $3/1024, $4/1024, $5/1024, $7 }' tightest.tsv
-          echo
-          echo "peak client RSS per stage:"
-          awk -F'\t' '
-            { if ($5 + 0 > peak[$7]) peak[$7] = $5 + 0; if (!($7 in seen)) { seen[$7] = ++n } }
-            END { for (s in peak) printf "%d\t%d\t%s\n", seen[s], peak[s] / 1024, s }' memory.tsv |
-            sort -n | awk -F'\t' '{ printf "  %5d MiB  %s\n", $2, $3 }'
+        run: scripts/autotest-memory-report.sh memory.tsv autotest.log
 
       - name: Assert every stage passed
         run: |
