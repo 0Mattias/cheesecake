@@ -101,6 +101,7 @@ public class ElytraProcess extends CheesecakeProcessHelper implements IElytraPro
         this.landingSearchState = null;
         this.reachedGoal = false;
         this.goal = null;
+        this.locateJumpTicks = 0;
         destroyBehaviorAsync();
         if (destroyNpf) {
             destroyNpfContextAsync();
@@ -134,6 +135,13 @@ public class ElytraProcess extends CheesecakeProcessHelper implements IElytraPro
     }
 
     private static final String AUTO_JUMP_FAILURE_MSG = "Failed to compute a walking path to a spot to jump off from. Consider starting from a higher location, near an overhang. Or, you can disable elytraAutoJump and just manually begin gliding.";
+    /**
+     * How long {@link State#LOCATE_JUMP} may go on before it is treated as the failure it is.
+     * Thirty seconds: finding a ledge to walk off takes a handful of ticks when it is possible at
+     * all, and the bound only has to be past anything a slow machine might need.
+     */
+    private static final int LOCATE_JUMP_TIMEOUT_TICKS = 600;
+    private int locateJumpTicks;
 
     @Override
     public PathingCommand onTick(boolean calcFailed, boolean isSafeToCancel) {
@@ -266,12 +274,26 @@ public class ElytraProcess extends CheesecakeProcessHelper implements IElytraPro
         }
 
         if (this.state == State.FLYING || this.state == State.START_FLYING) {
-            this.state = ctx.player().onGround() && Cheesecake.settings().elytraAutoJump.value
+            final State next = ctx.player().onGround() && Cheesecake.settings().elytraAutoJump.value
                     ? State.LOCATE_JUMP
                     : State.START_FLYING;
+            if (next == State.LOCATE_JUMP && this.state != State.LOCATE_JUMP) {
+                this.locateJumpTicks = 0;
+            }
+            this.state = next;
         }
 
         if (this.state == State.LOCATE_JUMP) {
+            // Asking again cannot help once the walk to a jump spot is impossible, and nothing
+            // else here notices. This branch pauses the path executor, so the player stays put and
+            // a stale executor keeps the failure arriving as NEXT_CALC_FAILED -- which, unlike
+            // CALC_FAILED, never sets calcFailed above. Left alone the process sits in this state
+            // for as long as whoever started it allows: 5600 ticks in the CI run that found this.
+            if (++this.locateJumpTicks > LOCATE_JUMP_TIMEOUT_TICKS) {
+                onLostControl();
+                logDirect(AUTO_JUMP_FAILURE_MSG);
+                return new PathingCommand(null, PathingCommandType.CANCEL_AND_SET_GOAL);
+            }
             if (shouldLandForSafety()) {
                 logDirect("Not taking off, because elytra durability or fireworks are so low that I would immediately emergency land anyway.");
                 onLostControl();
