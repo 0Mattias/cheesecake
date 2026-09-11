@@ -353,7 +353,24 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
             e.printStackTrace();
         }
 
-        NetherPathfinder.freeContext(this.context);
+        // Shutting down this class's own executors is not enough to know that nobody is inside the
+        // library. The elytra solver raytraces into this context from a thread of its own, under
+        // the read lock, and ElytraProcess tears the behavior and the context down as two separate
+        // tasks on a pool with four threads, so the two run at once: free the context here without
+        // waiting and the solver is left reading memory that has been handed back. That is what
+        // ends the game in the Nether -- as a segmentation fault inside the library on the solver's
+        // thread if the read lands on unmapped memory, and otherwise as a traversal over freed
+        // memory that arrives nowhere, which the library reports as "raytrace whiffed" before
+        // calling exit(696969), a status of 137 that reads like a kill and is not one.
+        //
+        // Taking the write lock is what the lock is for: it waits for every reader to leave and
+        // keeps the next one out, so the pointer cannot be freed with a thread standing on it.
+        writeLock.lock();
+        try {
+            NetherPathfinder.freeContext(this.context);
+        } finally {
+            writeLock.unlock();
+        }
     }
 
     public long getSeed() {
