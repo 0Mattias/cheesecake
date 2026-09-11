@@ -138,7 +138,7 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
                     // we might free this chunk
                     this.boi.chunkPtr = 0L;
                     long ptr = NetherPathfinder.allocateAndInsertChunk(this.context, chunk.getPos().x(), chunk.getPos().z());
-                    writeChunkData(chunk, ptr, this.maxHeight);
+                    writeChunkData(chunk, ptr);
                 } finally {
                     writeLock.unlock();
                 }
@@ -158,9 +158,7 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
                 }
                 event.getBlocks().forEach(pair -> {
                     BlockPos pos = pair.first().below(minY);
-                    // Against this context's height, not the tallest a context can be: a block
-                    // update above what the chunk was allocated for writes past the end of it.
-                    if (pos.getY() < 0 || pos.getY() >= maxHeight) {
+                    if (pos.getY() < 0 || pos.getY() >= 384) {
                         return;
                     }
                     boolean isSolid = pair.second() != AIR_BLOCK_STATE;
@@ -395,17 +393,10 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
         return this.maxHeight;
     }
 
-    /**
-     * @param maxHeight the height the context was created with. The chunk is allocated to that
-     *                  height, so it bounds what may be written into it -- the number of sections
-     *                  the world's chunk has does not. In the Nether with elytraAllowAboveRoof off
-     *                  the two differ by a factor of two, and writing the world's sixteen sections
-     *                  into the eight the chunk has room for walks off the end of the allocation.
-     */
-    private static void writeChunkData(LevelChunk chunk, long chunkPtr, int maxHeight) {
+    private static void writeChunkData(LevelChunk chunk, long chunkPtr) {
         try {
             LevelChunkSection[] sections = chunk.getSections();
-            final int maxSections = Math.min(sections.length, maxHeight / 16);
+            final int maxSections = Math.min(sections.length, 24); // pathfinder support stops at 384/16 sections
             for (int y0 = 0; y0 < maxSections; y0++) {
                 final LevelChunkSection section = sections[y0];
                 if (section == null || section.hasOnlyAir()) {
