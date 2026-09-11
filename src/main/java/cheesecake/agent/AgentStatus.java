@@ -108,6 +108,9 @@ public final class AgentStatus {
         e.addProperty("active", elytra.isActive());
         BlockPos destination = elytra.currentDestination();
         e.add("destination", destination == null ? JsonNull.INSTANCE : pos(destination));
+        // Zero while the path is still being computed. The process neither steers nor fires a
+        // rocket until this is not, which is invisible from "active" and "destination" alone.
+        e.addProperty("pathNodes", elytra.getPath().size());
         status.add("elytra", e);
 
         return status;

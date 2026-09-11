@@ -79,7 +79,7 @@ for line in f:
     "segmentPosition": 4, "segmentLength": 63,
     "ticksRemainingInSegment": 118.5, "estimatedTicksToGoal": 340.2
   },
-  "elytra": {"active": false, "destination": null}
+  "elytra": {"active": false, "destination": null, "pathNodes": 0}
 }
 ```
 
