@@ -32,7 +32,7 @@ import cheesecake.command.manager.CommandManager;
 import cheesecake.event.GameEventHandler;
 import cheesecake.process.*;
 import cheesecake.selection.SelectionManager;
-import cheesecake.utils.CheesecakeAutoTest;
+import cheesecake.utils.AutoTestHook;
 import cheesecake.utils.BlockStateInterface;
 import cheesecake.utils.GuiClick;
 import cheesecake.utils.InputOverrideHandler;
@@ -140,9 +140,7 @@ public class Cheesecake implements ICheesecake {
         this.commandManager = new CommandManager(this);
 
         this.gameEventHandler.registerEventListener(new AgentApiBehavior(this));
-        if (CheesecakeAutoTest.ENABLED) {
-            this.gameEventHandler.registerEventListener(new CheesecakeAutoTest(this));
-        }
+        AutoTestHook.listener(this).ifPresent(this.gameEventHandler::registerEventListener);
     }
 
     public void registerBehavior(IBehavior behavior) {

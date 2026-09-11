@@ -110,14 +110,26 @@ sourceSets {
     schematica_api {
         compileClasspath += sourceSets.main.compileClasspath
     }
+    // The in-world test harness. It is not part of the mod: `runClient` reaches it through main's
+    // runtime classpath below, while the jar task packages `sourceSets.main.output` alone, so it
+    // does not ship. The dependency only runs one way -- the stages call into the mod, and the mod
+    // looks the driver up by name from AutoTestHook rather than referring to it by type.
+    autotest {
+        compileClasspath += sourceSets.main.compileClasspath + sourceSets.main.output
+    }
     main {
         compileClasspath += sourceSets.schematica_api.output
+        runtimeClasspath += sourceSets.autotest.output
     }
     test {
         compileClasspath += sourceSets.main.compileClasspath
         runtimeClasspath += sourceSets.main.runtimeClasspath
     }
 }
+
+// Nothing compiles the harness on the way to the jar, so say it explicitly: a stage that stops
+// compiling should fail the build rather than wait for the in-world job to fail to launch.
+check.dependsOn autotestClasses
 
 test {
     useJUnit()

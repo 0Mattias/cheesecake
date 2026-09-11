@@ -51,6 +51,13 @@ jobs:
             exit 1
           fi
 
+          # The in-world test harness lives in its own source set so that it does not ship. Only
+          # AutoTestHook, which looks the driver up by name, belongs in the jar.
+          if unzip -l "$jar" | grep -E ' cheesecake/utils/autotest/'; then
+            echo "::error::jar ships the in-world test harness"
+            exit 1
+          fi
+
           # The nether-pathfinder library is bundled as a nested jar; without it the elytra
           # process is unavailable at runtime.
           if ! unzip -l "$jar" | grep -q 'META-INF/jars/nether-pathfinder'; then

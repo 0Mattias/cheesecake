@@ -15,29 +15,12 @@
  * along with Cheesecake.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package cheesecake.utils;
+package cheesecake.utils.autotest;
 
 import cheesecake.Cheesecake;
 import cheesecake.api.event.events.PathEvent;
 import cheesecake.api.event.events.TickEvent;
 import cheesecake.api.event.listener.AbstractGameEventListener;
-import cheesecake.utils.autotest.AutoTestContext;
-import cheesecake.utils.autotest.AutoTestFailure;
-import cheesecake.utils.autotest.BackfillStage;
-import cheesecake.utils.autotest.BuildStage;
-import cheesecake.utils.autotest.ElytraStage;
-import cheesecake.utils.autotest.ExploreStage;
-import cheesecake.utils.autotest.FarmStage;
-import cheesecake.utils.autotest.FollowStage;
-import cheesecake.utils.autotest.GetToBlockStage;
-import cheesecake.utils.autotest.InventoryPauseStage;
-import cheesecake.utils.autotest.MineStage;
-import cheesecake.utils.autotest.PlatformStage;
-import cheesecake.utils.autotest.PrepareStage;
-import cheesecake.utils.autotest.SocketStage;
-import cheesecake.utils.autotest.Stage;
-import cheesecake.utils.autotest.VineStage;
-import cheesecake.utils.autotest.WalkStage;
 import net.minecraft.client.CloudStatus;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Options;
@@ -63,7 +46,7 @@ import java.util.stream.Collectors;
 /**
  * An end-to-end test of the mod inside a running client, used by CI. With the environment variable
  * {@code CHEESECAKE_AUTO_TEST=true} the client creates a survival world from a fixed seed as soon as
- * it reaches the title screen and runs the stages in {@link cheesecake.utils.autotest} one after
+ * it reaches the title screen and runs the {@link Stage}s of this package one after
  * another: a walk with the goal drawn as the box and then as the beacon beam, a trip driven over the
  * control socket, climbs up three kinds of vines, two {@code #mine} runs that have to count what
  * the blocks drop, a box built from a selection, a walk after an animal, a field harvested and
@@ -73,6 +56,11 @@ import java.util.stream.Collectors;
  * so the run does not depend on the terrain beyond the first walk. Progress is written to standard
  * output with the {@value AutoTestContext#TAG} prefix; the final line is either {@code PASS} or
  * {@code FAIL}, and a failure also exits with status 1.
+ * <p>
+ * This package is the {@code autotest} source set, which {@code runClient} has on its classpath and
+ * the jar task does not, so none of it ships. The mod therefore cannot name this class: it is
+ * constructed reflectively by {@code cheesecake.utils.AutoTestHook}, which is what keeps the
+ * constructor signature below load-bearing.
  * <p>
  * Baritone shipped a test like this until 2021. It went away with the virtual display it needed,
  * which the continuous integration of this fork has since put back.
