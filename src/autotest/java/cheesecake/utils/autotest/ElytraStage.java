@@ -476,8 +476,12 @@ public final class ElytraStage extends Stage {
         BetterBlockPos best = null;
         int bestHeight = 0;
         BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
-        for (int x = anchor.x - radius; x <= anchor.x + radius; x += 4) {
-            for (int z = anchor.z - radius; z <= anchor.z + radius; z += 4) {
+        // Every second column, not every fourth. The anchor follows the platform, which follows
+        // where the player happened to stand, so it moves by a block or two between worlds; on a
+        // four-block grid that shift put the only columns that qualify between the samples, and
+        // a run failed here with the chunks loaded and the cavern present.
+        for (int x = anchor.x - radius; x <= anchor.x + radius; x += 2) {
+            for (int z = anchor.z - radius; z <= anchor.z + radius; z += 2) {
                 if (!chunksLoaded(world, x - half, z - half, x + half, z + half)) {
                     continue;
                 }
