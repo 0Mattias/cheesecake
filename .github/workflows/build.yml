@@ -312,6 +312,16 @@ jobs:
           if grep -qa "finished with non-zero exit value 137" autotest.log; then killed=yes; fi
           echo "$killed" > autotest.killed
 
+          # ...but 137 is also what nether-pathfinder leaves behind. Given a ray it will not
+          # answer, raytrace() prints "raytrace whiffed" and calls exit(696969); a process exits
+          # with the low eight bits of that, and 696969 ends in 137. So the same number means
+          # either a kill or a deliberate exit by the library, and only this line tells them
+          # apart. It is written to bare stderr with no log prefix, which is why it never showed
+          # up in the stage lines. Record it before anything else reads the 137.
+          whiffed=no
+          if grep -qa "raytrace whiffed" autotest.log; then whiffed=yes; fi
+          echo "$whiffed" > autotest.whiffed
+
           # Everything that can say WHY it died, collected whether or not it did: the kernel's
           # record of an out-of-memory kill, the JVM's record of a native crash, and the game's own
           # crash report. Which of these is empty is itself the evidence.
@@ -356,7 +366,10 @@ jobs:
           if [ "$(cat autotest.killed 2>/dev/null || echo no)" = "yes" ]; then
             during=$(grep -a "cheesecake-autotest\] stage [0-9]* of" autotest.log |
               tail -1 | sed -E 's/.*stage ([0-9]+ of [0-9]+: [a-z0-9-]+).*/stage \1/')
-            if [ -s oom.txt ]; then
+            if [ "$(cat autotest.whiffed 2>/dev/null || echo no)" = "yes" ]; then
+              echo "::error::nether-pathfinder ended the client during ${during:-startup}: it printed \"raytrace whiffed\" and called exit(696969), which leaves status 137. Nothing killed anything -- 137 here is the library's own exit code, not SIGKILL, which is why there is no crash report, no JVM error log and nothing in the kernel log. The ray it refused is the bug; see the lines before the whiff."
+              grep -na -B 12 "raytrace whiffed" autotest.log | tail -20
+            elif [ -s oom.txt ]; then
               echo "::error::the runner ran out of memory and killed the client (SIGKILL, exit 137) during ${during:-startup}. Nothing in the mod failed. The kernel's record of the kill follows."
               cat oom.txt
             else
