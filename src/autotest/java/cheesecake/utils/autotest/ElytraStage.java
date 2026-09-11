@@ -337,8 +337,17 @@ public final class ElytraStage extends Stage {
             advance(Step.FLYING);
         } else if (ticksInStep() >= 10) {
             BetterBlockPos feet = feet();
-            this.t.log("dropping the player from " + DROP_HEIGHT + " blocks up to start gliding");
-            teleport(feet.x + 0.5, feet.y + DROP_HEIGHT, feet.z + 0.5);
+            this.t.log("dropping the player from " + DROP_HEIGHT + " blocks up to start gliding, facing "
+                    + this.goalX + " " + this.goalZ);
+            // Facing the goal, because a glide begins in whatever direction the camera happens to
+            // point and the camera is wherever the last stage left it. Dropped facing away, the bot
+            // spends the first seconds of the flight turning around while it loses height, and on a
+            // slow runner it reaches the ground before it reaches the goal: one run started at yaw
+            // 115 with the goal due south, flew to z -73 instead of z +348 and finished the stage
+            // standing in a cavern at y 23. The flight and the landing are what this stage is for,
+            // not recovering from a takeoff pointed the wrong way.
+            teleportFacing(feet.x + 0.5, feet.y + DROP_HEIGHT, feet.z + 0.5,
+                    this.goalX + 0.5, feet.y + DROP_HEIGHT, this.goalZ + 0.5);
             this.dropped = true;
             advance(Step.FLYING);
         }
