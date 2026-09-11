@@ -17,6 +17,7 @@
 
 package cheesecake.utils.autotest;
 
+import cheesecake.api.event.events.PathEvent;
 import cheesecake.api.pathing.goals.GoalXZ;
 import cheesecake.api.utils.BetterBlockPos;
 import com.google.gson.JsonObject;
@@ -49,10 +50,26 @@ public final class SocketStage extends Stage {
     private volatile boolean resultOk;
     private volatile boolean statusOk;
     private volatile boolean atGoal;
+    /**
+     * Where the player stood when the path event fired, which is not where it stands by the time
+     * the socket has delivered the message and this stage next runs: arriving carries the player on
+     * for a few ticks, which is enough to leave a GoalXZ behind.
+     */
+    private volatile BetterBlockPos atGoalPos;
     private volatile boolean closed;
     private volatile int logs;
     private volatile int pathEvents;
     private volatile String error;
+
+    @Override
+    public void onPathEvent(PathEvent event) {
+        super.onPathEvent(event);
+        // The driver forwards the event on the game thread as it fires, so this is the one place
+        // the arrival position can be read before the player has moved on.
+        if (event == PathEvent.AT_GOAL && this.atGoalPos == null && this.t != null) {
+            this.atGoalPos = feet();
+        }
+    }
 
     @Override
     public String name() {
@@ -91,8 +108,9 @@ public final class SocketStage extends Stage {
                 }
                 return false;
             case 1:
-                if (this.atGoal && this.resultOk && this.statusOk && this.logs > 0) {
-                    check(this.goal.isInGoal(feet()), "AT_GOAL was reported at " + feet() + " for " + this.goal);
+                if (this.atGoal && this.atGoalPos != null && this.resultOk && this.statusOk && this.logs > 0) {
+                    check(this.goal.isInGoal(this.atGoalPos),
+                            "AT_GOAL was reported at " + this.atGoalPos + " for " + this.goal);
                     this.t.log("got the result, the status, " + this.logs + " log messages and " + this.pathEvents + " path events; closing the port");
                     this.stopping = true;
                     settings().agentApiPort.value = 0;
