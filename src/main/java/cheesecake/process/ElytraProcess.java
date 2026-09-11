@@ -44,6 +44,7 @@ import cheesecake.process.elytra.NullElytraProcess;
 import cheesecake.utils.CheesecakeProcessHelper;
 import cheesecake.utils.PathingCommandContext;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
@@ -90,21 +91,28 @@ public class ElytraProcess extends CheesecakeProcessHelper implements IElytraPro
     private LandingSearchState landingSearchState;
 
     @Override
+    /**
+     * Ends the flight but keeps the pathfinder context. Upstream frees the context here and builds
+     * a fresh one for the next flight, and that is what has been hanging the path calculation:
+     * nether-pathfinder's ParallelExecutor starts each worker thread before the flag that tells it
+     * to stop has been constructed, so the thread reads whatever the memory held -- and a context
+     * freed a moment earlier, at the same size and so at the same address, held every worker's
+     * stop flag set. A worker that reads it exits at birth, and the first terrain generation then
+     * spins for ever waiting for a result it will never get, inside pathFind, under the write
+     * lock. The context is built once instead, from memory no context has used, and lives until
+     * the world or the settings it was built for change: {@link #resetState()} and the world
+     * event free it. Chunks it packed on an earlier flight stay until the cull reaches them;
+     * every loaded chunk is repacked when a flight starts, so what is nearby is current.
+     */
     public void onLostControl() {
-        onLostControl(true);
-    }
-
-    public void onLostControl(boolean destroyNpf) {
         this.state = State.START_FLYING; // TODO: null state?
         this.goingToLandingSpot = false;
         this.landingSpot = null;
         this.landingSearchState = null;
         this.reachedGoal = false;
         this.goal = null;
+        this.groundedTicks = 0;
         destroyBehaviorAsync();
-        if (destroyNpf) {
-            destroyNpfContextAsync();
-        }
     }
 
     private ElytraProcess(Cheesecake cheesecake) {
@@ -127,6 +135,7 @@ public class ElytraProcess extends CheesecakeProcessHelper implements IElytraPro
     public void resetState() {
         BlockPos destination = this.currentDestination();
         this.onLostControl();
+        destroyNpfContextAsync(); // built for settings that have just changed
         if (destination != null) {
             this.pathTo(destination);
             this.repackChunks();
@@ -134,6 +143,22 @@ public class ElytraProcess extends CheesecakeProcessHelper implements IElytraPro
     }
 
     private static final String AUTO_JUMP_FAILURE_MSG = "Failed to compute a walking path to a spot to jump off from. Consider starting from a higher location, near an overhang. Or, you can disable elytraAutoJump and just manually begin gliding.";
+    /**
+     * Thirty seconds. A search is bounded at ten by the library and the queue in front of it is a
+     * repacking of loaded chunks that takes milliseconds each, so nothing legitimate lasts this
+     * long.
+     */
+    private static final long PATH_HANG_NANOS = 30_000_000_000L;
+    private static final String PATH_HANG_MSG = "The path calculation did not answer for thirty seconds. That is a known defect in nether-pathfinder, not a slow search: a worker thread it started read a stale stop flag and exited at birth, and the terrain generator waits for it for ever. Abandoning this context; use #elytra again and a fresh one is built.";
+    private static final String NO_TAKEOFF_MSG = "Still on the ground after thirty seconds of trying to take off, and elytraAutoJump is off, so there is no way to start gliding from here. Jump off something manually, or turn elytraAutoJump on.";
+    /**
+     * How long the process may go on trying to get off the ground before it is treated as the
+     * failure it is. Thirty seconds is far past anything a slow machine needs: taking off is a
+     * handful of ticks whenever it is possible at all. Only the two states that are waiting to
+     * leave the ground are counted -- walking to a takeoff spot is progress and may take a while.
+     */
+    private static final int TAKEOFF_TIMEOUT_TICKS = 600;
+    private int groundedTicks;
 
     @Override
     public PathingCommand onTick(boolean calcFailed, boolean isSafeToCancel) {
@@ -177,6 +202,16 @@ public class ElytraProcess extends CheesecakeProcessHelper implements IElytraPro
             return new PathingCommand(null, PathingCommandType.CANCEL_AND_SET_GOAL);
         }
 
+        // A calculation that never answers is the library's terrain generator hung -- see
+        // abandonNpfContext() -- and nothing downstream can proceed: the write lock is held for
+        // ever, so the solver never runs again either. Say so, and leave the context behind.
+        if (this.behavior.pathManager.isAwaitingPath() && this.behavior.pathManager.awaitingPathNanos() > PATH_HANG_NANOS) {
+            logDirect(PATH_HANG_MSG, ChatFormatting.RED);
+            abandonNpfContext();
+            onLostControl();
+            return new PathingCommand(null, PathingCommandType.CANCEL_AND_SET_GOAL);
+        }
+
         boolean safetyLanding = false;
         if (ctx.player().isFallFlying() && shouldLandForSafety()) {
             if (Cheesecake.settings().elytraAllowEmergencyLand.value) {
@@ -188,7 +223,14 @@ public class ElytraProcess extends CheesecakeProcessHelper implements IElytraPro
         }
         if (ctx.player().isFallFlying() && this.state != State.LANDING && (this.behavior.pathManager.isComplete() || safetyLanding)) {
             final BetterBlockPos last = this.behavior.pathManager.path.getLast();
-            if (last != null && (last.distToCenterSqr(playerPos()) < (48 * 48) || safetyLanding) && (!goingToLandingSpot || (safetyLanding && this.landingSpot == null))) {
+            // Near the end of the path is measured across the ground only. The last node is at
+            // the altitude the path was flown at, and a player who arrives under it -- by more
+            // than 48 blocks, on a long glide that used one rocket -- never came within 48 blocks
+            // of it in three dimensions and never began looking for somewhere to land: one run
+            // flew 1800 blocks past its goal, descending the whole way, and finished on the
+            // ground with the process still "beginning to fly". Where to come down is the
+            // landing search's question, not this one's.
+            if (last != null && (xzDistSqr(last, playerPos()) < (48 * 48) || safetyLanding) && (!goingToLandingSpot || (safetyLanding && this.landingSpot == null))) {
                 if (this.landingSearchState == null) {
                     logDirect("Path complete, searching for safe landing spot...");
                 }
@@ -271,6 +313,31 @@ public class ElytraProcess extends CheesecakeProcessHelper implements IElytraPro
                     : State.START_FLYING;
         }
 
+        // Neither of the states that wait to leave the ground can get there on its own if the way
+        // out is missing, and neither notices. LOCATE_JUMP asks for a walking path to a ledge it
+        // may have no route to, and pauses the path executor while it waits, so the player does not
+        // move and the failure returns as NEXT_CALC_FAILED -- not the event the give-up above keys
+        // on. START_FLYING, which is where a player stands when elytraAutoJump is off, only presses
+        // jump while already falling, which never becomes true standing still. Either way the
+        // process sits there for as long as it is allowed: 5600 ticks in the CI run that found it.
+        //
+        // A player standing still while the path is still being worked out has not failed to take
+        // off: nothing has asked them to leave the ground yet. That wait has an end of its own --
+        // the calculation times out and says so -- and on a slow machine it outlasts this bound,
+        // which then blamed the takeoff for a path that had not arrived. Count only once the
+        // calculation is over, one way or the other.
+        if (this.state == State.START_FLYING || this.state == State.LOCATE_JUMP) {
+            if (this.behavior.pathManager.isAwaitingPath()) {
+                this.groundedTicks = 0;
+            } else if (ctx.player().onGround() && ++this.groundedTicks > TAKEOFF_TIMEOUT_TICKS) {
+                onLostControl();
+                logDirect(Cheesecake.settings().elytraAutoJump.value ? AUTO_JUMP_FAILURE_MSG : NO_TAKEOFF_MSG);
+                return new PathingCommand(null, PathingCommandType.CANCEL_AND_SET_GOAL);
+            }
+        } else {
+            this.groundedTicks = 0;
+        }
+
         if (this.state == State.LOCATE_JUMP) {
             if (shouldLandForSafety()) {
                 logDirect("Not taking off, because elytra durability or fireworks are so low that I would immediately emergency land anyway.");
@@ -344,6 +411,12 @@ public class ElytraProcess extends CheesecakeProcessHelper implements IElytraPro
 
     private Vec3 playerPos() {
         return new Vec3(ctx.player().getX(), ctx.player().getY(), ctx.player().getZ());
+    }
+
+    private static double xzDistSqr(BetterBlockPos node, Vec3 pos) {
+        final double dx = node.x + 0.5 - pos.x;
+        final double dz = node.z + 0.5 - pos.z;
+        return dx * dx + dz * dz;
     }
 
     public void landingSpotIsBad(BetterBlockPos endPos) {
@@ -427,7 +500,7 @@ public class ElytraProcess extends CheesecakeProcessHelper implements IElytraPro
         if (ctx.player() == null) {
             return;
         }
-        this.onLostControl(false);
+        this.onLostControl();
         this.predictingTerrain = ctx.world().dimension() == Level.NETHER && Cheesecake.settings().elytraPredictTerrain.value;
         this.allowTight = Cheesecake.settings().elytraAllowTightSpaces.value;
         this.allowAboveBuildLimit = Cheesecake.settings().elytraAllowAboveBuildLimit.value;
@@ -683,9 +756,12 @@ public class ElytraProcess extends CheesecakeProcessHelper implements IElytraPro
         }
 
         BetterBlockPos landingSpot = this.landingSearchState.advance();
-        if (landingSpot != null || this.landingSearchState.exhausted) {
+        if (landingSpot != null) {
             this.landingSearchState = null;
         }
+        // An exhausted search is kept until the player has moved on or the ground under them has
+        // changed. Thrown away, it was rebuilt and run again every tick to the same end -- and
+        // announced every tick, since the announcement keys on there being no search.
         return landingSpot;
     }
 
@@ -699,8 +775,18 @@ public class ElytraProcess extends CheesecakeProcessHelper implements IElytraPro
      */
     private final class LandingSearchState {
         private final BetterBlockPos origin;
-        private final boolean useHeightmap;
+        private boolean useHeightmap;
+        /**
+         * Whether the search below ran out and the surface is being searched instead. Below is
+         * seeded at the destination's nominal height, and when that is inside the ground nothing
+         * is queued from it and the search is over at once; that left a player over hills, under a
+         * platform in the sky they were meant to land on, circling with nowhere to go. What is on
+         * top of the terrain is always somewhere to come down.
+         */
+        private boolean surfaceFallback;
         private final Queue<BetterBlockPos> queue;
+        /** Where the search is seeded and what it orders by: the destination when loaded. */
+        private final BetterBlockPos target;
         private final Set<BetterBlockPos> visited = new HashSet<>();
         private final LongOpenHashSet checkedPositions = new LongOpenHashSet();
         private boolean exhausted;
@@ -710,13 +796,14 @@ public class ElytraProcess extends CheesecakeProcessHelper implements IElytraPro
             this.useHeightmap = useHeightmap;
 
             final BetterBlockPos target = isChunkLoaded(dest) ? dest : origin;
+            this.target = target;
             this.queue = new PriorityQueue<>(Comparator.<BetterBlockPos>comparingInt(pos -> (pos.x - target.x) * (pos.x - target.x) + (pos.z - target.z) * (pos.z - target.z)).thenComparingInt(pos -> -pos.y));
             this.queue.add(target);
         }
 
         private boolean isCompatible(BetterBlockPos start, boolean useHeightmap) {
             // Restart if we've moved more than a chunk so the priority adjusts and newly loaded chunks get revisited
-            return this.useHeightmap == useHeightmap && this.origin.distanceSq(start) <= (16 * 16);
+            return (this.useHeightmap == useHeightmap || this.surfaceFallback) && this.origin.distanceSq(start) <= (16 * 16);
         }
 
         private void updateStartPosition(BetterBlockPos start) {
@@ -739,6 +826,14 @@ public class ElytraProcess extends CheesecakeProcessHelper implements IElytraPro
                 if (landing != null) {
                     return landing;
                 }
+            }
+            if (!this.useHeightmap && !this.surfaceFallback) {
+                this.useHeightmap = true;
+                this.surfaceFallback = true;
+                this.visited.clear();
+                this.checkedPositions.clear();
+                this.queue.add(this.target);
+                return null; // the surface next tick, within the same budget
             }
             this.exhausted = true;
             return null;
@@ -784,15 +879,30 @@ public class ElytraProcess extends CheesecakeProcessHelper implements IElytraPro
     }
 
     private NetherPathfinderContext getNpfContext() {
+        final long seed = Cheesecake.settings().elytraNetherSeed.value;
+        final Path cache = Cheesecake.settings().elytraUseCache.value ? cheesecake.getWorldProvider().getCurrentWorld().directory.resolve("cache") : null;
+        if (this.npfContext != null && !this.npfContext.builtFor(ctx.world(), seed, cache)) {
+            destroyNpfContextAsync(); // built for another dimension, height, seed or cache
+        }
         if (this.npfContext == null) {
             npfSema.acquireUninterruptibly();
-            this.npfContext = new NetherPathfinderContext(
-                    Cheesecake.settings().elytraNetherSeed.value,
-                    Cheesecake.settings().elytraUseCache.value ? cheesecake.getWorldProvider().getCurrentWorld().directory.resolve("cache") : null,
-                    ctx.world()
-            );
+            this.npfContext = new NetherPathfinderContext(seed, cache, ctx.world());
         }
         return this.npfContext;
+    }
+
+    /**
+     * Drops the context without freeing it. Freeing means taking its write lock, and when a path
+     * calculation has hung the thread that hung holds that lock for ever, so destroy() would only
+     * join it. The context and its threads are left for the life of the game -- one core spinning,
+     * its chunks unfreed -- and the next flight builds a new one at another address, which is
+     * what makes that one's workers start clean.
+     */
+    private void abandonNpfContext() {
+        if (this.npfContext != null) {
+            this.npfContext = null;
+            npfSema.release();
+        }
     }
 
     private void destroyNpfContextAsync() {

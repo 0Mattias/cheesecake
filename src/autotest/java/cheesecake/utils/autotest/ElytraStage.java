@@ -17,6 +17,7 @@
 
 package cheesecake.utils.autotest;
 
+import cheesecake.api.process.IElytraProcess;
 import cheesecake.api.utils.BetterBlockPos;
 import java.util.Locale;
 import net.minecraft.core.BlockPos;
@@ -48,7 +49,9 @@ public final class ElytraStage extends Stage {
         OVERWORLD_AUTO_JUMP,
         /**
          * Below the bedrock roof, from an open spot the stage finds in the terrain, through terrain
-         * the pathfinder predicts from the seed, landing wherever the process finds room.
+         * the pathfinder predicts from the seed, landing wherever the process finds room. The
+         * takeoff is a fall: the player stands on a block placed in the spot until the process has
+         * its path, and the block is then taken away.
          */
         NETHER_BELOW_ROOF,
         /**
@@ -100,6 +103,13 @@ public final class ElytraStage extends Stage {
      */
     private static final int DROP_HEIGHT = 40;
     private static final int MIN_GLIDING_TICKS = 60;
+    /** What the process says when a path calculation has hung; see armed(). */
+    private static final String PATH_HANG = "did not answer for thirty seconds";
+    /** What the process says when it gives up. Any of them fails the stage on the spot. */
+    private static final String[] GIVING_UP = {
+            "Failed to compute path to destination", "Failed to compute a walking path", "no fireworks", "Not taking off",
+            "Still on the ground after thirty seconds",
+    };
 
     private final Trip trip;
     private Step step = Step.SETUP;
@@ -113,10 +123,14 @@ public final class ElytraStage extends Stage {
      */
     private BetterBlockPos netherDestinationAnchor;
     private BetterBlockPos landing;
+    /** For the trip below the roof: the block the player stands on until the process has a path. */
+    private BetterBlockPos perch;
     private int netherPhase;
     private int candidate;
     private int goalX;
+    private Integer goalY;
     private int goalZ;
+    private boolean relaunched;
     private double maxY;
     /**
      * The highest node the process planned, which says whether it routed above the build limit
@@ -124,7 +138,6 @@ public final class ElytraStage extends Stage {
      */
     private int maxPathY = Integer.MIN_VALUE;
     private int glidingTicks;
-    private boolean dropped;
     private boolean padBuilt;
 
     public ElytraStage(Trip trip) {
@@ -279,14 +292,28 @@ public final class ElytraStage extends Stage {
                     }
                     BetterBlockPos spot = findOpenSpot(this.netherAnchor);
                     check(spot != null, "found no open spot in the loaded Nether terrain around " + this.netherAnchor);
-                    this.t.log("found an open spot at " + spot + ", dropping into it");
-                    teleport(spot.x + 0.5, spot.y, spot.z + 0.5);
-                    this.dropped = true; // the drop into the spot is the takeoff
+                    // The player stands on a block placed under the spot while the process works
+                    // out its path, and armed() takes the block away once it has one. Dropped
+                    // straight in, the glide was a race against that calculation: the process
+                    // neither steers nor fires a rocket until the path exists, so a calculation
+                    // slow enough -- it queues behind the repacking of every loaded chunk, on a
+                    // runner that software rendering already keeps busy -- let the player fall
+                    // untouched to the cavern floor, and with elytraAutoJump off there is no
+                    // getting up from there.
+                    this.perch = spot.below();
+                    this.t.log("found an open spot at " + spot + "; standing on a block under it, facing " + this.landing
+                            + ", until the process has a path");
+                    setBlock(this.perch, "minecraft:barrier");
+                    // Facing the landing column, for the same reason the other trips face their
+                    // goal before dropping: the glide begins in whatever direction the camera is
+                    // pointing. Level with the spot, so the pitch stays flat and only the yaw is set.
+                    teleportFacing(spot.x + 0.5, spot.y, spot.z + 0.5,
+                            this.landing.x + 0.5, spot.y, this.landing.z + 0.5);
                     this.netherPhase = 2;
                     return false;
                 }
-                if (feet().y >= ROOF_Y - 4) {
-                    return false; // the teleport has not reached the client yet
+                if (!commandsDone() || !this.t.player().onGround() || feet().y != this.perch.y + 1) {
+                    return false; // not standing on the block yet
                 }
                 settings().elytraAutoJump.value = false;
                 settings().elytraNetherSeed.value = AutoTestContext.SEED;
@@ -319,6 +346,7 @@ public final class ElytraStage extends Stage {
         settings().elytraTermsAccepted.value = true;
         this.origin = feet();
         this.goalX = x;
+        this.goalY = y;
         this.goalZ = z;
         String goal = y == null ? x + " " + z : x + " " + y + " " + z;
         this.t.markChat();
@@ -330,19 +358,67 @@ public final class ElytraStage extends Stage {
     }
 
     /**
-     * The process is waiting to fly. Trips without the automatic takeoff get dropped from the air.
+     * The process is waiting to fly. Until it has a path it does nothing for a player in the air --
+     * no steering, no rocket -- so the trips that take off by being dropped wait here, on whatever
+     * they are standing on, until the path exists, and only then let go. Dropped before that, the
+     * glide was a race against the calculation, and on a slow runner the calculation lost. The
+     * automatic takeoff finds its own way off the pad.
      */
     private boolean armed() {
-        if (this.trip == Trip.OVERWORLD_AUTO_JUMP || this.dropped) {
+        if (this.trip == Trip.OVERWORLD_AUTO_JUMP) {
             advance(Step.FLYING);
-        } else if (ticksInStep() >= 10) {
-            BetterBlockPos feet = feet();
-            this.t.log("dropping the player from " + DROP_HEIGHT + " blocks up to start gliding");
-            teleport(feet.x + 0.5, feet.y + DROP_HEIGHT, feet.z + 0.5);
-            this.dropped = true;
-            advance(Step.FLYING);
+            return false;
         }
+        if (this.t.saidSinceMark(PATH_HANG)) {
+            // A known nether-pathfinder defect, recorded in the README: a worker thread the
+            // library starts can read a stale stop flag and exit at birth, after which the terrain
+            // generator waits for ever. The process has abandoned that context; a fresh one is
+            // built at another address. Once is the library's fault; twice would be ours.
+            check(!this.relaunched, "the path calculation hung twice");
+            this.relaunched = true;
+            this.t.log("the path calculation hung, which is the nether-pathfinder worker-thread defect; starting the process again on a fresh context");
+            launch(this.goalX, this.goalY, this.goalZ);
+            return false;
+        }
+        checkNotGivenUp();
+        IElytraProcess elytra = this.t.cheesecake.getElytraProcess();
+        check(elytra.isActive(), "the elytra process stopped before it had a path");
+        if (elytra.getPath().isEmpty()) {
+            return false;
+        }
+        this.t.log("the process has a path of " + elytra.getPath().size() + " nodes after " + ticksInStep() + " ticks");
+        if (this.trip == Trip.NETHER_BELOW_ROOF) {
+            this.t.log("taking the block away; the fall into the cavern is the takeoff");
+            setBlock(this.perch, "minecraft:air");
+        } else {
+            BetterBlockPos feet = feet();
+            this.t.log("dropping the player from " + DROP_HEIGHT + " blocks up to start gliding, facing "
+                    + this.goalX + " " + this.goalZ);
+            // Facing the goal, because a glide begins in whatever direction the camera happens to
+            // point and the camera is wherever the last stage left it. Dropped facing away, the bot
+            // spends the first seconds of the flight turning around while it loses height, and on a
+            // slow runner it reaches the ground before it reaches the goal: one run started at yaw
+            // 115 with the goal due south, flew to z -73 instead of z +348 and finished the stage
+            // standing in a cavern at y 23. The flight and the landing are what this stage is for,
+            // not recovering from a takeoff pointed the wrong way.
+            teleportFacing(feet.x + 0.5, feet.y + DROP_HEIGHT, feet.z + 0.5,
+                    this.goalX + 0.5, feet.y + DROP_HEIGHT, this.goalZ + 0.5);
+        }
+        advance(Step.FLYING);
         return false;
+    }
+
+    private void checkNotGivenUp() {
+        check(!this.t.saidSinceMark(PATH_HANG), "the path calculation hung");
+        for (String failure : GIVING_UP) {
+            check(!this.t.saidSinceMark(failure), "the process gave up: " + failure);
+        }
+    }
+
+    /** Sets a block in the dimension the player is in; a plain setblock from the console acts in the Overworld. */
+    private void setBlock(BetterBlockPos pos, String block) {
+        command("execute in " + this.t.ctx().world().dimension().identifier()
+                + " run setblock " + pos.x + " " + pos.y + " " + pos.z + " " + block);
     }
 
     private boolean flying() {
@@ -354,9 +430,7 @@ public final class ElytraStage extends Stage {
         if (this.t.player().isFallFlying()) {
             this.glidingTicks++;
         }
-        for (String failure : new String[]{"Failed to compute path to destination", "Failed to compute a walking path", "no fireworks", "Not taking off"}) {
-            check(!this.t.saidSinceMark(failure), "the process gave up: " + failure);
-        }
+        checkNotGivenUp();
         if (!this.t.saidSinceMark("Done :)") || this.t.cheesecake.getElytraProcess().isActive() || !this.t.player().onGround()) {
             return false;
         }
@@ -402,8 +476,12 @@ public final class ElytraStage extends Stage {
         BetterBlockPos best = null;
         int bestHeight = 0;
         BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
-        for (int x = anchor.x - radius; x <= anchor.x + radius; x += 4) {
-            for (int z = anchor.z - radius; z <= anchor.z + radius; z += 4) {
+        // Every second column, not every fourth. The anchor follows the platform, which follows
+        // where the player happened to stand, so it moves by a block or two between worlds; on a
+        // four-block grid that shift put the only columns that qualify between the samples, and
+        // a run failed here with the chunks loaded and the cavern present.
+        for (int x = anchor.x - radius; x <= anchor.x + radius; x += 2) {
+            for (int z = anchor.z - radius; z <= anchor.z + radius; z += 2) {
                 if (!chunksLoaded(world, x - half, z - half, x + half, z + half)) {
                     continue;
                 }

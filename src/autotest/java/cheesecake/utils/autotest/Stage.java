@@ -139,6 +139,17 @@ public abstract class Stage {
     }
 
     /**
+     * Teleports and points the player at {@code (lookX, lookY, lookZ)}. The camera keeps whatever
+     * direction the last stage left it in, which matters wherever a stage cares which way the
+     * player is facing when it starts.
+     */
+    protected void teleportFacing(double x, double y, double z, double lookX, double lookY, double lookZ) {
+        command("execute in " + this.t.ctx().world().dimension().identifier()
+                + " run tp " + this.t.playerName() + " " + x + " " + y + " " + z
+                + " facing " + lookX + " " + lookY + " " + lookZ);
+    }
+
+    /**
      * Whether every queued command has run. A command that reported an error fails the stage.
      */
     protected boolean commandsDone() {

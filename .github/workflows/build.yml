@@ -208,16 +208,191 @@ jobs:
           CHEESECAKE_AUTO_TEST: 'true'
         run: |
           set +e
+
+          # What the runner gives us, and what the client will help itself to. Loom sets no -Xmx
+          # for runClient, so the client JVM takes the ergonomic default of a quarter of physical
+          # memory, on top of the 4G this build's Gradle asks for. Printed so that a kill can be
+          # read against the numbers instead of guessed at.
+          free -m
+          "${JAVA_HOME}/bin/java" -XX:+PrintFlagsFinal -version 2>/dev/null |
+            grep -E ' (MaxHeapSize|MaxRAM|MaxRAMPercentage) ' || true
+
+          # Can we read the kernel's own record of a kill? An empty oom.txt has to mean "the kernel
+          # recorded no kill", not "we were not allowed to look", or it proves nothing either way.
+          if sudo -n dmesg > /dev/null 2>&1; then
+            echo "dmesg: readable"
+          else
+            echo "dmesg: NOT readable, the kernel's record of a kill will not be available"
+          fi
+
+          # Sample once a second, and do it with shell builtins only. The first version of this
+          # forked pgrep, ps, awk, sed, grep and date on every sample; on a four-core runner that
+          # is already saturated by software rendering, that load landed on the thing being
+          # measured and took the in-world job from an eight percent failure rate to eighty. A
+          # measurement that changes the result is worse than no measurement. So: /proc read
+          # through bash's own read, the clock from SECONDS against a base taken once instead of
+          # a date per sample, the client looked up once rather than every sample, and no stage
+          # tagging here at all -- the report correlates samples with stages afterwards, when the
+          # game is gone and forks are free.
+          #
+          # VmHWM is the kernel's own high-water mark for the process, so the peak survives even
+          # if no sample lands on top of a spike. That is what makes one hertz enough.
+          #
+          # The fifo is the timer: read -t on a pipe that never carries anything waits without
+          # forking, which plain sleep cannot do.
+          #
+          # Each sample is appended rather than written down a redirect held open by the subshell,
+          # so that every sample is on disk the moment it is taken: the samples worth having are
+          # the last ones before a kill, and those are exactly the ones a buffer would eat.
+          mkfifo tick.fifo
+          exec 9<> tick.fifo
+          epoch_base=$(($(date +%s) - SECONDS))
+          : > memory.tsv
+          (
+            pid=""
+            looking=1
+            while :; do
+              avail=0; swaptotal=0; swapfree=0
+              while read -r key value _; do
+                case "$key" in
+                  MemAvailable:) avail=$value ;;
+                  SwapTotal:)    swaptotal=$value ;;
+                  SwapFree:)     swapfree=$value ;;
+                esac
+              done < /proc/meminfo
+
+              # Loom runs the game under its own xvfb-run, and that shell carries the whole java
+              # command line in its argv, so the match alone finds a two-megabyte shell first.
+              # Take the candidate that is actually a JVM, and only look until it is found.
+              if [ -z "$pid" ] && [ "$looking" = 1 ]; then
+                for candidate in $(pgrep -f 'fabric[.]dli[.]config' 2>/dev/null); do
+                  comm=""
+                  read -r comm < "/proc/$candidate/comm" 2>/dev/null
+                  if [ "$comm" = "java" ]; then
+                    pid=$candidate
+                    break
+                  fi
+                done
+              fi
+
+              rss=0; hwm=0
+              if [ -n "$pid" ]; then
+                if [ -r "/proc/$pid/status" ]; then
+                  while read -r key value _; do
+                    case "$key" in
+                      VmRSS:) rss=$value ;;
+                      VmHWM:) hwm=$value ;;
+                    esac
+                  done < "/proc/$pid/status"
+                else
+                  # It has gone; the run is over. Stop looking, so the search costs nothing more.
+                  pid=""
+                  looking=0
+                fi
+              fi
+
+              printf '%s\t%s\t%s\t%s\t%s\n' \
+                "$((epoch_base + SECONDS))" "$avail" "$((swaptotal - swapfree))" "$rss" "$hwm" >> memory.tsv
+              read -t 1 -u 9 _ || true
+            done
+          ) &
+          sampler=$!
+
           xvfb-run -a --server-args="-screen 0 1280x720x24" \
             timeout --signal=INT 1500 ./gradlew runClient --no-daemon > autotest.log 2>&1
           code=$?
+          kill "$sampler" 2>/dev/null
+
           echo "$code" > autotest.exit
           echo "gradle exited $code"
+
+          # Gradle exits 1 whether a stage failed or the client died under it, so the client's own
+          # status only shows in the task failure Gradle reports. Take whatever it says rather than
+          # looking for one number: 137 is SIGKILL (and is also what the pathfinder's exit(696969)
+          # leaves behind, which the next check sorts out), 134 is SIGABRT -- the C runtime aborting
+          # on a corrupted heap -- and 139 is SIGSEGV. A run that died on 134 used to fall through
+          # to the stage-failure message and say nothing about the crash at all.
+          client_status=$(grep -a "finished with non-zero exit value" autotest.log |
+            tail -1 | sed -E 's/.*exit value ([0-9]+).*/\1/')
+          echo "${client_status:-}" > autotest.client-status
+          killed=no
+          case "${client_status:-}" in 134|137|139) killed=yes;; esac
+          echo "$killed" > autotest.killed
+
+          # ...but 137 is also what nether-pathfinder leaves behind. Given a ray it will not
+          # answer, raytrace() prints "raytrace whiffed" and calls exit(696969); a process exits
+          # with the low eight bits of that, and 696969 ends in 137. So the same number means
+          # either a kill or a deliberate exit by the library, and only this line tells them
+          # apart. It is written to bare stderr with no log prefix, which is why it never showed
+          # up in the stage lines. Record it before anything else reads the 137.
+          whiffed=no
+          if grep -qa "raytrace whiffed" autotest.log; then whiffed=yes; fi
+          echo "$whiffed" > autotest.whiffed
+
+          # Everything that can say WHY it died, collected whether or not it did: the kernel's
+          # record of an out-of-memory kill, the JVM's record of a native crash, and the game's own
+          # crash report. Which of these is empty is itself the evidence.
+          sudo -n dmesg 2>/dev/null | grep -iE 'out of memory|oom-kill|killed process|oom_reaper' > oom.txt
+          echo "kernel out-of-memory records: $(wc -l < oom.txt)"
+          cat oom.txt
+
+          # systemd-oomd kills a cgroup with SIGKILL on memory-pressure and reports it to the
+          # journal, not to the kernel ring buffer, so a kill by it looks exactly like this one:
+          # 137, nothing in dmesg, no crash log. Ask the journal too before concluding anything.
+          sudo -n journalctl -q --no-pager --since "-20min" -u systemd-oomd 2>/dev/null > oomd.txt
+          sudo -n journalctl -q --no-pager --since "-20min" -k 2>/dev/null |
+            grep -iE 'killed process|out of memory|oom' >> oomd.txt
+          echo "systemd-oomd / journal records: $(wc -l < oomd.txt)"
+          cat oomd.txt
+          # head -40 stops just short of the only part that names anything: the crashing thread
+          # and its frames. Print the header for the signal and then that section.
+          ls -1 hs_err_pid*.log run/hs_err_pid*.log 2>/dev/null | while read -r f; do
+            echo "--- JVM crash log $f"
+            head -20 "$f"
+            echo "--- crashing thread and frames"
+            sed -n '/^Current thread/,/^siginfo/p' "$f"
+          done
+          ls -1 run/crash-reports/*.txt 2>/dev/null | while read -r f; do
+            echo "--- game crash report $f"
+            head -40 "$f"
+          done
+
           grep -nE "\[cheesecake-autotest\] (stage |PASS|FAIL)" autotest.log || true
+
+      # The numbers the kill has to be read against: how close the runner came to having nothing
+      # left, and which stage the client was biggest in. Diagnostics only -- continue-on-error,
+      # because a failure here would skip the assert step below and turn a run that passed every
+      # stage red, which is exactly what happened the first time this was not marked.
+      - name: Report the memory ceiling
+        if: always()
+        continue-on-error: true
+        run: scripts/autotest-memory-report.sh memory.tsv autotest.log
 
       - name: Assert every stage passed
         run: |
           set -euo pipefail
+
+          # A kill is not a stage failure. Say so first and stop: the client never reached its own
+          # failure path, so the stage lines end mid-stage and reading them as a hang wastes time.
+          if [ "$(cat autotest.killed 2>/dev/null || echo no)" = "yes" ]; then
+            during=$(grep -a "cheesecake-autotest\] stage [0-9]* of" autotest.log |
+              tail -1 | sed -E 's/.*stage ([0-9]+ of [0-9]+: [a-z0-9-]+).*/stage \1/')
+            status=$(cat autotest.client-status 2>/dev/null || echo "")
+            if [ "$status" = "134" ] || [ "$status" = "139" ]; then
+              echo "::error::the client crashed in native code during ${during:-startup} (exit $status, $([ "$status" = 134 ] && echo SIGABRT || echo SIGSEGV)). This is not a kill and not the runner running out of memory. The JVM crash log names the thread and the frames -- see \"crashing thread and frames\" above, and the hs_err log in the uploaded artifact."
+              grep -aE "malloc\(\)|free\(\)|corrupted|double free|Aborted" autotest.log | tail -5 || true
+            elif [ "$(cat autotest.whiffed 2>/dev/null || echo no)" = "yes" ]; then
+              echo "::error::nether-pathfinder ended the client during ${during:-startup}: it printed \"raytrace whiffed\" and called exit(696969), which leaves status 137. Nothing killed anything -- 137 here is the library's own exit code, not SIGKILL, which is why there is no crash report, no JVM error log and nothing in the kernel log. The ray it refused is the bug; see the lines before the whiff."
+              grep -na -B 12 "raytrace whiffed" autotest.log | tail -20
+            elif [ -s oom.txt ]; then
+              echo "::error::the runner ran out of memory and killed the client (SIGKILL, exit 137) during ${during:-startup}. Nothing in the mod failed. The kernel's record of the kill follows."
+              cat oom.txt
+            else
+              echo "::error::something killed the client with SIGKILL (exit 137) during ${during:-startup}. The kernel recorded no out-of-memory kill, so this is NOT the runner running out of memory -- see the memory ceiling above for how much was free. The client never reached its own failure path, so the stage lines say nothing about why."
+            fi
+            exit 1
+          fi
+
           if ! grep -q "\[cheesecake-autotest\] PASS" autotest.log; then
             echo "::error::the in-world test did not pass - see the stage lines above and the uploaded log"
             grep -nE "\[cheesecake-autotest\] FAIL|Exception|Caused by" autotest.log | head -40 || true
@@ -235,7 +410,14 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: autotest-log
-          path: autotest.log
+          path: |
+            autotest.log
+            memory.tsv
+            oom.txt
+            oomd.txt
+            hs_err_pid*.log
+            run/hs_err_pid*.log
+            run/crash-reports/*.txt
           if-no-files-found: ignore
 
       # The walk stage photographs the goal beacon beam; the picture is the one visual check a

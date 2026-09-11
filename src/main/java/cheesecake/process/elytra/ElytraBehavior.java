@@ -145,6 +145,12 @@ public final class ElytraBehavior implements Helper {
         public NetherPath path;
         private boolean completePath;
         private boolean recalculating;
+        /**
+         * Whether a path calculation is in flight. Set on the game thread when one starts and
+         * cleared by whichever thread finishes it, so read as volatile.
+         */
+        private volatile boolean awaitingPath;
+        private volatile long awaitingSince;
 
         private int maxPlayerNear;
         private int ticksNearUnchanged;
@@ -286,20 +292,51 @@ public final class ElytraBehavior implements Helper {
             this.maxPlayerNear = 0;
         }
 
-        private void setPath(final UnpackedSegment segment) {
-            List<BetterBlockPos> path = segment.collect();
-            if (ElytraBehavior.this.appendDestination) {
-                BlockPos dest = destinationFixed();
-                BlockPos last = !path.isEmpty() ? path.get(path.size() - 1) : null;
-                if (last != null && ElytraBehavior.this.clearView(Vec3.atLowerCornerOf(dest), Vec3.atLowerCornerOf(last), false)) {
-                    path.add(new BetterBlockPos(dest));
-                } else {
-                    logDirect("unable to land at " + dest);
-                    process.landingSpotIsBad(new BetterBlockPos(dest));
-                }
+        /**
+         * A computed segment with the landing spot already decided on: appended to the path when it
+         * is visible from the path's last node, or named here to be marked bad when it is not.
+         */
+        private record ComputedPath(List<BetterBlockPos> path, boolean finished, BetterBlockPos rejectedLanding) {}
+
+        /**
+         * Decides whether the landing spot can be appended. This raytraces into nether-pathfinder,
+         * so it runs on a worker with the read lock held: not on the game thread, which must never
+         * wait on that lock, and not without the lock, which is how it used to run. Landing was the
+         * one time a path was finished with a raytrace in it, and the write executor is busy exactly
+         * then -- the player is still flying, chunks are still loading and being packed, and each
+         * packing frees the chunk it replaces. A lookup in the chunk table racing an insertion, and
+         * then a traversal over whatever pointer came back, is where Nether flights have been
+         * ending: as "raytrace whiffed" and exit(696969) when the traversal arrived nowhere, and as
+         * a corrupted heap when two threads reached that exit at once.
+         */
+        private ComputedPath withLandingSpot(final UnpackedSegment segment) {
+            final List<BetterBlockPos> path = segment.collect();
+            if (!ElytraBehavior.this.appendDestination) {
+                return new ComputedPath(path, segment.isFinished(), null);
             }
-            this.path = new NetherPath(path);
-            this.completePath = segment.isFinished();
+            final BetterBlockPos dest = destinationFixed();
+            final BetterBlockPos last = path.isEmpty() ? null : path.get(path.size() - 1);
+            final boolean visible;
+            npfContext.acquireReadLock();
+            try {
+                visible = last != null && ElytraBehavior.this.clearView(Vec3.atLowerCornerOf(dest), Vec3.atLowerCornerOf(last), false);
+            } finally {
+                npfContext.releaseReadLock();
+            }
+            if (visible) {
+                path.add(dest);
+                return new ComputedPath(path, segment.isFinished(), null);
+            }
+            return new ComputedPath(path, segment.isFinished(), dest);
+        }
+
+        private void setPath(final ComputedPath computed) {
+            if (computed.rejectedLanding() != null) {
+                logDirect("unable to land at " + computed.rejectedLanding());
+                process.landingSpotIsBad(computed.rejectedLanding());
+            }
+            this.path = new NetherPath(computed.path());
+            this.completePath = computed.finished();
             this.playerNear = 0;
             this.ticksNearUnchanged = 0;
             this.maxPlayerNear = 0;
@@ -315,9 +352,13 @@ public final class ElytraBehavior implements Helper {
 
         // mickey resigned
         private CompletableFuture<Void> path0(BlockPos src, BlockPos dst, UnaryOperator<UnpackedSegment> operator) {
+            this.awaitingSince = System.nanoTime();
+            this.awaitingPath = true;
             return ElytraBehavior.this.pathFinder.pathFindAsync(src, dst)
                     .thenApply(operator)
-                    .thenAcceptAsync(this::setPath, ctx.minecraft()::execute);
+                    .thenApplyAsync(this::withLandingSpot, Cheesecake.getExecutor())
+                    .thenAcceptAsync(this::setPath, ctx.minecraft()::execute)
+                    .whenComplete((result, ex) -> this.awaitingPath = false);
         }
 
         // requires the read lock to be held
@@ -440,6 +481,16 @@ public final class ElytraBehavior implements Helper {
 
         public boolean isComplete() {
             return this.completePath;
+        }
+
+        /** Whether a path is being calculated. A player waiting for one has not failed to take off. */
+        public boolean isAwaitingPath() {
+            return this.awaitingPath;
+        }
+
+        /** How long the current calculation has been running, or zero when there is none. */
+        public long awaitingPathNanos() {
+            return this.awaitingPath ? System.nanoTime() - this.awaitingSince : 0L;
         }
     }
 
