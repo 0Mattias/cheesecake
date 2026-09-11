@@ -217,26 +217,55 @@ jobs:
           "${JAVA_HOME}/bin/java" -XX:+PrintFlagsFinal -version 2>/dev/null |
             grep -E ' (MaxHeapSize|MaxRAM|MaxRAMPercentage) ' || true
 
-          # Sample every five seconds for the whole run and tag each sample with the stage that was
-          # running, so that a kill can be attributed to one. Loom launches the game through
-          # DevLaunchInjector, so -Dfabric.dli.config names the client exactly and everything else
-          # on the JVM side -- Gradle itself and the workers it forks to compile -- is the build.
+          # Can we read the kernel's own record of a kill? An empty oom.txt has to mean "the kernel
+          # recorded no kill", not "we were not allowed to look", or it proves nothing either way.
+          if sudo -n dmesg > /dev/null 2>&1; then
+            echo "dmesg: readable"
+          else
+            echo "dmesg: NOT readable, the kernel's record of a kill will not be available"
+          fi
+
+          # Sample twice a second and tag each sample with the stage that was running. Twice a
+          # second rather than every few, because what this has to be able to see is a spike: a
+          # sampler slower than the thing it measures cannot tell a run that sat at its peak from
+          # one that shot past it between two samples. VmHWM is the kernel's own high-water mark
+          # for the process, so it catches a spike even if no sample lands on top of it. Loom
+          # launches the game through DevLaunchInjector, so -Dfabric.dli.config names the client
+          # exactly and everything else on the JVM side is the build around it.
           : > memory.tsv
           (
+            stage=starting
+            n=0
             while true; do
               read -r avail swap <<< "$(awk '
                 /^MemAvailable:/ { a = $2 }
                 /^SwapTotal:/    { t = $2 }
                 /^SwapFree:/     { f = $2 }
                 END { print a, t - f }' /proc/meminfo)"
-              read -r gradle client <<< "$(ps -eo rss=,args= | awk '
-                /[j]ava/ { if ($0 ~ /fabric\.dli/) { c += $1 } else { g += $1 } }
-                END { print g + 0, c + 0 }')"
-              stage=$(grep -a "cheesecake-autotest\] stage [0-9]* of" autotest.log 2>/dev/null |
-                tail -1 | sed -E 's/.*stage ([0-9]+ of [0-9]+: [a-z0-9-]+).*/\1/')
-              printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
-                "$(date -u +%H:%M:%S)" "$avail" "$swap" "$gradle" "$client" "${stage:-starting}" >> memory.tsv
-              sleep 5
+              # Matched on the full option so that it cannot also match this sampler's own awk,
+              # whose pattern argument would otherwise put "fabric.dli" in its command line too.
+              pid=$(pgrep -f 'fabric[.]dli[.]config' | head -1)
+              client=0
+              hwm=0
+              if [ -n "$pid" ] && [ -r "/proc/$pid/status" ]; then
+                read -r client hwm <<< "$(awk '
+                  /^VmRSS:/ { r = $2 }
+                  /^VmHWM:/ { h = $2 }
+                  END { print r + 0, h + 0 }' "/proc/$pid/status" 2>/dev/null)"
+              fi
+              gradle=$(ps -eo rss=,args= | awk '
+                /[j]ava/ { if ($0 !~ /fabric\.dli/) { g += $1 } }
+                END { print g + 0 }')
+              # Re-reading the log twice a second would cost more than it tells us; once a second
+              # is finer than a stage boundary anyway.
+              n=$((n + 1))
+              if [ $((n % 2)) -eq 0 ]; then
+                stage=$(grep -a "cheesecake-autotest\] stage [0-9]* of" autotest.log 2>/dev/null |
+                  tail -1 | sed -E 's/.*stage ([0-9]+ of [0-9]+: [a-z0-9-]+).*/\1/')
+              fi
+              printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+                "$(date -u +%H:%M:%S.%2N)" "$avail" "$swap" "${gradle:-0}" "${client:-0}" "${hwm:-0}" "${stage:-starting}" >> memory.tsv
+              sleep 0.5
             done
           ) &
           sampler=$!
@@ -250,13 +279,25 @@ jobs:
           echo "gradle exited $code"
 
           # 137 is SIGKILL. Gradle exits 1 whether a stage failed or the client was killed under it,
-          # so the kill only shows in the task failure Gradle reports and, when the runner lets us
-          # read the ring buffer, in the kernel's own record of the kill.
+          # so the kill only shows in the task failure Gradle reports.
           killed=no
           if grep -qa "finished with non-zero exit value 137" autotest.log; then killed=yes; fi
-          sudo -n dmesg 2>/dev/null | grep -iE 'out of memory|oom-kill|killed process' | tail -5 > oom.txt
-          if [ -s oom.txt ]; then killed=yes; fi
           echo "$killed" > autotest.killed
+
+          # Everything that can say WHY it died, collected whether or not it did: the kernel's
+          # record of an out-of-memory kill, the JVM's record of a native crash, and the game's own
+          # crash report. Which of these is empty is itself the evidence.
+          sudo -n dmesg 2>/dev/null | grep -iE 'out of memory|oom-kill|killed process|oom_reaper' > oom.txt
+          echo "kernel out-of-memory records: $(wc -l < oom.txt)"
+          cat oom.txt
+          ls -1 hs_err_pid*.log run/hs_err_pid*.log 2>/dev/null | while read -r f; do
+            echo "--- JVM crash log $f"
+            head -40 "$f"
+          done
+          ls -1 run/crash-reports/*.txt 2>/dev/null | while read -r f; do
+            echo "--- game crash report $f"
+            head -40 "$f"
+          done
 
           grep -nE "\[cheesecake-autotest\] (stage |PASS|FAIL)" autotest.log || true
 
@@ -272,13 +313,18 @@ jobs:
           fi
           awk '/^MemTotal:/ { printf "runner memory: %d MiB total\n", $2 / 1024 }' /proc/meminfo
           echo
+          echo "samples: $(wc -l < memory.tsv), twice a second"
+          awk -F'\t' '
+            { if ($6 + 0 > h) h = $6 + 0 }
+            END { printf "client high-water (VmHWM, the kernel\047s own peak for the process): %d MiB\n", h / 1024 }' memory.tsv
+          echo
           echo "tightest ten samples (client is the game, gradle is the build around it):"
           sort -t"$(printf '\t')" -k2 -n memory.tsv | head -10 |
-            awk -F'\t' '{ printf "  %s  available %6d MiB  swap used %5d MiB  gradle %5d MiB  client %5d MiB  %s\n", $1, $2/1024, $3/1024, $4/1024, $5/1024, $6 }'
+            awk -F'\t' '{ printf "  %s  available %6d MiB  swap used %5d MiB  gradle %5d MiB  client %5d MiB  %s\n", $1, $2/1024, $3/1024, $4/1024, $5/1024, $7 }'
           echo
           echo "peak client RSS per stage:"
           awk -F'\t' '
-            { if ($5 + 0 > peak[$6]) peak[$6] = $5 + 0; if (!($6 in seen)) { seen[$6] = ++n } }
+            { if ($5 + 0 > peak[$7]) peak[$7] = $5 + 0; if (!($7 in seen)) { seen[$7] = ++n } }
             END { for (s in peak) printf "%d\t%d\t%s\n", seen[s], peak[s] / 1024, s }' memory.tsv |
             sort -n | awk -F'\t' '{ printf "  %5d MiB  %s\n", $2, $3 }'
 
@@ -291,8 +337,12 @@ jobs:
           if [ "$(cat autotest.killed 2>/dev/null || echo no)" = "yes" ]; then
             during=$(grep -a "cheesecake-autotest\] stage [0-9]* of" autotest.log |
               tail -1 | sed -E 's/.*stage ([0-9]+ of [0-9]+: [a-z0-9-]+).*/stage \1/')
-            echo "::error::the runner killed the client (SIGKILL, exit 137) during ${during:-startup}: it ran out of memory, nothing in the mod failed. See the memory ceiling above."
-            cat oom.txt 2>/dev/null || true
+            if [ -s oom.txt ]; then
+              echo "::error::the runner ran out of memory and killed the client (SIGKILL, exit 137) during ${during:-startup}. Nothing in the mod failed. The kernel's record of the kill follows."
+              cat oom.txt
+            else
+              echo "::error::something killed the client with SIGKILL (exit 137) during ${during:-startup}. The kernel recorded no out-of-memory kill, so this is NOT the runner running out of memory -- see the memory ceiling above for how much was free. The client never reached its own failure path, so the stage lines say nothing about why."
+            fi
             exit 1
           fi
 
@@ -316,6 +366,10 @@ jobs:
           path: |
             autotest.log
             memory.tsv
+            oom.txt
+            hs_err_pid*.log
+            run/hs_err_pid*.log
+            run/crash-reports/*.txt
           if-no-files-found: ignore
 
       # The walk stage photographs the goal beacon beam; the picture is the one visual check a
