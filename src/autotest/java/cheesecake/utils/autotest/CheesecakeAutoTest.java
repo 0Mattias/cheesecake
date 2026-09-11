@@ -19,6 +19,11 @@ package cheesecake.utils.autotest;
 
 import cheesecake.Cheesecake;
 import cheesecake.api.event.events.PathEvent;
+import java.util.stream.Stream;
+import java.util.Comparator;
+import java.nio.file.Path;
+import java.nio.file.Files;
+import java.io.IOException;
 import cheesecake.api.event.events.TickEvent;
 import cheesecake.api.event.listener.AbstractGameEventListener;
 import net.minecraft.client.CloudStatus;
@@ -249,6 +254,7 @@ public final class CheesecakeAutoTest implements AbstractGameEventListener {
     }
 
     private static void createWorld(Minecraft mc) {
+        deleteEarlierWorlds(mc);
         String name = "cheesecake-autotest-" + System.currentTimeMillis();
         log("creating world " + name + " with seed " + AutoTestContext.SEED);
         LevelSettings info = new LevelSettings(
@@ -265,6 +271,35 @@ public final class CheesecakeAutoTest implements AbstractGameEventListener {
                 WorldPresets::createNormalWorldDimensions,
                 mc.gui.screen()
         );
+    }
+
+    /**
+     * Removes the worlds earlier runs left behind. Every run creates a fresh world and nothing
+     * deleted them: seventy had accumulated, 1.3 GB. The current run's world is kept, since it is
+     * what there is to look at when a stage fails, and the previous ones go as the next run starts
+     * -- a world cannot be removed while the game that made it is still shutting down.
+     */
+    private static void deleteEarlierWorlds(Minecraft mc) {
+        Path saves = mc.getLevelSource().getBaseDir();
+        if (!Files.isDirectory(saves)) {
+            return;
+        }
+        int removed = 0;
+        try (Stream<Path> worlds = Files.list(saves)) {
+            for (Path world : worlds.filter(p -> p.getFileName().toString().startsWith("cheesecake-autotest-")).toList()) {
+                try (Stream<Path> files = Files.walk(world)) {
+                    for (Path file : files.sorted(Comparator.reverseOrder()).toList()) {
+                        Files.deleteIfExists(file);
+                    }
+                }
+                removed++;
+            }
+        } catch (IOException e) {
+            log("could not remove an earlier world: " + e);
+        }
+        if (removed > 0) {
+            log("removed " + removed + " world" + (removed == 1 ? "" : "s") + " left by earlier runs");
+        }
     }
 
     private void pass(String message) {
