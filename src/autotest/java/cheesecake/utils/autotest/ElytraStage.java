@@ -103,6 +103,8 @@ public final class ElytraStage extends Stage {
      */
     private static final int DROP_HEIGHT = 40;
     private static final int MIN_GLIDING_TICKS = 60;
+    /** What the process says when a path calculation has hung; see armed(). */
+    private static final String PATH_HANG = "did not answer for thirty seconds";
     /** What the process says when it gives up. Any of them fails the stage on the spot. */
     private static final String[] GIVING_UP = {
             "Failed to compute path to destination", "Failed to compute a walking path", "no fireworks", "Not taking off",
@@ -126,7 +128,9 @@ public final class ElytraStage extends Stage {
     private int netherPhase;
     private int candidate;
     private int goalX;
+    private Integer goalY;
     private int goalZ;
+    private boolean relaunched;
     private double maxY;
     /**
      * The highest node the process planned, which says whether it routed above the build limit
@@ -342,6 +346,7 @@ public final class ElytraStage extends Stage {
         settings().elytraTermsAccepted.value = true;
         this.origin = feet();
         this.goalX = x;
+        this.goalY = y;
         this.goalZ = z;
         String goal = y == null ? x + " " + z : x + " " + y + " " + z;
         this.t.markChat();
@@ -362,6 +367,17 @@ public final class ElytraStage extends Stage {
     private boolean armed() {
         if (this.trip == Trip.OVERWORLD_AUTO_JUMP) {
             advance(Step.FLYING);
+            return false;
+        }
+        if (this.t.saidSinceMark(PATH_HANG)) {
+            // A known nether-pathfinder defect, recorded in the README: a worker thread the
+            // library starts can read a stale stop flag and exit at birth, after which the terrain
+            // generator waits for ever. The process has abandoned that context; a fresh one is
+            // built at another address. Once is the library's fault; twice would be ours.
+            check(!this.relaunched, "the path calculation hung twice");
+            this.relaunched = true;
+            this.t.log("the path calculation hung, which is the nether-pathfinder worker-thread defect; starting the process again on a fresh context");
+            launch(this.goalX, this.goalY, this.goalZ);
             return false;
         }
         checkNotGivenUp();
@@ -393,6 +409,7 @@ public final class ElytraStage extends Stage {
     }
 
     private void checkNotGivenUp() {
+        check(!this.t.saidSinceMark(PATH_HANG), "the path calculation hung");
         for (String failure : GIVING_UP) {
             check(!this.t.saidSinceMark(failure), "the process gave up: " + failure);
         }

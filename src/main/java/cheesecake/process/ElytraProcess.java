@@ -44,6 +44,7 @@ import cheesecake.process.elytra.NullElytraProcess;
 import cheesecake.utils.CheesecakeProcessHelper;
 import cheesecake.utils.PathingCommandContext;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
@@ -90,11 +91,20 @@ public class ElytraProcess extends CheesecakeProcessHelper implements IElytraPro
     private LandingSearchState landingSearchState;
 
     @Override
+    /**
+     * Ends the flight but keeps the pathfinder context. Upstream frees the context here and builds
+     * a fresh one for the next flight, and that is what has been hanging the path calculation:
+     * nether-pathfinder's ParallelExecutor starts each worker thread before the flag that tells it
+     * to stop has been constructed, so the thread reads whatever the memory held -- and a context
+     * freed a moment earlier, at the same size and so at the same address, held every worker's
+     * stop flag set. A worker that reads it exits at birth, and the first terrain generation then
+     * spins for ever waiting for a result it will never get, inside pathFind, under the write
+     * lock. The context is built once instead, from memory no context has used, and lives until
+     * the world or the settings it was built for change: {@link #resetState()} and the world
+     * event free it. Chunks it packed on an earlier flight stay until the cull reaches them;
+     * every loaded chunk is repacked when a flight starts, so what is nearby is current.
+     */
     public void onLostControl() {
-        onLostControl(true);
-    }
-
-    public void onLostControl(boolean destroyNpf) {
         this.state = State.START_FLYING; // TODO: null state?
         this.goingToLandingSpot = false;
         this.landingSpot = null;
@@ -103,9 +113,6 @@ public class ElytraProcess extends CheesecakeProcessHelper implements IElytraPro
         this.goal = null;
         this.groundedTicks = 0;
         destroyBehaviorAsync();
-        if (destroyNpf) {
-            destroyNpfContextAsync();
-        }
     }
 
     private ElytraProcess(Cheesecake cheesecake) {
@@ -128,6 +135,7 @@ public class ElytraProcess extends CheesecakeProcessHelper implements IElytraPro
     public void resetState() {
         BlockPos destination = this.currentDestination();
         this.onLostControl();
+        destroyNpfContextAsync(); // built for settings that have just changed
         if (destination != null) {
             this.pathTo(destination);
             this.repackChunks();
@@ -135,6 +143,13 @@ public class ElytraProcess extends CheesecakeProcessHelper implements IElytraPro
     }
 
     private static final String AUTO_JUMP_FAILURE_MSG = "Failed to compute a walking path to a spot to jump off from. Consider starting from a higher location, near an overhang. Or, you can disable elytraAutoJump and just manually begin gliding.";
+    /**
+     * Thirty seconds. A search is bounded at ten by the library and the queue in front of it is a
+     * repacking of loaded chunks that takes milliseconds each, so nothing legitimate lasts this
+     * long.
+     */
+    private static final long PATH_HANG_NANOS = 30_000_000_000L;
+    private static final String PATH_HANG_MSG = "The path calculation did not answer for thirty seconds. That is a known defect in nether-pathfinder, not a slow search: a worker thread it started read a stale stop flag and exited at birth, and the terrain generator waits for it for ever. Abandoning this context; use #elytra again and a fresh one is built.";
     private static final String NO_TAKEOFF_MSG = "Still on the ground after thirty seconds of trying to take off, and elytraAutoJump is off, so there is no way to start gliding from here. Jump off something manually, or turn elytraAutoJump on.";
     /**
      * How long the process may go on trying to get off the ground before it is treated as the
@@ -184,6 +199,16 @@ public class ElytraProcess extends CheesecakeProcessHelper implements IElytraPro
         if (calcFailed) {
             onLostControl();
             logDirect(AUTO_JUMP_FAILURE_MSG);
+            return new PathingCommand(null, PathingCommandType.CANCEL_AND_SET_GOAL);
+        }
+
+        // A calculation that never answers is the library's terrain generator hung -- see
+        // abandonNpfContext() -- and nothing downstream can proceed: the write lock is held for
+        // ever, so the solver never runs again either. Say so, and leave the context behind.
+        if (this.behavior.pathManager.isAwaitingPath() && this.behavior.pathManager.awaitingPathNanos() > PATH_HANG_NANOS) {
+            logDirect(PATH_HANG_MSG, ChatFormatting.RED);
+            abandonNpfContext();
+            onLostControl();
             return new PathingCommand(null, PathingCommandType.CANCEL_AND_SET_GOAL);
         }
 
@@ -475,7 +500,7 @@ public class ElytraProcess extends CheesecakeProcessHelper implements IElytraPro
         if (ctx.player() == null) {
             return;
         }
-        this.onLostControl(false);
+        this.onLostControl();
         this.predictingTerrain = ctx.world().dimension() == Level.NETHER && Cheesecake.settings().elytraPredictTerrain.value;
         this.allowTight = Cheesecake.settings().elytraAllowTightSpaces.value;
         this.allowAboveBuildLimit = Cheesecake.settings().elytraAllowAboveBuildLimit.value;
@@ -832,15 +857,30 @@ public class ElytraProcess extends CheesecakeProcessHelper implements IElytraPro
     }
 
     private NetherPathfinderContext getNpfContext() {
+        final long seed = Cheesecake.settings().elytraNetherSeed.value;
+        final Path cache = Cheesecake.settings().elytraUseCache.value ? cheesecake.getWorldProvider().getCurrentWorld().directory.resolve("cache") : null;
+        if (this.npfContext != null && !this.npfContext.builtFor(ctx.world(), seed, cache)) {
+            destroyNpfContextAsync(); // built for another dimension, height, seed or cache
+        }
         if (this.npfContext == null) {
             npfSema.acquireUninterruptibly();
-            this.npfContext = new NetherPathfinderContext(
-                    Cheesecake.settings().elytraNetherSeed.value,
-                    Cheesecake.settings().elytraUseCache.value ? cheesecake.getWorldProvider().getCurrentWorld().directory.resolve("cache") : null,
-                    ctx.world()
-            );
+            this.npfContext = new NetherPathfinderContext(seed, cache, ctx.world());
         }
         return this.npfContext;
+    }
+
+    /**
+     * Drops the context without freeing it. Freeing means taking its write lock, and when a path
+     * calculation has hung the thread that hung holds that lock for ever, so destroy() would only
+     * join it. The context and its threads are left for the life of the game -- one core spinning,
+     * its chunks unfreed -- and the next flight builds a new one at another address, which is
+     * what makes that one's workers start clean.
+     */
+    private void abandonNpfContext() {
+        if (this.npfContext != null) {
+            this.npfContext = null;
+            npfSema.release();
+        }
     }
 
     private void destroyNpfContextAsync() {

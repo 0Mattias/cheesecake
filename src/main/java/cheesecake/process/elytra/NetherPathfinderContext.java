@@ -82,14 +82,28 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
     final long context;
     private final long seed;
     // write locked operations
-    private final ExecutorService writeExecutor = Executors.newSingleThreadExecutor();
+    private final ExecutorService writeExecutor = Executors.newSingleThreadExecutor(named("nether-pathfinder-write"));
     // operations that don't make changes to the chunk cache. could use multiple threads but i'm not sure if it would cause problems.
-    private final ExecutorService readExecutor = Executors.newSingleThreadExecutor();
+    private final ExecutorService readExecutor = Executors.newSingleThreadExecutor(named("nether-pathfinder-read"));
     private final ResourceKey<Level> dimension;
     /** Whether a region cache was given, in which case a path calculation can insert chunks. */
     private final boolean cached;
     final int minY;
     private final BlockStateOctreeInterface boi;
+
+    /**
+     * Named, so that a crash log or a trace says which thread was inside the library rather than
+     * "pool-20-thread-1"; daemon, so that a context abandoned with its writer hung -- see
+     * ElytraProcess.abandonNpfContext() -- does not hold the game open at exit, which the client
+     * reports as a crash.
+     */
+    private static java.util.concurrent.ThreadFactory named(final String name) {
+        return runnable -> {
+            final Thread thread = new Thread(runnable, name);
+            thread.setDaemon(true);
+            return thread;
+        };
+    }
 
     public NetherPathfinderContext(long seed, Path cache, Level world) {
         this.dimension = world.dimension();
@@ -102,10 +116,7 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
         } else {
             dim = NetherPathfinder.DIMENSION_OVERWORLD;
         }
-        int height = Math.min(world.dimensionType().height(), 384);
-        if (!Cheesecake.settings().elytraAllowAboveRoof.value && dim == NetherPathfinder.DIMENSION_NETHER) {
-            height = Math.min(height, 128);
-        }
+        final int height = heightFor(world);
         this.maxHeight = height;
         this.context = NetherPathfinder.newContext(seed, cache != null ? cache.toString() : null, dim, height, Cheesecake.settings().elytraCustomAllocator.value);
         this.cached = cache != null;
@@ -390,6 +401,31 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
 
     public long getSeed() {
         return this.seed;
+    }
+
+    /** The dimension this context was built for; its height and floor are that dimension's. */
+    public ResourceKey<Level> dimension() {
+        return this.dimension;
+    }
+
+    /** The height a context for this world is built with, under the current settings. */
+    public static int heightFor(Level world) {
+        int height = Math.min(world.dimensionType().height(), 384);
+        if (!Cheesecake.settings().elytraAllowAboveRoof.value && world.dimension() == Level.NETHER) {
+            height = Math.min(height, 128);
+        }
+        return height;
+    }
+
+    /**
+     * Whether this context is the one the current world and settings call for. A context is built
+     * for one dimension, one height, one seed and one cache, and cannot be changed after.
+     */
+    public boolean builtFor(Level world, long seed, Path cache) {
+        return this.dimension == world.dimension()
+                && this.maxHeight == heightFor(world)
+                && this.seed == seed
+                && this.cached == (cache != null);
     }
 
     public void acquireReadLock() {

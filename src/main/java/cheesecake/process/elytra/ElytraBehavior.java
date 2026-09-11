@@ -150,6 +150,7 @@ public final class ElytraBehavior implements Helper {
          * cleared by whichever thread finishes it, so read as volatile.
          */
         private volatile boolean awaitingPath;
+        private volatile long awaitingSince;
 
         private int maxPlayerNear;
         private int ticksNearUnchanged;
@@ -351,6 +352,7 @@ public final class ElytraBehavior implements Helper {
 
         // mickey resigned
         private CompletableFuture<Void> path0(BlockPos src, BlockPos dst, UnaryOperator<UnpackedSegment> operator) {
+            this.awaitingSince = System.nanoTime();
             this.awaitingPath = true;
             return ElytraBehavior.this.pathFinder.pathFindAsync(src, dst)
                     .thenApply(operator)
@@ -484,6 +486,11 @@ public final class ElytraBehavior implements Helper {
         /** Whether a path is being calculated. A player waiting for one has not failed to take off. */
         public boolean isAwaitingPath() {
             return this.awaitingPath;
+        }
+
+        /** How long the current calculation has been running, or zero when there is none. */
+        public long awaitingPathNanos() {
+            return this.awaitingPath ? System.nanoTime() - this.awaitingSince : 0L;
         }
     }
 
