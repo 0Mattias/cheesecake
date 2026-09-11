@@ -28,16 +28,30 @@ public final class BlockStateOctreeInterface {
     private final NetherPathfinderContext context;
     private final long contextPtr;
     private final int minY;
-    transient long chunkPtr;
+    /**
+     * The chunk the last lookup fell in, so that a run of lookups inside one chunk costs one
+     * native call. Every solver thread under the read lock shares this object, and the read lock
+     * admits them all at once -- there are two of them for a moment whenever a flight is re-planned,
+     * the old behavior's solver finishing while the new one's starts -- so the pair is one immutable
+     * value swapped through a single reference. A reader sees a whole (chunk, pointer) pair or
+     * nothing, never one thread's coordinates against another's pointer, which three separate
+     * fields allowed and which answered a query out of the wrong chunk. The writer clears it under
+     * the write lock whenever chunks are replaced or freed, since the pointer may then be to memory
+     * that has been handed back.
+     */
+    private volatile CachedChunk cached;
 
-    // Guarantee that the first lookup will fetch the context by setting MAX_VALUE
-    private int prevChunkX = Integer.MAX_VALUE;
-    private int prevChunkZ = Integer.MAX_VALUE;
+    private record CachedChunk(int chunkX, int chunkZ, long ptr) {}
 
     public BlockStateOctreeInterface(final NetherPathfinderContext context) {
         this.context = context;
         this.contextPtr = context.context;
         this.minY = context.minY;
+    }
+
+    /** Forgets the cached chunk. Called under the write lock by whatever replaces or frees chunks. */
+    void invalidate() {
+        this.cached = null;
     }
 
     public boolean get0(final int x, final int y, final int z) {
@@ -47,11 +61,11 @@ public final class BlockStateOctreeInterface {
         }
         final int chunkX = x >> 4;
         final int chunkZ = z >> 4;
-        if (this.chunkPtr == 0 | ((chunkX ^ this.prevChunkX) | (chunkZ ^ this.prevChunkZ)) != 0) {
-            this.prevChunkX = chunkX;
-            this.prevChunkZ = chunkZ;
-            this.chunkPtr = NetherPathfinder.getChunkOrDefault(this.contextPtr, chunkX, chunkZ, true);
+        CachedChunk c = this.cached;
+        if (c == null || c.chunkX != chunkX || c.chunkZ != chunkZ) {
+            c = new CachedChunk(chunkX, chunkZ, NetherPathfinder.getChunkOrDefault(this.contextPtr, chunkX, chunkZ, true));
+            this.cached = c;
         }
-        return Octree.getBlock(this.chunkPtr, x & 0xF, adjustedY, z & 0xF);
+        return Octree.getBlock(c.ptr, x & 0xF, adjustedY, z & 0xF);
     }
 }

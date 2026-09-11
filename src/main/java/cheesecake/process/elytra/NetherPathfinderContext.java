@@ -118,7 +118,7 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
         this.writeExecutor.execute(() -> {
             writeLock.lock();
             try {
-                this.boi.chunkPtr = 0L;
+                this.boi.invalidate();
                 NetherPathfinder.cullFarChunks(this.context, chunkX, chunkZ, maxDistanceBlocks);
             } finally {
                 writeLock.unlock();
@@ -136,7 +136,7 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
                 writeLock.lock();
                 try {
                     // we might free this chunk
-                    this.boi.chunkPtr = 0L;
+                    this.boi.invalidate();
                     long ptr = NetherPathfinder.allocateAndInsertChunk(this.context, chunk.getPos().x(), chunk.getPos().z());
                     writeChunkData(chunk, ptr);
                 } finally {
