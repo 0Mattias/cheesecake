@@ -279,8 +279,14 @@ public final class ElytraStage extends Stage {
                     }
                     BetterBlockPos spot = findOpenSpot(this.netherAnchor);
                     check(spot != null, "found no open spot in the loaded Nether terrain around " + this.netherAnchor);
-                    this.t.log("found an open spot at " + spot + ", dropping into it");
-                    teleport(spot.x + 0.5, spot.y, spot.z + 0.5);
+                    this.t.log("found an open spot at " + spot + ", dropping into it facing " + this.landing);
+                    // Facing the landing column, for the same reason the other trips face their
+                    // goal before dropping: the glide begins in whatever direction the camera is
+                    // pointing, and this trip takes off here rather than through the shared drop,
+                    // so it was still starting on whatever the stage before left behind. Level
+                    // with the spot, so the pitch stays flat and only the yaw is set.
+                    teleportFacing(spot.x + 0.5, spot.y, spot.z + 0.5,
+                            this.landing.x + 0.5, spot.y, this.landing.z + 0.5);
                     this.dropped = true; // the drop into the spot is the takeoff
                     this.netherPhase = 2;
                     return false;
