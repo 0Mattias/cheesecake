@@ -145,6 +145,11 @@ public final class ElytraBehavior implements Helper {
         public NetherPath path;
         private boolean completePath;
         private boolean recalculating;
+        /**
+         * Whether a path calculation is in flight. Set on the game thread when one starts and
+         * cleared by whichever thread finishes it, so read as volatile.
+         */
+        private volatile boolean awaitingPath;
 
         private int maxPlayerNear;
         private int ticksNearUnchanged;
@@ -346,10 +351,12 @@ public final class ElytraBehavior implements Helper {
 
         // mickey resigned
         private CompletableFuture<Void> path0(BlockPos src, BlockPos dst, UnaryOperator<UnpackedSegment> operator) {
+            this.awaitingPath = true;
             return ElytraBehavior.this.pathFinder.pathFindAsync(src, dst)
                     .thenApply(operator)
                     .thenApplyAsync(this::withLandingSpot, Cheesecake.getExecutor())
-                    .thenAcceptAsync(this::setPath, ctx.minecraft()::execute);
+                    .thenAcceptAsync(this::setPath, ctx.minecraft()::execute)
+                    .whenComplete((result, ex) -> this.awaitingPath = false);
         }
 
         // requires the read lock to be held
@@ -472,6 +479,11 @@ public final class ElytraBehavior implements Helper {
 
         public boolean isComplete() {
             return this.completePath;
+        }
+
+        /** Whether a path is being calculated. A player waiting for one has not failed to take off. */
+        public boolean isAwaitingPath() {
+            return this.awaitingPath;
         }
     }
 

@@ -288,8 +288,16 @@ public class ElytraProcess extends CheesecakeProcessHelper implements IElytraPro
         // on. START_FLYING, which is where a player stands when elytraAutoJump is off, only presses
         // jump while already falling, which never becomes true standing still. Either way the
         // process sits there for as long as it is allowed: 5600 ticks in the CI run that found it.
+        //
+        // A player standing still while the path is still being worked out has not failed to take
+        // off: nothing has asked them to leave the ground yet. That wait has an end of its own --
+        // the calculation times out and says so -- and on a slow machine it outlasts this bound,
+        // which then blamed the takeoff for a path that had not arrived. Count only once the
+        // calculation is over, one way or the other.
         if (this.state == State.START_FLYING || this.state == State.LOCATE_JUMP) {
-            if (ctx.player().onGround() && ++this.groundedTicks > TAKEOFF_TIMEOUT_TICKS) {
+            if (this.behavior.pathManager.isAwaitingPath()) {
+                this.groundedTicks = 0;
+            } else if (ctx.player().onGround() && ++this.groundedTicks > TAKEOFF_TIMEOUT_TICKS) {
                 onLostControl();
                 logDirect(Cheesecake.settings().elytraAutoJump.value ? AUTO_JUMP_FAILURE_MSG : NO_TAKEOFF_MSG);
                 return new PathingCommand(null, PathingCommandType.CANCEL_AND_SET_GOAL);
