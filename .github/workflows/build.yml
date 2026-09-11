@@ -244,7 +244,16 @@ jobs:
                 END { print a, t - f }' /proc/meminfo)"
               # Matched on the full option so that it cannot also match this sampler's own awk,
               # whose pattern argument would otherwise put "fabric.dli" in its command line too.
-              pid=$(pgrep -f 'fabric[.]dli[.]config' | head -1)
+              # Loom runs the game under its own xvfb-run, and that shell carries the entire java
+              # command line in its argv, so the match alone finds a two-megabyte shell first --
+              # take the one that is actually a JVM.
+              pid=""
+              for candidate in $(pgrep -f 'fabric[.]dli[.]config'); do
+                if [ "$(cat "/proc/$candidate/comm" 2>/dev/null)" = "java" ]; then
+                  pid=$candidate
+                  break
+                fi
+              done
               client=0
               hwm=0
               if [ -n "$pid" ] && [ -r "/proc/$pid/status" ]; then
@@ -290,6 +299,15 @@ jobs:
           sudo -n dmesg 2>/dev/null | grep -iE 'out of memory|oom-kill|killed process|oom_reaper' > oom.txt
           echo "kernel out-of-memory records: $(wc -l < oom.txt)"
           cat oom.txt
+
+          # systemd-oomd kills a cgroup with SIGKILL on memory-pressure and reports it to the
+          # journal, not to the kernel ring buffer, so a kill by it looks exactly like this one:
+          # 137, nothing in dmesg, no crash log. Ask the journal too before concluding anything.
+          sudo -n journalctl -q --no-pager --since "-20min" -u systemd-oomd 2>/dev/null > oomd.txt
+          sudo -n journalctl -q --no-pager --since "-20min" -k 2>/dev/null |
+            grep -iE 'killed process|out of memory|oom' >> oomd.txt
+          echo "systemd-oomd / journal records: $(wc -l < oomd.txt)"
+          cat oomd.txt
           ls -1 hs_err_pid*.log run/hs_err_pid*.log 2>/dev/null | while read -r f; do
             echo "--- JVM crash log $f"
             head -40 "$f"
@@ -305,8 +323,11 @@ jobs:
       # left, and which stage the client was biggest in.
       - name: Report the memory ceiling
         if: always()
+        # Diagnostics only. Never let this fail the job: a failure here skips the assert step
+        # below, which would turn a run that passed every stage red for no reason.
+        continue-on-error: true
         run: |
-          set -euo pipefail
+          set -uo pipefail
           if [ ! -s memory.tsv ]; then
             echo "no samples were taken"
             exit 0
@@ -319,8 +340,10 @@ jobs:
             END { printf "client high-water (VmHWM, the kernel\047s own peak for the process): %d MiB\n", h / 1024 }' memory.tsv
           echo
           echo "tightest ten samples (client is the game, gradle is the build around it):"
-          sort -t"$(printf '\t')" -k2 -n memory.tsv | head -10 |
-            awk -F'\t' '{ printf "  %s  available %6d MiB  swap used %5d MiB  gradle %5d MiB  client %5d MiB  %s\n", $1, $2/1024, $3/1024, $4/1024, $5/1024, $7 }'
+          # Written out rather than piped into head: head closing the pipe kills sort with SIGPIPE,
+          # which under pipefail fails the step once there are more samples than head wants.
+          sort -t"$(printf '\t')" -k2 -n memory.tsv > tightest.tsv
+          awk -F'\t' 'NR <= 10 { printf "  %s  available %6d MiB  swap used %5d MiB  gradle %5d MiB  client %5d MiB  %s\n", $1, $2/1024, $3/1024, $4/1024, $5/1024, $7 }' tightest.tsv
           echo
           echo "peak client RSS per stage:"
           awk -F'\t' '
@@ -367,6 +390,7 @@ jobs:
             autotest.log
             memory.tsv
             oom.txt
+            oomd.txt
             hs_err_pid*.log
             run/hs_err_pid*.log
             run/crash-reports/*.txt
