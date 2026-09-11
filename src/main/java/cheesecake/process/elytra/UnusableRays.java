@@ -39,6 +39,18 @@ package cheesecake.process.elytra;
  * Neither can be answered by asking the library, so they are answered here: a point is always
  * visible from itself, and a ray that is not a number is not a sight line anybody should act on.
  * <p>
+ * An infinite coordinate is worse than either, and was previously let through on the grounds that
+ * the library accepts it. It does not. {@code computeRay} divides the difference by its magnitude,
+ * and with an infinity on both sides of that division every direction component comes out NaN --
+ * the same state a zero-length ray reaches. An infinity in z then makes {@code isVisible} never
+ * return at all: the traversal walks node to node for ever, on whichever thread made the call.
+ * That is unrecoverable rather than merely fatal. The elytra solver runs on its own executor, and
+ * {@code ElytraBehavior.destroy()} waits on it with {@code awaitTermination(Long.MAX_VALUE)}, so a
+ * thread parked inside the library takes the teardown with it, and the write lock that
+ * {@code NetherPathfinderContext.destroy()} needs is held by a reader that will never leave.
+ * Measured against 1.6: an infinity in x or y returns, one in z does not. Rejecting every
+ * non-finite coordinate covers both, and NaN with them, since NaN is not finite either.
+ * <p>
  * Kept out of {@link NetherPathfinderContext} so that it can be tested -- initialising that class
  * loads Minecraft's registries, which the unit tests cannot bootstrap.
  */
@@ -56,17 +68,17 @@ final class UnusableRays {
                 dst[i * 3], dst[i * 3 + 1], dst[i * 3 + 2]);
     }
 
-    static boolean hasNaN(final double startX, final double startY, final double startZ,
-                          final double endX, final double endY, final double endZ) {
-        return Double.isNaN(startX) || Double.isNaN(startY) || Double.isNaN(startZ)
-                || Double.isNaN(endX) || Double.isNaN(endY) || Double.isNaN(endZ);
+    static boolean hasNonFinite(final double startX, final double startY, final double startZ,
+                                final double endX, final double endY, final double endZ) {
+        return !Double.isFinite(startX) || !Double.isFinite(startY) || !Double.isFinite(startZ)
+                || !Double.isFinite(endX) || !Double.isFinite(endY) || !Double.isFinite(endZ);
     }
 
-    /** How many of the {@code count} segments carry a coordinate that is not a number. */
-    static int countNaN(final int count, final double[] src, final double[] dst) {
+    /** How many of the {@code count} segments carry a coordinate that is not a finite number. */
+    static int countNonFinite(final int count, final double[] src, final double[] dst) {
         int n = 0;
         for (int i = 0; i < count; i++) {
-            if (hasNaN(src[i * 3], src[i * 3 + 1], src[i * 3 + 2],
+            if (hasNonFinite(src[i * 3], src[i * 3 + 1], src[i * 3 + 2],
                     dst[i * 3], dst[i * 3 + 1], dst[i * 3 + 2])) {
                 n++;
             }

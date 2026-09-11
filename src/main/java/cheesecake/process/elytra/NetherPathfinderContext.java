@@ -219,7 +219,7 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
         if (UnusableRays.isZeroLength(startX, startY, startZ, endX, endY, endZ)) {
             return true;
         }
-        if (UnusableRays.hasNaN(startX, startY, startZ, endX, endY, endZ)) {
+        if (UnusableRays.hasNonFinite(startX, startY, startZ, endX, endY, endZ)) {
             return false;
         }
         final double adjustedStartY = startY - this.minY;
@@ -239,7 +239,7 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
         if (UnusableRays.isZeroLength(start.x, start.y, start.z, end.x, end.y, end.z)) {
             return true;
         }
-        if (UnusableRays.hasNaN(start.x, start.y, start.z, end.x, end.y, end.z)) {
+        if (UnusableRays.hasNonFinite(start.x, start.y, start.z, end.x, end.y, end.z)) {
             return false;
         }
         final Vec3 adjustedStart = start.subtract(0, this.minY, 0);
@@ -260,7 +260,7 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
         // Answer for the zero-length segments here rather than asking about them, and put only
         // the rest to the library. A point is always visible from itself, which decides ANY and
         // NONE outright and leaves ALL to the segments that remain.
-        if (UnusableRays.countNaN(count, src, dst) > 0) {
+        if (UnusableRays.countNonFinite(count, src, dst) > 0) {
             return visibility == Visibility.NONE;
         }
         final int degenerate = UnusableRays.countZeroLength(count, src, dst);
@@ -302,8 +302,9 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
         }
 
         // Same reason as above. A zero-length ray passes through nothing, so it hits nothing;
-        // a ray that is not a number is not a sight line, so report no hit for it either.
-        if (UnusableRays.countNaN(count, src, dst) > 0) {
+        // a ray with a coordinate that is not a finite number is not a sight line, so report no
+        // hit for it either.
+        if (UnusableRays.countNonFinite(count, src, dst) > 0) {
             java.util.Arrays.fill(hitsOut, false);
             return;
         }

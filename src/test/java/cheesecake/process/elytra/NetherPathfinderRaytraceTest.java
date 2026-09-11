@@ -65,18 +65,37 @@ public class NetherPathfinderRaytraceTest {
     public void testNaNIsCaughtEvenThoughItIsNotEqualToItself() {
         final double[] src = { 1.5, 64.0, -2.5 };
         assertEquals(0, UnusableRays.countZeroLength(1, src, new double[] { Double.NaN, 64.0, -2.5 }));
-        assertEquals(1, UnusableRays.countNaN(1, src, new double[] { Double.NaN, 64.0, -2.5 }));
-        assertEquals(1, UnusableRays.countNaN(1, src, new double[] { 1.5, Double.NaN, -2.5 }));
-        assertEquals(1, UnusableRays.countNaN(1, new double[] { 1.5, Double.NaN, -2.5 }, src));
-        assertEquals(0, UnusableRays.countNaN(1, src, new double[] { 1.5, 65.0, -2.5 }));
+        assertEquals(1, UnusableRays.countNonFinite(1, src, new double[] { Double.NaN, 64.0, -2.5 }));
+        assertEquals(1, UnusableRays.countNonFinite(1, src, new double[] { 1.5, Double.NaN, -2.5 }));
+        assertEquals(1, UnusableRays.countNonFinite(1, new double[] { 1.5, Double.NaN, -2.5 }, src));
+        assertEquals(0, UnusableRays.countNonFinite(1, src, new double[] { 1.5, 65.0, -2.5 }));
     }
 
-    /** Infinities are accepted by the library, so they must not be dropped. */
+    /**
+     * An infinite coordinate was let through on the grounds that the library accepts it, which is
+     * true only of the axis that was tried. Against 1.6, an infinity in x or y returns; one in z
+     * never returns at all, and the thread that called stays inside the library for good. Every
+     * non-finite coordinate is refused now, which is the same rule NaN already fell under.
+     */
     @Test
-    public void testInfinityIsNotTreatedAsUnusable() {
+    public void testInfinityIsRefusedOnEveryAxis() {
         final double[] src = { 1.5, 64.0, -2.5 };
-        final double[] dst = { Double.POSITIVE_INFINITY, 64.0, -2.5 };
-        assertEquals(0, UnusableRays.countNaN(1, src, dst));
+        for (final double infinity : new double[] { Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY }) {
+            assertEquals(1, UnusableRays.countNonFinite(1, src, new double[] { infinity, 64.0, -2.5 }));
+            assertEquals(1, UnusableRays.countNonFinite(1, src, new double[] { 40.5, infinity, -2.5 }));
+            assertEquals(1, UnusableRays.countNonFinite(1, src, new double[] { 40.5, 64.0, infinity }));
+            assertEquals(1, UnusableRays.countNonFinite(1, new double[] { infinity, 64.0, -2.5 }, src));
+        }
+        // and it is not the length check that catches them: an infinity apart is still a length
+        assertEquals(0, UnusableRays.countZeroLength(1, src, new double[] { Double.POSITIVE_INFINITY, 64.0, -2.5 }));
+    }
+
+    /** The largest coordinates a world can hold are ordinary rays and must still be asked about. */
+    @Test
+    public void testFiniteExtremesAreStillUsable() {
+        final double[] src = { -30_000_000.0, -64.0, -30_000_000.0 };
+        final double[] dst = { 30_000_000.0, 320.0, 30_000_000.0 };
+        assertEquals(0, UnusableRays.countNonFinite(1, src, dst));
         assertEquals(0, UnusableRays.countZeroLength(1, src, dst));
     }
 
