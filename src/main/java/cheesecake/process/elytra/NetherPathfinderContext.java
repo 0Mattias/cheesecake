@@ -86,6 +86,8 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
     // operations that don't make changes to the chunk cache. could use multiple threads but i'm not sure if it would cause problems.
     private final ExecutorService readExecutor = Executors.newSingleThreadExecutor();
     private final ResourceKey<Level> dimension;
+    /** Whether a region cache was given, in which case a path calculation can insert chunks. */
+    private final boolean cached;
     final int minY;
     private final BlockStateOctreeInterface boi;
 
@@ -106,6 +108,7 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
         }
         this.maxHeight = height;
         this.context = NetherPathfinder.newContext(seed, cache != null ? cache.toString() : null, dim, height, Cheesecake.settings().elytraCustomAllocator.value);
+        this.cached = cache != null;
         this.seed = seed;
         this.boi = new BlockStateOctreeInterface(this);
     }
@@ -175,8 +178,14 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
         final BlockPos adjustedSrc = src.below(minY);
         final BlockPos adjustedDst = dst.below(minY);
         boolean generate = Cheesecake.settings().elytraPredictTerrain.value && this.dimension == Level.NETHER;
-        Lock l = generate ? writeLock : readLock;
-        ExecutorService exec = generate ? writeExecutor : readExecutor;
+        // A search that generates terrain inserts the chunks it makes, so it is a writer. So is
+        // one that has a region cache to read from: the first time it touches a region it parses
+        // the file and inserts every chunk in it, and the library takes no lock of its own for
+        // that -- this lock is the only thing between those inserts and the solver's lookups.
+        // Only a search with neither is a pure reader that can run beside them.
+        boolean writes = generate || this.cached;
+        Lock l = writes ? writeLock : readLock;
+        ExecutorService exec = writes ? writeExecutor : readExecutor;
         return CompletableFuture.supplyAsync(() -> {
             l.lock();
             try {
