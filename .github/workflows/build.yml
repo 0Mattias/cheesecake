@@ -218,8 +218,9 @@ jobs:
             grep -E ' (MaxHeapSize|MaxRAM|MaxRAMPercentage) ' || true
 
           # Sample every five seconds for the whole run and tag each sample with the stage that was
-          # running, so that a kill can be attributed to one. The client is the java process that
-          # is not Gradle's.
+          # running, so that a kill can be attributed to one. Loom launches the game through
+          # DevLaunchInjector, so -Dfabric.dli.config names the client exactly and everything else
+          # on the JVM side -- Gradle itself and the workers it forks to compile -- is the build.
           : > memory.tsv
           (
             while true; do
@@ -229,9 +230,7 @@ jobs:
                 /^SwapFree:/     { f = $2 }
                 END { print a, t - f }' /proc/meminfo)"
               read -r gradle client <<< "$(ps -eo rss=,args= | awk '
-                /[j]ava/ {
-                  if ($0 ~ /GradleWrapperMain|GradleDaemon|gradle-launcher/) { g += $1 } else { c += $1 }
-                }
+                /[j]ava/ { if ($0 ~ /fabric\.dli/) { c += $1 } else { g += $1 } }
                 END { print g + 0, c + 0 }')"
               stage=$(grep -a "cheesecake-autotest\] stage [0-9]* of" autotest.log 2>/dev/null |
                 tail -1 | sed -E 's/.*stage ([0-9]+ of [0-9]+: [a-z0-9-]+).*/\1/')
@@ -273,7 +272,7 @@ jobs:
           fi
           awk '/^MemTotal:/ { printf "runner memory: %d MiB total\n", $2 / 1024 }' /proc/meminfo
           echo
-          echo "tightest ten samples:"
+          echo "tightest ten samples (client is the game, gradle is the build around it):"
           sort -t"$(printf '\t')" -k2 -n memory.tsv | head -10 |
             awk -F'\t' '{ printf "  %s  available %6d MiB  swap used %5d MiB  gradle %5d MiB  client %5d MiB  %s\n", $1, $2/1024, $3/1024, $4/1024, $5/1024, $6 }'
           echo
