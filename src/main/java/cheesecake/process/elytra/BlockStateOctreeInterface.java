@@ -17,8 +17,8 @@
 
 package cheesecake.process.elytra;
 
-import dev.babbaj.pathfinder.NetherPathfinder;
-import dev.babbaj.pathfinder.Octree;
+import cheesecake.process.elytra.pathfinder.Chunk;
+import cheesecake.process.elytra.pathfinder.NetherPathfinder;
 
 /**
  * @author Brady
@@ -26,30 +26,30 @@ import dev.babbaj.pathfinder.Octree;
 public final class BlockStateOctreeInterface {
 
     private final NetherPathfinderContext context;
-    private final long contextPtr;
+    private final NetherPathfinder pathfinder;
     private final int minY;
     /**
      * The chunk the last lookup fell in, so that a run of lookups inside one chunk costs one
-     * native call. Every solver thread under the read lock shares this object, and the read lock
+     * table lookup. Every solver thread under the read lock shares this object, and the read lock
      * admits them all at once -- there are two of them for a moment whenever a flight is re-planned,
      * the old behavior's solver finishing while the new one's starts -- so the pair is one immutable
-     * value swapped through a single reference. A reader sees a whole (chunk, pointer) pair or
-     * nothing, never one thread's coordinates against another's pointer, which three separate
+     * value swapped through a single reference. A reader sees a whole (position, chunk) pair or
+     * nothing, never one thread's coordinates against another's chunk, which three separate
      * fields allowed and which answered a query out of the wrong chunk. The writer clears it under
-     * the write lock whenever chunks are replaced or freed, since the pointer may then be to memory
-     * that has been handed back.
+     * the write lock whenever chunks are replaced or culled, so that a lookup does not go on
+     * answering out of a chunk the table no longer holds.
      */
     private volatile CachedChunk cached;
 
-    private record CachedChunk(int chunkX, int chunkZ, long ptr) {}
+    private record CachedChunk(int chunkX, int chunkZ, Chunk chunk) {}
 
     public BlockStateOctreeInterface(final NetherPathfinderContext context) {
         this.context = context;
-        this.contextPtr = context.context;
+        this.pathfinder = context.context;
         this.minY = context.minY;
     }
 
-    /** Forgets the cached chunk. Called under the write lock by whatever replaces or frees chunks. */
+    /** Forgets the cached chunk. Called under the write lock by whatever replaces or culls chunks. */
     void invalidate() {
         this.cached = null;
     }
@@ -63,9 +63,9 @@ public final class BlockStateOctreeInterface {
         final int chunkZ = z >> 4;
         CachedChunk c = this.cached;
         if (c == null || c.chunkX != chunkX || c.chunkZ != chunkZ) {
-            c = new CachedChunk(chunkX, chunkZ, NetherPathfinder.getChunkOrDefault(this.contextPtr, chunkX, chunkZ, true));
+            c = new CachedChunk(chunkX, chunkZ, this.pathfinder.getChunkOrDefault(chunkX, chunkZ, true));
             this.cached = c;
         }
-        return Octree.getBlock(c.ptr, x & 0xF, adjustedY, z & 0xF);
+        return c.chunk.isSolid(x & 0xF, adjustedY, z & 0xF);
     }
 }

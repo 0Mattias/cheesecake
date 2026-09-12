@@ -23,11 +23,10 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 
 /**
- * Handed a ray whose start is its end, nether-pathfinder prints "raytrace whiffed" and calls
- * exit(696969), ending the game. A shell reports that status as 137, which is also what a process
- * killed by SIGKILL reports, so it reads as an out-of-memory kill and is nothing of the kind.
- * These cover picking those segments out before they reach the library; the library itself cannot
- * be exercised from a test, because a miss would take the test runner with it.
+ * The rays the elytra process answers itself: a ray whose start is its end, one with a coordinate
+ * that is not a finite number, and one that ends on a voxel boundary. These cover picking them out
+ * and moving the ends; what the pathfinder answers for the rays it is given is tested in
+ * {@code cheesecake.process.elytra.pathfinder}.
  */
 public class NetherPathfinderRaytraceTest {
 

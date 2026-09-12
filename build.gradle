@@ -61,19 +61,12 @@ allprojects {
             url = 'https://maven.fabricmc.net/'
         }
         mavenCentral()
-        maven {
-            name = 'babbaj-repo'
-            url = 'https://babbaj.github.io/maven/'
-        }
     }
 
     dependencies {
         implementation 'com.google.code.findbugs:jsr305:3.0.2'
         // Minecraft ships with Mojang's names since 26.1, so there are no mappings to apply.
         minecraft "com.mojang:minecraft:${project.minecraft_version}"
-
-        implementation "dev.babbaj:nether-pathfinder:${project.nether_pathfinder_version}"
-        include "dev.babbaj:nether-pathfinder:${project.nether_pathfinder_version}"
     }
 
     tasks.withType(JavaCompile).configureEach {

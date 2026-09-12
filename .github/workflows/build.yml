@@ -58,10 +58,14 @@ jobs:
             exit 1
           fi
 
-          # The nether-pathfinder library is bundled as a nested jar; without it the elytra
-          # process is unavailable at runtime.
-          if ! unzip -l "$jar" | grep -q 'META-INF/jars/nether-pathfinder'; then
-            echo "::error::jar does not bundle nether-pathfinder"
+          # The Nether pathfinder is the Java port under cheesecake.process.elytra.pathfinder, so
+          # the jar carries it as classes and nests no library at all.
+          if ! unzip -l "$jar" | grep -q 'cheesecake/process/elytra/pathfinder/NetherPathfinder.class'; then
+            echo "::error::jar does not carry the Nether pathfinder"
+            exit 1
+          fi
+          if unzip -l "$jar" | grep -q 'META-INF/jars/'; then
+            echo "::error::jar nests a library; nothing is bundled any more"
             exit 1
           fi
 
@@ -149,9 +153,9 @@ jobs:
 
           # Not a grep for "cheesecake": the repo path contains it, so that matches every Gradle
           # line whether or not the mod loaded. Assert on the mod's own code having run instead --
-          # this line is printed by the nether-pathfinder native that we bundle and load.
-          if ! grep -q "\[nether-pathfinder\] Loaded shared library" client.log; then
-            echo "::error::the mod never ran: no nether-pathfinder native load in the client log"
+          # this line is logged by CheesecakeProvider once the mod has been built for the client.
+          if ! grep -q "(Cheesecake) Cheesecake loaded" client.log; then
+            echo "::error::the mod never ran: no 'Cheesecake loaded' line in the client log"
             grep -nE "cheesecake" client.log | head -20 || true
             exit 1
           fi
@@ -308,26 +312,15 @@ jobs:
 
           # Gradle exits 1 whether a stage failed or the client died under it, so the client's own
           # status only shows in the task failure Gradle reports. Take whatever it says rather than
-          # looking for one number: 137 is SIGKILL (and is also what the pathfinder's exit(696969)
-          # leaves behind, which the next check sorts out), 134 is SIGABRT -- the C runtime aborting
-          # on a corrupted heap -- and 139 is SIGSEGV. A run that died on 134 used to fall through
-          # to the stage-failure message and say nothing about the crash at all.
+          # looking for one number: 137 is SIGKILL, 134 is SIGABRT -- the C runtime aborting on a
+          # corrupted heap -- and 139 is SIGSEGV. A run that died on 134 used to fall through to
+          # the stage-failure message and say nothing about the crash at all.
           client_status=$(grep -a "finished with non-zero exit value" autotest.log |
             tail -1 | sed -E 's/.*exit value ([0-9]+).*/\1/')
           echo "${client_status:-}" > autotest.client-status
           killed=no
           case "${client_status:-}" in 134|137|139) killed=yes;; esac
           echo "$killed" > autotest.killed
-
-          # ...but 137 is also what nether-pathfinder leaves behind. Given a ray it will not
-          # answer, raytrace() prints "raytrace whiffed" and calls exit(696969); a process exits
-          # with the low eight bits of that, and 696969 ends in 137. So the same number means
-          # either a kill or a deliberate exit by the library, and only this line tells them
-          # apart. It is written to bare stderr with no log prefix, which is why it never showed
-          # up in the stage lines. Record it before anything else reads the 137.
-          whiffed=no
-          if grep -qa "raytrace whiffed" autotest.log; then whiffed=yes; fi
-          echo "$whiffed" > autotest.whiffed
 
           # Everything that can say WHY it died, collected whether or not it did: the kernel's
           # record of an out-of-memory kill, the JVM's record of a native crash, and the game's own
@@ -381,9 +374,6 @@ jobs:
             if [ "$status" = "134" ] || [ "$status" = "139" ]; then
               echo "::error::the client crashed in native code during ${during:-startup} (exit $status, $([ "$status" = 134 ] && echo SIGABRT || echo SIGSEGV)). This is not a kill and not the runner running out of memory. The JVM crash log names the thread and the frames -- see \"crashing thread and frames\" above, and the hs_err log in the uploaded artifact."
               grep -aE "malloc\(\)|free\(\)|corrupted|double free|Aborted" autotest.log | tail -5 || true
-            elif [ "$(cat autotest.whiffed 2>/dev/null || echo no)" = "yes" ]; then
-              echo "::error::nether-pathfinder ended the client during ${during:-startup}: it printed \"raytrace whiffed\" and called exit(696969), which leaves status 137. Nothing killed anything -- 137 here is the library's own exit code, not SIGKILL, which is why there is no crash report, no JVM error log and nothing in the kernel log. The ray it refused is the bug; see the lines before the whiff."
-              grep -na -B 12 "raytrace whiffed" autotest.log | tail -20
             elif [ -s oom.txt ]; then
               echo "::error::the runner ran out of memory and killed the client (SIGKILL, exit 137) during ${during:-startup}. Nothing in the mod failed. The kernel's record of the kill follows."
               cat oom.txt

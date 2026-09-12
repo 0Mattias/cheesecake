@@ -30,12 +30,16 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import net.minecraft.client.Minecraft;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * @author Brady
  * @since 9/29/2018
  */
 public final class CheesecakeProvider implements ICheesecakeProvider {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger("Cheesecake");
 
     private final List<ICheesecake> all;
     private final List<ICheesecake> allView;
@@ -47,6 +51,9 @@ public final class CheesecakeProvider implements ICheesecakeProvider {
         // Setup chat control, just for the primary instance
         final Cheesecake primary = (Cheesecake) this.createCheesecake(Minecraft.getInstance());
         primary.registerBehavior(ExampleCheesecakeControl::new);
+        // The one line the mod writes to the log on its own. The headless client in CI looks for
+        // it as proof that the mod's code ran, not only that the loader found the jar.
+        LOGGER.info("Cheesecake loaded");
     }
 
     @Override

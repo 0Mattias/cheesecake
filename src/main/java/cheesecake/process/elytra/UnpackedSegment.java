@@ -18,7 +18,7 @@
 package cheesecake.process.elytra;
 
 import cheesecake.api.utils.BetterBlockPos;
-import dev.babbaj.pathfinder.PathSegment;
+import cheesecake.process.elytra.pathfinder.PathSegment;
 
 import java.util.Arrays;
 import java.util.HashMap;

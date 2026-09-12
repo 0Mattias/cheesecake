@@ -19,14 +19,12 @@ package cheesecake.process.elytra;
 
 import cheesecake.Cheesecake;
 import cheesecake.api.event.events.BlockChangeEvent;
+import cheesecake.process.elytra.pathfinder.Chunk;
+import cheesecake.process.elytra.pathfinder.NetherPathfinder;
+import cheesecake.process.elytra.pathfinder.PathSegment;
 import cheesecake.utils.accessor.IPalettedContainer;
-import dev.babbaj.pathfinder.NetherPathfinder;
-import dev.babbaj.pathfinder.Octree;
-import dev.babbaj.pathfinder.PathSegment;
-import sun.misc.Unsafe;
 
 import java.lang.ref.SoftReference;
-import java.lang.reflect.Field;
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -53,33 +51,20 @@ import net.minecraft.world.phys.Vec3;
 @SuppressWarnings({"unchecked"})
 public final class NetherPathfinderContext implements IElytraPathFinder {
 
-    private static final Unsafe UNSAFE;
-
-    static {
-        try {
-            Field f = Unsafe.class.getDeclaredField("theUnsafe");
-            f.setAccessible(true);
-            UNSAFE = (Unsafe) f.get(null);
-        } catch (Exception ex) {
-            throw new RuntimeException(ex);
-        }
-    }
-
     private static final BlockState AIR_BLOCK_STATE = Blocks.AIR.defaultBlockState();
-    /**
-     * Blocks in one 16x16x16 chunk section. The pathfinder stores each as a single bit.
-     */
-    private static final int SECTION_BLOCKS = 16 * 16 * 16;
 
-    // This lock must be held while there are active pointers to chunks in java,
-    // but we just hold it for the entire tick so we don't have to think much about it.
+    // The native library needed this lock held while there were pointers to its chunks in Java.
+    // The port needs none of that: a chunk is an object that stays valid for whoever holds it, and
+    // the table takes lookups, inserts and culls from any thread at once. The lock is kept so that
+    // the threads still run in the order the flights were tested in -- packing, culling and
+    // generating searches on the write side, everything else on the read side.
     public final ReentrantReadWriteLock rwl = new ReentrantReadWriteLock();
     public final ReentrantReadWriteLock.ReadLock readLock = rwl.readLock();
     public final ReentrantReadWriteLock.WriteLock writeLock = rwl.writeLock();
     private final int maxHeight;
 
     // Visible for access in BlockStateOctreeInterface
-    final long context;
+    final NetherPathfinder context;
     private final long seed;
     // write locked operations
     private final ExecutorService writeExecutor = Executors.newSingleThreadExecutor(named("nether-pathfinder-write"));
@@ -92,10 +77,9 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
     private final BlockStateOctreeInterface boi;
 
     /**
-     * Named, so that a crash log or a trace says which thread was inside the library rather than
-     * "pool-20-thread-1"; daemon, so that a context abandoned with its writer hung -- see
-     * ElytraProcess.abandonNpfContext() -- does not hold the game open at exit, which the client
-     * reports as a crash.
+     * Named, so that a crash log or a trace says which thread was inside the pathfinder rather
+     * than "pool-20-thread-1"; daemon, so that a context still working at exit does not hold the
+     * game open, which the client reports as a crash.
      */
     private static java.util.concurrent.ThreadFactory named(final String name) {
         return runnable -> {
@@ -118,14 +102,14 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
         }
         final int height = heightFor(world);
         this.maxHeight = height;
-        this.context = NetherPathfinder.newContext(seed, cache != null ? cache.toString() : null, dim, height, Cheesecake.settings().elytraCustomAllocator.value);
+        this.context = new NetherPathfinder(seed, cache != null ? cache.toString() : null, dim, height);
         this.cached = cache != null;
         this.seed = seed;
         this.boi = new BlockStateOctreeInterface(this);
     }
 
     public boolean hasChunk(ChunkPos pos) {
-        return NetherPathfinder.hasChunkFromJava(this.context, pos.x(), pos.z());
+        return this.context.hasChunkFromJava(pos.x(), pos.z());
     }
 
     public void queueCacheCulling(int chunkX, int chunkZ, int maxDistanceBlocks) {
@@ -133,7 +117,7 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
             writeLock.lock();
             try {
                 this.boi.invalidate();
-                NetherPathfinder.cullFarChunks(this.context, chunkX, chunkZ, maxDistanceBlocks);
+                this.context.cullFarChunks(chunkX, chunkZ, maxDistanceBlocks);
             } finally {
                 writeLock.unlock();
             }
@@ -149,10 +133,10 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
             if (chunk != null) {
                 writeLock.lock();
                 try {
-                    // we might free this chunk
+                    // we might replace this chunk
                     this.boi.invalidate();
-                    long ptr = NetherPathfinder.allocateAndInsertChunk(this.context, chunk.getPos().x(), chunk.getPos().z());
-                    writeChunkData(chunk, ptr);
+                    final Chunk packed = this.context.allocateAndInsertChunk(chunk.getPos().x(), chunk.getPos().z());
+                    writeChunkData(chunk, packed);
                 } finally {
                     writeLock.unlock();
                 }
@@ -166,8 +150,8 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
             // not inserting or deleting from the cache hashmap but it would still be bad for this function to race with itself
             writeLock.lock();
             try {
-                long ptr = NetherPathfinder.getChunk(this.context, chunkPos.x(), chunkPos.z());
-                if (ptr == 0) {
+                final Chunk chunk = this.context.getChunk(chunkPos.x(), chunkPos.z());
+                if (chunk == null) {
                     return; // this shouldn't ever happen
                 }
                 event.getBlocks().forEach(pair -> {
@@ -176,7 +160,7 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
                         return;
                     }
                     boolean isSolid = pair.second() != AIR_BLOCK_STATE;
-                    Octree.setBlock(ptr, pos.getX() & 15, pos.getY(), pos.getZ() & 15, isSolid);
+                    chunk.setBlock(pos.getX() & 15, pos.getY(), pos.getZ() & 15, isSolid);
                 });
             } finally {
                 writeLock.unlock();
@@ -190,12 +174,10 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
         final BlockPos adjustedDst = dst.below(minY);
         boolean generate = Cheesecake.settings().elytraPredictTerrain.value && this.dimension == Level.NETHER;
         // A search that generates terrain inserts the chunks it makes, so it is a writer. A search
-        // that does not is treated as a reader, as upstream treats it, although it is not quite
-        // one: with a region cache the library parses and inserts a region's chunks the first time
-        // a search reaches it, and the air-node lookup for the start and goal goes through the
-        // chunk table without the library's own mutex. That is a race with the solver's lookups
-        // and belongs to the library. Taking the write lock for these searches instead was tried
-        // and grounded the in-world test's return flight in four runs of ten: while a writer holds
+        // that does not is a reader, as upstream treats it, although with a region cache it too
+        // inserts chunks, a region's the first time it reaches one; the port's table takes that
+        // from any thread. Taking the write lock for these searches instead was tried and
+        // grounded the in-world test's return flight in four runs of ten: while a writer holds
         // the lock the game thread cannot take the read side, so the player is not steered, and a
         // flight recalculates its segments far too often to be blind for each one.
         Lock l = generate ? writeLock : readLock;
@@ -203,8 +185,7 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
         return CompletableFuture.supplyAsync(() -> {
             l.lock();
             try {
-                final PathSegment segment = NetherPathfinder.pathFind(
-                        this.context,
+                final PathSegment segment = this.context.pathFind(
                         adjustedSrc.getX(), adjustedSrc.getY(), adjustedSrc.getZ(),
                         adjustedDst.getX(), adjustedDst.getY(), adjustedDst.getZ(),
                         !Cheesecake.settings().elytraAllowTightSpaces.value, // atleastX4
@@ -247,7 +228,7 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
         }
         final double adjustedStartY = startY - this.minY;
         final double adjustedEndY = endY - this.minY;
-        return NetherPathfinder.isVisible(this.context, NetherPathfinder.CACHE_MISS_SOLID, startX, adjustedStartY, startZ,
+        return this.context.isVisible(NetherPathfinder.CACHE_MISS_SOLID, startX, adjustedStartY, startZ,
                 UnusableRays.offBoundary(endX, startX), UnusableRays.offBoundary(adjustedEndY, adjustedStartY), UnusableRays.offBoundary(endZ, startZ));
     }
 
@@ -268,7 +249,7 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
         }
         final Vec3 adjustedStart = start.subtract(0, this.minY, 0);
         final Vec3 adjustedEnd = end.subtract(0, this.minY, 0);
-        return NetherPathfinder.isVisible(this.context, NetherPathfinder.CACHE_MISS_SOLID, adjustedStart.x, adjustedStart.y, adjustedStart.z,
+        return this.context.isVisible(NetherPathfinder.CACHE_MISS_SOLID, adjustedStart.x, adjustedStart.y, adjustedStart.z,
                 UnusableRays.offBoundary(adjustedEnd.x, adjustedStart.x), UnusableRays.offBoundary(adjustedEnd.y, adjustedStart.y), UnusableRays.offBoundary(adjustedEnd.z, adjustedStart.z));
     }
 
@@ -307,11 +288,11 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
 
         switch (visibility) {
             case Visibility.ALL:
-                return NetherPathfinder.isVisibleMulti(this.context, NetherPathfinder.CACHE_MISS_SOLID, kept, keptSrc, keptDst, false) == -1;
+                return this.context.isVisibleMulti(NetherPathfinder.CACHE_MISS_SOLID, kept, keptSrc, keptDst, false) == -1;
             case Visibility.NONE:
-                return NetherPathfinder.isVisibleMulti(this.context, NetherPathfinder.CACHE_MISS_SOLID, kept, keptSrc, keptDst, true) == -1;
+                return this.context.isVisibleMulti(NetherPathfinder.CACHE_MISS_SOLID, kept, keptSrc, keptDst, true) == -1;
             case Visibility.ANY:
-                return NetherPathfinder.isVisibleMulti(this.context, NetherPathfinder.CACHE_MISS_SOLID, kept, keptSrc, keptDst, true) != -1;
+                return this.context.isVisibleMulti(NetherPathfinder.CACHE_MISS_SOLID, kept, keptSrc, keptDst, true) != -1;
             default:
                 throw new IllegalArgumentException("lol");
         }
@@ -337,7 +318,7 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
         final int degenerate = UnusableRays.countZeroLength(count, src, dst);
         if (degenerate == 0) {
             UnusableRays.endsOffBoundary(count, src, dst);
-            NetherPathfinder.raytrace(this.context, NetherPathfinder.CACHE_MISS_SOLID, count, src, dst, hitsOut, hitPosOut);
+            this.context.raytrace(NetherPathfinder.CACHE_MISS_SOLID, count, src, dst, hitsOut, hitPosOut);
             return;
         }
         final double[] keptSrc = UnusableRays.withoutZeroLength(count, src, dst, src, degenerate);
@@ -347,7 +328,7 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
         final double[] keptHitPos = new double[kept * 3];
         if (kept > 0) {
             UnusableRays.endsOffBoundary(kept, keptSrc, keptDst);
-            NetherPathfinder.raytrace(this.context, NetherPathfinder.CACHE_MISS_SOLID, kept, keptSrc, keptDst, keptHits, keptHitPos);
+            this.context.raytrace(NetherPathfinder.CACHE_MISS_SOLID, kept, keptSrc, keptDst, keptHits, keptHitPos);
         }
         int at = 0;
         for (int i = 0; i < count; i++) {
@@ -366,7 +347,7 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
     }
 
     public void cancel() {
-        NetherPathfinder.cancel(this.context);
+        this.context.cancel();
     }
 
     public void destroy() {
@@ -382,24 +363,12 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
             e.printStackTrace();
         }
 
-        // Shutting down this class's own executors is not enough to know that nobody is inside the
-        // library. The elytra solver raytraces into this context from a thread of its own, under
-        // the read lock, and ElytraProcess tears the behavior and the context down as two separate
-        // tasks on a pool with four threads, so the two run at once: free the context here without
-        // waiting and the solver is left reading memory that has been handed back. That is what
-        // ends the game in the Nether -- as a segmentation fault inside the library on the solver's
-        // thread if the read lands on unmapped memory, and otherwise as a traversal over freed
-        // memory that arrives nowhere, which the library reports as "raytrace whiffed" before
-        // calling exit(696969), a status of 137 that reads like a kill and is not one.
-        //
-        // Taking the write lock is what the lock is for: it waits for every reader to leave and
-        // keeps the next one out, so the pointer cannot be freed with a thread standing on it.
-        writeLock.lock();
-        try {
-            NetherPathfinder.freeContext(this.context);
-        } finally {
-            writeLock.unlock();
-        }
+        // The elytra solver may still be raytracing into this context from a thread of its own:
+        // ElytraProcess tears the behavior and the context down as two separate tasks on a pool
+        // with four threads. With the native library that was fatal, memory freed under the
+        // solver's feet. A chunk is an object now, and closing the table under a running ray or
+        // search only changes what it answers, so there is nothing to wait for.
+        this.context.close();
     }
 
     public long getSeed() {
@@ -447,7 +416,7 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
         return this.maxHeight;
     }
 
-    private static void writeChunkData(LevelChunk chunk, long chunkPtr) {
+    private static void writeChunkData(LevelChunk chunk, Chunk packed) {
         try {
             LevelChunkSection[] sections = chunk.getSections();
             final int maxSections = Math.min(sections.length, 24); // pathfinder support stops at 384/16 sections
@@ -478,8 +447,7 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
                     }
                 }
                 if (airId == -1 & caveAirId == -1) {
-                    final long bytesInSection = SECTION_BLOCKS / 8;
-                    UNSAFE.setMemory(chunkPtr + (y0 * bytesInSection), bytesInSection, (byte) 0xFF);
+                    packed.fillSection(y0, true);
                     continue;
                 }
                 // pasted from FasterWorldScanner
@@ -503,7 +471,7 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
 
                         // Avoid unnecessary writes that may trigger a page allocation
                         if (!(value == airId | value == caveAirId) & value != redMushroomId & value != brownMushroomId) {
-                            Octree.setBlock(chunkPtr, x, y, z, true);
+                            packed.setBlock(x, y, z, true);
                         }
                     }
                 }
@@ -512,10 +480,6 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
             e.printStackTrace();
             throw new RuntimeException(e);
         }
-    }
-
-    public static boolean isSupported() {
-        return NetherPathfinder.isThisSystemSupported();
     }
 
     public static final class Visibility {
