@@ -17,7 +17,7 @@ The pathfinder is Baritone's, and much of this page is adapted from Baritone's o
 
 ## Elytra
 
-`#elytra` flies to the goal with firework rockets, in the Nether, the Overworld and the End. A native pathfinder plans around terrain in a compact copy of the loaded chunks and, in the Nether, in terrain predicted from the world seed. Long trips can climb above the build limit and fly straight, and on arrival it searches for a safe place to land.
+`#elytra` flies to the goal with firework rockets, in the Nether, the Overworld and the End. A separate pathfinder plans around terrain in a compact copy of the loaded chunks and, in the Nether, in terrain predicted from the world seed. Long trips can climb above the build limit and fly straight, and on arrival it searches for a safe place to land.
 
 ## Mining
 
