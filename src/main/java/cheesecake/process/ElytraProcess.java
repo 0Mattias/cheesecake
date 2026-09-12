@@ -40,7 +40,6 @@ import cheesecake.pathing.movement.CalculationContext;
 import cheesecake.pathing.movement.movements.MovementFall;
 import cheesecake.process.elytra.ElytraBehavior;
 import cheesecake.process.elytra.NetherPathfinderContext;
-import cheesecake.process.elytra.NullElytraProcess;
 import cheesecake.utils.CheesecakeProcessHelper;
 import cheesecake.utils.PathingCommandContext;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
@@ -121,9 +120,7 @@ public class ElytraProcess extends CheesecakeProcessHelper implements IElytraPro
     }
 
     public static IElytraProcess create(final Cheesecake cheesecake) {
-        return NetherPathfinderContext.isSupported()
-                ? new ElytraProcess(cheesecake)
-                : new NullElytraProcess(cheesecake);
+        return new ElytraProcess(cheesecake);
     }
 
     @Override
@@ -144,12 +141,12 @@ public class ElytraProcess extends CheesecakeProcessHelper implements IElytraPro
 
     private static final String AUTO_JUMP_FAILURE_MSG = "Failed to compute a walking path to a spot to jump off from. Consider starting from a higher location, near an overhang. Or, you can disable elytraAutoJump and just manually begin gliding.";
     /**
-     * Thirty seconds. A search is bounded at ten by the library and the queue in front of it is a
-     * repacking of loaded chunks that takes milliseconds each, so nothing legitimate lasts this
+     * Thirty seconds. A search is bounded at ten by the pathfinder and the queue in front of it is
+     * a repacking of loaded chunks that takes milliseconds each, so nothing legitimate lasts this
      * long.
      */
     private static final long PATH_HANG_NANOS = 30_000_000_000L;
-    private static final String PATH_HANG_MSG = "The path calculation did not answer for thirty seconds. That is a known defect in nether-pathfinder, not a slow search: a worker thread it started read a stale stop flag and exited at birth, and the terrain generator waits for it for ever. Abandoning this context; use #elytra again and a fresh one is built.";
+    private static final String PATH_HANG_MSG = "The path calculation did not answer for thirty seconds. Dropping this pathfinder context; use #elytra again and a fresh one is built.";
     private static final String NO_TAKEOFF_MSG = "Still on the ground after thirty seconds of trying to take off, and elytraAutoJump is off, so there is no way to start gliding from here. Jump off something manually, or turn elytraAutoJump on.";
     /**
      * How long the process may go on trying to get off the ground before it is treated as the
@@ -202,12 +199,13 @@ public class ElytraProcess extends CheesecakeProcessHelper implements IElytraPro
             return new PathingCommand(null, PathingCommandType.CANCEL_AND_SET_GOAL);
         }
 
-        // A calculation that never answers is the library's terrain generator hung -- see
-        // abandonNpfContext() -- and nothing downstream can proceed: the write lock is held for
-        // ever, so the solver never runs again either. Say so, and leave the context behind.
+        // A calculation that never answers holds the write lock for as long as it runs, and the
+        // solver cannot run under it. Nothing in the pathfinder is known to do this any more --
+        // the native library's terrain generator could hang for good -- so this is the safety
+        // net: say so, cancel the search and rebuild the context on the next flight.
         if (this.behavior.pathManager.isAwaitingPath() && this.behavior.pathManager.awaitingPathNanos() > PATH_HANG_NANOS) {
             logDirect(PATH_HANG_MSG, ChatFormatting.RED);
-            abandonNpfContext();
+            destroyNpfContextAsync();
             onLostControl();
             return new PathingCommand(null, PathingCommandType.CANCEL_AND_SET_GOAL);
         }
@@ -889,20 +887,6 @@ public class ElytraProcess extends CheesecakeProcessHelper implements IElytraPro
             this.npfContext = new NetherPathfinderContext(seed, cache, ctx.world());
         }
         return this.npfContext;
-    }
-
-    /**
-     * Drops the context without freeing it. Freeing means taking its write lock, and when a path
-     * calculation has hung the thread that hung holds that lock for ever, so destroy() would only
-     * join it. The context and its threads are left for the life of the game -- one core spinning,
-     * its chunks unfreed -- and the next flight builds a new one at another address, which is
-     * what makes that one's workers start clean.
-     */
-    private void abandonNpfContext() {
-        if (this.npfContext != null) {
-            this.npfContext = null;
-            npfSema.release();
-        }
     }
 
     private void destroyNpfContextAsync() {

@@ -1762,8 +1762,10 @@ public final class Settings {
     public final Setting<Integer> agentApiPort = new Setting<>(0);
 
     /**
-     * May reduce memory usage by using a custom allocator for pathfinding
+     * Does nothing. The pathfinder is Java now and has no allocator of its own; kept so that a
+     * settings file naming it still loads.
      */
+    @Deprecated
     public final Setting<Boolean> elytraCustomAllocator = new Setting<>(true);
 
     /**

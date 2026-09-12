@@ -18,52 +18,29 @@
 package cheesecake.process.elytra;
 
 /**
- * Rays that must not be handed to nether-pathfinder.
- * <p>
- * Given one, the library prints "raytrace whiffed" and calls {@code exit(696969)}. The status a
- * process exits with is its low eight bits, and 696969 ends in 137, which is also what a shell
- * reports for a process killed by SIGKILL -- so Gradle says "this value may indicate that the
- * process was terminated with the SIGKILL signal, which is often caused by the system running out
- * of memory" and the whole thing reads as an out-of-memory kill. It is nothing of the kind. The
- * game is simply gone: no crash report, no JVM error log, nothing in the kernel log and nothing
- * from systemd-oomd, because as far as the operating system is concerned it exited normally.
- * <p>
- * Two inputs are known to do it, each reproducible on its own:
+ * Rays the elytra process answers itself, without asking the pathfinder.
  * <ul>
- *     <li>a ray of zero length. Any nonzero length is accepted, down to the last representable
- *     step. The elytra solver produces one whenever it measures the way to a point the player
- *     already occupies, which is what the eight hitbox rays all become on a tick where the path is
- *     rebuilt around a landing spot underneath the player.</li>
- *     <li>a coordinate that is not a number.</li>
+ *     <li>A ray of zero length. The solver produces one whenever it measures the way to a point
+ *     the player already occupies, which is what the eight hitbox rays all become on a tick where
+ *     the path is rebuilt around a landing spot underneath the player. A point is visible from
+ *     itself, and passes through nothing, so it hits nothing.</li>
+ *     <li>A ray with a coordinate that is not a finite number. It is not a sight line anybody
+ *     should act on, so it is not visible, and it hits nothing. The pathfinder refuses one with
+ *     an exception, which is right for a library and wrong for a solver thread.</li>
+ *     <li>A ray that ends exactly on a voxel boundary, which every ray aimed at a path node does,
+ *     since every node is an integer corner. The end is moved a millionth of a block off the
+ *     boundary towards the start, which keeps it strictly inside the voxel the ray crosses last.
+ *     A ray that ends on the corner of a solid block is then answered by that last voxel and not
+ *     by how the traversal's arithmetic happens to round, so a node that touches a block answers
+ *     the same from every direction.</li>
  * </ul>
- * Neither can be answered by asking the library, so they are answered here: a point is always
- * visible from itself, and a ray that is not a number is not a sight line anybody should act on.
- * <p>
- * A third does the same and is the one that was ending the game in the Nether: a ray that ends
- * exactly on a voxel boundary. The traversal walks the octree node by node and stops when it has
- * covered the ray's length; when the end sits exactly on a face, and above all on an edge or a
- * corner where faces meet, the step out of the last node and the arrival at the end fall on the
- * same parameter value, floating point decides which is seen first, and when it is the step the
- * traversal moves into a neighbouring node the ray never enters, finds no intersection, and the
- * library exits. Every node on a flight path is an integer corner, so every ray the solver aims at
- * one ends on a boundary in all three axes; whether it whiffs depends on the direction it comes
- * from. The ray that was caught doing it, from CI run 34632119143 with the read lock held and
- * nothing else wrong: {@code (386.7112215521066, 137.40911926818373, 7.0554159455922285) ->
- * (416.0, 142.0, 0.0)}. Moving that end by a billionth of a block on any axis returns true.
- * So an end that sits on a boundary is moved a millionth of a block off it, towards the start,
- * which keeps it strictly inside its voxel and changes nothing about what the ray can see.
- * <p>
- * An infinite coordinate is worse than either, and was previously let through on the grounds that
- * the library accepts it. It does not. {@code computeRay} divides the difference by its magnitude,
- * and with an infinity on both sides of that division every direction component comes out NaN --
- * the same state a zero-length ray reaches. An infinity in z then makes {@code isVisible} never
- * return at all: the traversal walks node to node for ever, on whichever thread made the call.
- * That is unrecoverable rather than merely fatal. The elytra solver runs on its own executor, and
- * {@code ElytraBehavior.destroy()} waits on it with {@code awaitTermination(Long.MAX_VALUE)}, so a
- * thread parked inside the library takes the teardown with it, and the write lock that
- * {@code NetherPathfinderContext.destroy()} needs is held by a reader that will never leave.
- * Measured against 1.6: an infinity in x or y returns, one in z does not. Rejecting every
- * non-finite coordinate covers both, and NaN with them, since NaN is not finite either.
+ * The first two were once fatal: handed either, the native nether-pathfinder printed "raytrace
+ * whiffed" and called {@code exit(696969)}, a status of 137 that reads like a kill and is not one,
+ * and an infinity in z made {@code isVisible} never return at all. The end on a boundary could
+ * make its traversal step out of its last node into one the ray never enters, and exit the same
+ * way; the ray that was caught doing it, from CI run 34632119143: {@code (386.7112215521066,
+ * 137.40911926818373, 7.0554159455922285) -> (416.0, 142.0, 0.0)}. The Java port answers all
+ * three without harm, and the filter stays for the answers the flight wants.
  * <p>
  * Kept out of {@link NetherPathfinderContext} so that it can be tested -- initialising that class
  * loads Minecraft's registries, which the unit tests cannot bootstrap.
