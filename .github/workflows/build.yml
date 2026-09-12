@@ -154,7 +154,9 @@ jobs:
           # Not a grep for "cheesecake": the repo path contains it, so that matches every Gradle
           # line whether or not the mod loaded. Assert on the mod's own code having run instead --
           # this line is logged by CheesecakeProvider once the mod has been built for the client.
-          if ! grep -q "(Cheesecake) Cheesecake loaded" client.log; then
+          # Not a fixed string: the client colours its log lines, and the escape codes sit between
+          # the logger's name and the message.
+          if ! grep -qE "\(Cheesecake\).*Cheesecake loaded" client.log; then
             echo "::error::the mod never ran: no 'Cheesecake loaded' line in the client log"
             grep -nE "cheesecake" client.log | head -20 || true
             exit 1
