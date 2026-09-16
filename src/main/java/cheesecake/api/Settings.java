@@ -310,7 +310,7 @@ public final class Settings {
      * list will be accepted at that location as well
      * <p>
      * Syntax same as <a href=
-     * "https://cheesecake.leijurv.com/cheesecake/api/Settings.html#buildSubstitutes">buildSubstitutes</a>
+     * "https://baritone.leijurv.com/baritone/api/Settings.html#buildSubstitutes">buildSubstitutes</a>
      */
     public final Setting<Map<Block, List<Block>>> buildValidSubstitutes = new Setting<>(new HashMap<>());
 
@@ -492,7 +492,7 @@ public final class Settings {
     /**
      * Set to 1.0 to effectively disable this feature
      *
-     * @see <a href="https://github.com/cabaletta/cheesecake/issues/18">Issue
+     * @see <a href="https://github.com/cabaletta/baritone/issues/18">Issue
      *      #18</a>
      */
     public final Setting<Double> backtrackCostFavoringCoefficient = new Setting<>(0.5);
@@ -563,7 +563,7 @@ public final class Settings {
      * This is much safer to leave off now, and makes pathing more efficient. More
      * explanation in the issue.
      *
-     * @see <a href="https://github.com/cabaletta/cheesecake/issues/114">Issue
+     * @see <a href="https://github.com/cabaletta/baritone/issues/114">Issue
      *      #114</a>
      */
     public final Setting<Boolean> cutoffAtLoadBoundary = new Setting<>(false);
@@ -733,7 +733,7 @@ public final class Settings {
      * <p>
      * Temporarily reenabled
      *
-     * @see <a href="https://github.com/cabaletta/cheesecake/issues/248">Issue
+     * @see <a href="https://github.com/cabaletta/baritone/issues/248">Issue
      *      #248</a>
      */
     public final Setting<Boolean> pruneRegionsFromRAM = new Setting<>(true);
@@ -926,7 +926,7 @@ public final class Settings {
     /**
      * 😎 Render cached chunks as semitransparent. Doesn't work with OptiFine 😭
      * Rarely randomly crashes, see
-     * <a href="https://github.com/cabaletta/cheesecake/issues/327">this issue</a>.
+     * <a href="https://github.com/cabaletta/baritone/issues/327">this issue</a>.
      * <p>
      * Can be very useful on servers with low render distance. After enabling, you
      * may need to reload the world in order for it to have an effect

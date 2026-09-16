@@ -237,7 +237,7 @@ public interface Helper {
 
     default void logUnhandledException(final Throwable exception) {
         HELPER.logDirect("An unhandled exception occurred. " +
-                        "The error is in your game's log, please report this at https://github.com/cabaletta/cheesecake/issues",
+                        "The error is in your game's log, please report this at https://github.com/0Mattias/cheesecake/issues",
                 ChatFormatting.RED);
         exception.printStackTrace();
     }

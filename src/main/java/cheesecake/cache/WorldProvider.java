@@ -81,7 +81,7 @@ public class WorldProvider implements IWorldProvider {
                 Files.createDirectories(readmeDir);
                 Files.write(
                         readmeDir.resolve("readme.txt"),
-                        "https://github.com/cabaletta/cheesecake\n".getBytes(StandardCharsets.US_ASCII));
+                        "https://github.com/0Mattias/cheesecake\n".getBytes(StandardCharsets.US_ASCII));
             } catch (IOException ignored) {
             }
 

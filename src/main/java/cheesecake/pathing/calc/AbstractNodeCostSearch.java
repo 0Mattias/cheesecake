@@ -46,7 +46,7 @@ public abstract class AbstractNodeCostSearch implements IPathFinder, Helper {
     private final CalculationContext context;
 
     /**
-     * @see <a href="https://github.com/cabaletta/cheesecake/issues/107">Issue #107</a>
+     * @see <a href="https://github.com/cabaletta/baritone/issues/107">Issue #107</a>
      */
     private final Long2ObjectOpenHashMap<PathNode> map;
 
@@ -165,7 +165,7 @@ public abstract class AbstractNodeCostSearch implements IPathFinder, Helper {
      * @param z        The z position of the node
      * @param hashCode The hash code of the node, provided by {@link BetterBlockPos#longHash(int, int, int)}
      * @return The associated node
-     * @see <a href="https://github.com/cabaletta/cheesecake/issues/107">Issue #107</a>
+     * @see <a href="https://github.com/cabaletta/baritone/issues/107">Issue #107</a>
      */
 
     protected PathNode getNodeAtPosition(int x, int y, int z, long hashCode) {
