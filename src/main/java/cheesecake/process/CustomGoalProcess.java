@@ -23,6 +23,7 @@ import cheesecake.api.process.ICustomGoalProcess;
 import cheesecake.api.process.PathingCommand;
 import cheesecake.api.process.PathingCommandType;
 import cheesecake.utils.CheesecakeProcessHelper;
+import net.minecraft.ChatFormatting;
 
 /**
  * As set by ExampleCheesecakeControl or something idk
@@ -57,7 +58,11 @@ public final class CustomGoalProcess extends CheesecakeProcessHelper implements 
         this.goal = goal;
         this.mostRecentGoal = goal;
         if (cheesecake.getElytraProcess().isActive()) {
-            cheesecake.getElytraProcess().pathTo(goal);
+            try {
+                cheesecake.getElytraProcess().pathTo(goal);
+            } catch (IllegalArgumentException e) {
+                logDirect("Failed to update elytra goal because: " + e.getMessage(), ChatFormatting.RED);
+            }
         }
         if (this.state == State.NONE) {
             this.state = State.GOAL_SET;
