@@ -71,7 +71,8 @@ public final class AgentApiBehavior implements AbstractGameEventListener {
             try {
                 this.api.start(port);
                 this.failedPort = -1;
-            } catch (IOException e) {
+            } catch (IOException | IllegalArgumentException e) {
+                // IOException: in use, or privileged; IllegalArgumentException: above 65535
                 this.failedPort = port; // try again once the setting changes
                 LOGGER.warn("Could not start the agent API on port {}: {}", port, e.toString());
             }
