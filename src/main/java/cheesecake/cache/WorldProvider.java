@@ -95,7 +95,7 @@ public class WorldProvider implements IWorldProvider {
             System.out.println("Cheesecake world data dir: " + worldDataDir);
             synchronized (worldCache) {
                 this.currentWorld = worldCache.computeIfAbsent(worldDataDir,
-                        d -> new WorldData(d, world.dimensionType()));
+                        d -> new WorldData(d, world.dimensionType(), world.dimension()));
             }
             this.mcWorld = ctx.world();
         });

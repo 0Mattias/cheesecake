@@ -72,6 +72,7 @@ Cheesecake began as a port of Baritone's 1.19.4 branch to Minecraft 1.21.11. Ups
 - The elytra process gives up after thirty seconds on the ground once its path has been calculated. Upstream can wait for ever in either of the states that precede flight: one asks for a walking path to a ledge it may have no route to and pauses the path executor while it waits, so the failure returns as `NEXT_CALC_FAILED` rather than the event its give-up is watching for, and the other presses jump only while already falling, which never becomes true standing still. Either way the bot stands there until something else stops it.
 - The `shortBaritonePrefix` setting is called `shortCheesecakePrefix`.
 - The Depth Strider multiplier starts at zero, so a player without the enchantment pays the water walking cost. Upstream's 26.2 branch starts it at 1.0, which is Depth Strider III, and prices a step into water like a step on land for everyone else.
+- The cache's rule that prices the bottom five layers of the Overworld and the Nether as obsidian, so that a path prefers breaking known stone above them, compares the y it is given, which is already relative to the world's floor, with 5. Upstream compares it with the floor plus 5, which in the Overworld is -59, so the rule never fires there.
 
 ### Verification
 
