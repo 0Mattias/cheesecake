@@ -37,7 +37,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(LocalPlayer.class)
 public class MixinClientPlayerEntity {
 
-    @Inject(method = "tick", at = @At("HEAD"))
+    @Inject(method = "tick", at = @At(value = "INVOKE", target = "net/minecraft/client/player/AbstractClientPlayer.tick()V", shift = At.Shift.AFTER))
     private void onPreUpdate(CallbackInfo ci) {
         ICheesecake cheesecake = CheesecakeAPI.getProvider().getCheesecakeForPlayer((LocalPlayer) (Object) this);
         if (cheesecake != null) {
