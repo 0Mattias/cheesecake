@@ -21,14 +21,13 @@ import cheesecake.Cheesecake;
 import cheesecake.api.event.events.TickEvent;
 import cheesecake.api.utils.Helper;
 import cheesecake.utils.ToolSet;
-// import net.minecraft.item.Item;
-// import net.minecraft.item.Item;
 import java.util.ArrayList;
 import java.util.OptionalInt;
 import java.util.Random;
 import java.util.function.Predicate;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.Direction;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.NonNullList;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.inventory.ContainerInput;
@@ -69,7 +68,7 @@ public final class InventoryBehavior extends Behavior implements Helper {
         if (firstValidThrowaway() >= 9) { // aka there are none on the hotbar, but there are some in main inventory
             requestSwapWithHotBar(firstValidThrowaway(), 8);
         }
-        int pick = bestToolAgainst(Blocks.STONE, Item.class);
+        int pick = bestToolAgainst(Blocks.STONE);
         if (pick >= 9) {
             requestSwapWithHotBar(pick, 0);
         }
@@ -140,7 +139,7 @@ public final class InventoryBehavior extends Behavior implements Helper {
         return -1;
     }
 
-    private int bestToolAgainst(Block against, Class<? extends Item> cla$$) {
+    private int bestToolAgainst(Block against) {
         NonNullList<ItemStack> invy = ctx.player().getInventory().getNonEquipmentItems();
         int bestInd = -1;
         double bestSpeed = -1;
@@ -154,7 +153,7 @@ public final class InventoryBehavior extends Behavior implements Helper {
                     && stack.getMaxDamage() > 1) {
                 continue;
             }
-            if (cla$$.isInstance(stack.getItem())) {
+            if (stack.getItem().components().has(DataComponents.TOOL)) {
                 double speed = ToolSet.calculateSpeedVsBlock(stack, against.defaultBlockState()); // takes into account
                                                                                                 // enchants
                 if (speed > bestSpeed) {
@@ -231,7 +230,7 @@ public final class InventoryBehavior extends Behavior implements Helper {
             // so not a shovel, not a hoe, not a block, etc
             for (int i = 0; i < 9; i++) {
                 ItemStack item = inv.get(i);
-                if (item.isEmpty() || item.getItem() instanceof Item) {
+                if (item.isEmpty() || item.getItem().components().has(DataComponents.TOOL)) {
                     if (select) {
                         p.getInventory().setSelectedSlot(i);
                     }
