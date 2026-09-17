@@ -134,7 +134,9 @@ public class CalculationContext {
         this.minFallHeight = 3; // Minimum fall height used by MovementFall
         this.maxFallHeightNoWater = Cheesecake.settings().maxFallHeightNoWater.value;
         this.maxFallHeightBucket = Cheesecake.settings().maxFallHeightBucket.value;
-        float waterSpeedMultiplier = 1.0f;
+        // The attribute Depth Strider adds is a third per level, so a player without it has 0. Upstream
+        // starts at 1.0, which is Depth Strider III, and prices water as land for everyone else.
+        float waterSpeedMultiplier = 0.0f;
         OUTER: for (EquipmentSlot slot : EquipmentSlot.values()) {
             ItemEnchantments itemEnchantments = cheesecake.getPlayerContext()
                 .player()

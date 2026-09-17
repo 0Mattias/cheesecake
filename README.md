@@ -71,6 +71,7 @@ Cheesecake began as a port of Baritone's 1.19.4 branch to Minecraft 1.21.11. Ups
 - The elytra process starts looking for a landing when it is within 48 blocks of the end of its path across the ground. Upstream measures that distance in three dimensions, so a player who arrives more than 48 blocks under the last node -- a long glide on one rocket does it -- never arrives at all and flies on past the goal.
 - The elytra process gives up after thirty seconds on the ground once its path has been calculated. Upstream can wait for ever in either of the states that precede flight: one asks for a walking path to a ledge it may have no route to and pauses the path executor while it waits, so the failure returns as `NEXT_CALC_FAILED` rather than the event its give-up is watching for, and the other presses jump only while already falling, which never becomes true standing still. Either way the bot stands there until something else stops it.
 - The `shortBaritonePrefix` setting is called `shortCheesecakePrefix`.
+- The Depth Strider multiplier starts at zero, so a player without the enchantment pays the water walking cost. Upstream's 26.2 branch starts it at 1.0, which is Depth Strider III, and prices a step into water like a step on land for everyone else.
 
 ### Verification
 
