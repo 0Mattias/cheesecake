@@ -62,23 +62,15 @@ public class ChunkTest {
         assertTrue(chunk.isEmpty(Size.X1, 8, 70, 3));
         assertTrue(chunk.isEmpty(Size.X16, 0, 80, 0));
 
-        // an exact clear empties its x8 and x16 again only once it was the last block there
+        // a clear empties its x8 and x16 again only once it was the last block there
         chunk.setBlock(10, 70, 3, true);
-        chunk.setBlock(9, 70, 3, false, true);
+        chunk.setBlock(9, 70, 3, false);
         assertFalse(chunk.isEmptyX8(9, 70, 3));
         assertFalse(chunk.isEmptyX16(64));
-        chunk.setBlock(10, 70, 3, false, true);
+        chunk.setBlock(10, 70, 3, false);
         assertTrue(chunk.isEmptyX8(9, 70, 3));
         assertTrue(chunk.isEmptyX16(64));
         assertNotNull(chunk.section(64)); // the section stays allocated
-        // a plain clear, which is what the bulk fills use, leaves the x8 and x16 summaries as they
-        // are: the block is gone, which the exact question sees, and the summaries err only towards
-        // "may hold a block"
-        chunk.setBlock(9, 70, 3, true);
-        chunk.setBlock(9, 70, 3, false);
-        assertFalse(chunk.isSolid(9, 70, 3));
-        assertFalse(chunk.isEmptyX8(9, 70, 3));
-        assertFalse(chunk.isEmptyX16(64));
     }
 
     @Test
@@ -109,27 +101,8 @@ public class ChunkTest {
         assertTrue(chunk.isEmptyX16(64));
         assertTrue(chunk.isEmptyX8(15, 79, 15));
         chunk.fillSection(4, true);
-        chunk.setBlock(15, 79, 15, false, true);
+        chunk.setBlock(15, 79, 15, false);
         assertFalse("the x8 still has its other blocks", chunk.isEmptyX8(15, 79, 15));
-    }
-
-    @Test
-    public void insertChunkDataUsesTheBlockStateContainerIndex() {
-        final NetherPathfinder ctx = new NetherPathfinder(1, null, NetherPathfinder.Dimension.NETHER, 128);
-        final boolean[] data = new boolean[16 * 16 * 256];
-        data[(77 << 8) | (5 << 4) | 12] = true;
-        ctx.insertChunkData(-3, 9, data);
-        final Chunk chunk = ctx.getChunk(-3, 9);
-        assertNotNull(chunk);
-        assertTrue(chunk.isSolid(12, 77, 5));
-        assertFalse(chunk.isSolid(5, 77, 12));
-        assertTrue(ctx.hasChunkFromCaller(-3, 9));
-        try {
-            ctx.insertChunkData(0, 0, new boolean[10]);
-            throw new AssertionError("expected IllegalArgumentException");
-        } catch (IllegalArgumentException expected) {
-            // good
-        }
     }
 
     @Test
@@ -138,16 +111,12 @@ public class ChunkTest {
         assertSame(Chunk.AIR, ctx.getChunkOrDefault(1, 1, false));
         assertSame(Chunk.SOLID, ctx.getChunkOrDefault(1, 1, true));
         assertNull(ctx.getChunk(1, 1));
-        assertFalse(ctx.setChunkState(1, 1, true));
 
         final Chunk chunk = ctx.allocateAndInsertChunk(1, 1);
         assertSame(chunk, ctx.getChunk(1, 1));
         assertSame(chunk, ctx.getChunkOrDefault(1, 1, true));
         assertTrue(ctx.hasChunkFromCaller(1, 1));
-        assertTrue(ctx.setChunkState(1, 1, false));
-        assertFalse(ctx.hasChunkFromCaller(1, 1));
-        // a fake chunk is a default to the search's real-chunk lookup
-        assertSame(Chunk.SOLID, ctx.getRealChunkOrDefault(1, 1, true));
+        assertSame(chunk, ctx.getRealChunkOrDefault(1, 1, true));
         assertSame(chunk, ctx.getChunkOrAir(1, 1).chunk);
 
         // replacing keeps the new one
@@ -165,14 +134,15 @@ public class ChunkTest {
     }
 
     @Test
-    public void generatedChunksAreFakeUntilMarked() {
+    public void generatedChunksAreFake() {
         final NetherPathfinder ctx = new NetherPathfinder(Oracle.SEED, null, NetherPathfinder.Dimension.NETHER, 128);
         final Chunk chunk = ctx.getOrGenChunk(0, 0);
         assertSame(chunk, ctx.getOrGenChunk(0, 0));
         assertFalse(ctx.hasChunkFromCaller(0, 0));
+        // a fake chunk is a default to the search's real-chunk lookup, and itself to the rest
+        assertSame(Chunk.SOLID, ctx.getRealChunkOrDefault(0, 0, true));
         assertSame(Chunk.AIR, ctx.getRealChunkFromCacheOrFakeChunkMaybeGen(0, 0, NetherPathfinder.CacheMiss.AIR));
         assertSame(chunk, ctx.getRealChunkFromCacheOrFakeChunkMaybeGen(0, 0, NetherPathfinder.CacheMiss.GENERATE));
-        ctx.setChunkState(0, 0, true);
-        assertSame(chunk, ctx.getRealChunkFromCacheOrFakeChunkMaybeGen(0, 0, NetherPathfinder.CacheMiss.AIR));
+        assertSame(chunk, ctx.getChunkOrAir(0, 0).chunk);
     }
 }

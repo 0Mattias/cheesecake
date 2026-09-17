@@ -53,7 +53,7 @@ public class PathExecutor implements IPathExecutor, Helper {
      * Default value is equal to 10 seconds. It's find to decrease it, but it must be at least 5.5s (110 ticks).
      * For more information, see issue #102.
      *
-     * @see <a href="https://github.com/cabaletta/cheesecake/issues/102">Issue #102</a>
+     * @see <a href="https://github.com/cabaletta/baritone/issues/102">Issue #102</a>
      * @see <a href="https://i.imgur.com/5s5GLnI.png">Anime</a>
      */
     private static final double MAX_TICKS_AWAY = 200;

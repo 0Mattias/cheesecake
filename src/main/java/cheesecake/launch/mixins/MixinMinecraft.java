@@ -57,7 +57,7 @@ public class MixinMinecraft {
                 CheesecakeAPI.getProvider().getPrimaryCheesecake();
         }
 
-        @Inject(method = "tick", at = @At(value = "FIELD", opcode = Opcodes.GETFIELD, target = "net/minecraft/client/Minecraft.gui:Lnet/minecraft/client/gui/Gui;", ordinal = 0, shift = At.Shift.BEFORE), slice = @Slice(from = @At(value = "FIELD", opcode = Opcodes.PUTFIELD, target = "net/minecraft/client/MinecraftClient.itemUseCooldown:I")))
+        @Inject(method = "tick", at = @At(value = "FIELD", opcode = Opcodes.GETFIELD, target = "net/minecraft/client/Minecraft.gui:Lnet/minecraft/client/gui/Gui;", ordinal = 0, shift = At.Shift.BEFORE), slice = @Slice(from = @At(value = "FIELD", opcode = Opcodes.PUTFIELD, target = "net/minecraft/client/Minecraft.missTime:I")))
         private void runTick(CallbackInfo ci) {
                 this.tickProvider = TickEvent.createNextProvider();
 
@@ -131,9 +131,10 @@ public class MixinMinecraft {
          * behaves as if no screen were open for that stretch of the tick -- most visibly, missTime is not
          * pinned to 10000. Cheesecake breaks and places blocks through the player controller rather than
          * through vanilla's keybind handling, so the practical effect here is small, and porting the
-         * redirect means matching a @Slice that cannot be verified without a running client: getting it
-         * wrong is a hard crash at startup rather than a missing feature. Left out deliberately; if you
-         * add it back, test it in a real client first.
+         * redirect means matching a @Slice that cannot be verified without a running client, and a slice
+         * that matches nothing does not fail: Mixin quietly moves the injection, which is how the pre-tick
+         * slice above sat on the wrong instruction until cdf2238a. Left out deliberately; if you add it
+         * back, test it in a real client first.
          */
 
         // TODO

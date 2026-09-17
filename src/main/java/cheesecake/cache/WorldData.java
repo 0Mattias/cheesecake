@@ -22,6 +22,8 @@ import cheesecake.api.cache.ICachedWorld;
 import cheesecake.api.cache.IWaypointCollection;
 import cheesecake.api.cache.IWorldData;
 import java.nio.file.Path;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.dimension.DimensionType;
 
 /**
@@ -37,9 +39,9 @@ public class WorldData implements IWorldData {
     public final Path directory;
     public final DimensionType dimension;
 
-    WorldData(Path directory, DimensionType dimension) {
+    WorldData(Path directory, DimensionType dimension, ResourceKey<Level> dimensionId) {
         this.directory = directory;
-        this.cache = new CachedWorld(directory.resolve("cache"), dimension);
+        this.cache = new CachedWorld(directory.resolve("cache"), dimension, dimensionId);
         this.waypoints = new WaypointCollection(directory.resolve("waypoints"));
         this.dimension = dimension;
     }

@@ -17,6 +17,8 @@
 
 package cheesecake.process.elytra.pathfinder;
 
+import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+import it.unimi.dsi.fastutil.longs.LongSet;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import java.util.ArrayDeque;
@@ -116,7 +118,7 @@ final class PathFinder {
     // ---- neighbour expansion ----
 
     private interface Callback {
-        void accept(NodePos neighbor, Chunk chunk, int state);
+        void accept(NodePos neighbor, Chunk chunk, boolean fromCaller);
     }
 
     /**
@@ -148,14 +150,14 @@ final class PathFinder {
         }
     }
 
-    private static void forEachNeighborInCube(Chunk chunk, int state, NodePos neighborNode, Direction face, Size size, boolean sizeChange, Size minSize, Callback callback) {
+    private static void forEachNeighborInCube(Chunk chunk, boolean fromCaller, NodePos neighborNode, Direction face, Size size, boolean sizeChange, Size minSize, Callback callback) {
         if (sizeChange) {
-            callback.accept(neighborNode, chunk, state);
+            callback.accept(neighborNode, chunk, fromCaller);
             return;
         }
         final BlockPos pos = neighborNode.absolutePosZero();
         if (chunk.isEmpty(size, pos.getX() & 15, pos.getY(), pos.getZ() & 15)) {
-            callback.accept(neighborNode, chunk, state);
+            callback.accept(neighborNode, chunk, fromCaller);
             return;
         }
         if (size != Size.X1) {
@@ -163,20 +165,20 @@ final class PathFinder {
             // Don't shrink cubes to X1 because they suck and make the path try to squeeze through small areas
             if (nextSize.ordinal() < minSize.ordinal()) return;
             for (BlockPos subCube : neighborCubes(face, nextSize, pos)) {
-                forEachNeighborInCube(chunk, state, new NodePos(nextSize, subCube), face, nextSize, false, minSize, callback);
+                forEachNeighborInCube(chunk, fromCaller, new NodePos(nextSize, subCube), face, nextSize, false, minSize, callback);
             }
         }
     }
 
     /** Grows the neighbour to the largest empty cube it is in, then iterates what is on the face. */
-    private static void growThenIterate(Chunk chunk, int state, NodePos pos, Direction face, Size minSize, Callback callback) {
+    private static void growThenIterate(Chunk chunk, boolean fromCaller, NodePos pos, Direction face, Size minSize, Callback callback) {
         final Size originalSize = pos.size;
         final BlockPos bpos = pos.absolutePosZero();
         final int lx = bpos.getX() & 15;
         final int lz = bpos.getZ() & 15;
         for (Size s = originalSize; ; s = s.larger()) {
             if (s == Size.X16 || !chunk.isEmpty(s.larger(), lx, bpos.getY(), lz)) {
-                forEachNeighborInCube(chunk, state, new NodePos(s, bpos), face, s, originalSize != s, minSize, callback);
+                forEachNeighborInCube(chunk, fromCaller, new NodePos(s, bpos), face, s, originalSize != s, minSize, callback);
                 return;
             }
         }
@@ -202,9 +204,9 @@ final class PathFinder {
         }
 
         @Override
-        public void accept(NodePos neighborPos, Chunk chunk, int state) {
+        public void accept(NodePos neighborPos, Chunk chunk, boolean fromCaller) {
             final PathNode neighborNode = getNodeAtPosition(this.map, neighborPos, this.goalCenter);
-            final double cost = state == NetherPathfinder.STATE_FROM_CALLER ? 1 : this.fakeChunkCost;
+            final double cost = fromCaller ? 1 : this.fakeChunkCost;
             final double tentativeCost = this.currentNode.cost + cost;
             if (neighborNode.cost - tentativeCost > MIN_IMPROVEMENT) {
                 neighborNode.previous = this.currentNode;
@@ -241,7 +243,7 @@ final class PathFinder {
         final BlockPos startCenter = start.absolutePosCenter();
 
         final Search s = new Search(goalCenter, startCenter, fakeChunkCost);
-        final Set<Long> doneFull = new HashSet<>();
+        final LongSet doneFull = new LongOpenHashSet();
 
         final PathNode startNode = getNodeAtPosition(s.map, start, goal.absolutePosZero());
         final BlockPos startZero = start.absolutePosZero();
@@ -284,7 +286,7 @@ final class PathFinder {
             final int cx = (bpos.getX() >> 4);
             final int cz = (bpos.getZ() >> 4);
             final NetherPathfinder.Entry currentChunk = ctx.getChunkOrAir(cx, cz);
-            if (currentChunk.state != NetherPathfinder.STATE_FROM_CALLER) {
+            if (!currentChunk.fromCaller) {
                 fakeChunkVisits++;
             } else {
                 fakeChunkVisits = 0;
@@ -306,7 +308,7 @@ final class PathFinder {
                 final int neighborCz = (origin.getZ() >> 4);
                 timeDoingIO += ctx.tryLoadRegion(neighborCx, neighborCz);
                 final NetherPathfinder.Entry entry = neighborCx == cx && neighborCz == cz ? currentChunk : ctx.getChunkOrAir(neighborCx, neighborCz);
-                growThenIterate(entry.chunk, entry.state, neighborNodePos, face, minSize, s);
+                growThenIterate(entry.chunk, entry.fromCaller, neighborNodePos, face, minSize, s);
             }
         }
         return bestPathSoFar(s.bestSoFar, startCenter, goalCenter);

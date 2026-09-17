@@ -159,8 +159,7 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
                         return;
                     }
                     boolean isSolid = !pair.second().isAir();
-                    // one block at a time in a chunk that is in use, so keep the x8 summary exact
-                    chunk.setBlock(pos.getX() & 15, pos.getY(), pos.getZ() & 15, isSolid, true);
+                    chunk.setBlock(pos.getX() & 15, pos.getY(), pos.getZ() & 15, isSolid);
                 });
             } finally {
                 writeLock.unlock();
