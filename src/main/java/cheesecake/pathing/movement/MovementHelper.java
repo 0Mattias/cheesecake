@@ -51,6 +51,12 @@ import net.minecraft.world.level.block.HorizontalDirectionalBlock;
 import net.minecraft.world.level.block.InfestedBlock;
 import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.LiquidBlock;
+import net.minecraft.core.Holder;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.world.item.enchantment.Enchantments;
+import net.minecraft.world.item.enchantment.ItemEnchantments;
+import net.minecraft.world.level.block.FrostedIceBlock;
 import net.minecraft.world.level.block.PointedDripstoneBlock;
 import net.minecraft.world.level.block.ScaffoldingBlock;
 import net.minecraft.world.level.block.ShulkerBoxBlock;
@@ -573,15 +579,28 @@ public interface MovementHelper extends ActionCosts, Helper {
 
     static boolean canUseFrostWalker(CalculationContext context, BlockState state) {
         return context.frostWalker != 0
-                && !state.getFluidState().isEmpty()
-                && ((Integer) state.getValue(LiquidBlock.LEVEL)) == 0;
+                && state == FrostedIceBlock.meltsInto()
+                && state.getValue(LiquidBlock.LEVEL) == 0;
     }
 
     static boolean canUseFrostWalker(IPlayerContext ctx, BlockPos pos) {
+        boolean hasFrostWalker = false;
+        OUTER: for (EquipmentSlot slot : EquipmentSlot.values()) {
+            ItemEnchantments itemEnchantments = ctx
+                .player()
+                .getItemBySlot(slot)
+                .getEnchantments();
+            for (Holder<Enchantment> enchant : itemEnchantments.keySet()) {
+                if (enchant.is(Enchantments.FROST_WALKER)) {
+                    hasFrostWalker = true;
+                    break OUTER;
+                }
+            }
+        }
         BlockState state = BlockStateInterface.get(ctx, pos);
-        return false
-                && !state.getFluidState().isEmpty()
-                && ((Integer) state.getValue(LiquidBlock.LEVEL)) == 0;
+        return hasFrostWalker
+                && state == FrostedIceBlock.meltsInto()
+                && state.getValue(LiquidBlock.LEVEL) == 0;
     }
 
     /**

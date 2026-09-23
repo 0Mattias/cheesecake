@@ -24,22 +24,45 @@ final class NodePos {
 
     final Size size;
     /** absolute position divided by the width */
-    private final BlockPos pos;
+    private final int x;
+    private final int y;
+    private final int z;
 
-    NodePos(Size size, BlockPos approxPosition) {
+    /** The cube of the given size that holds the block at (x, y, z). */
+    NodePos(Size size, int x, int y, int z) {
         this.size = size;
         final int shift = size.shift();
-        this.pos = new BlockPos(approxPosition.getX() >> shift, approxPosition.getY() >> shift, approxPosition.getZ() >> shift);
+        this.x = x >> shift;
+        this.y = y >> shift;
+        this.z = z >> shift;
     }
 
-    BlockPos absolutePosZero() {
-        final int shift = this.size.shift();
-        return new BlockPos(this.pos.getX() << shift, this.pos.getY() << shift, this.pos.getZ() << shift);
+    /** The absolute coordinates of the cube's lowest corner. */
+    int minX() {
+        return this.x << this.size.shift();
     }
 
+    int minY() {
+        return this.y << this.size.shift();
+    }
+
+    int minZ() {
+        return this.z << this.size.shift();
+    }
+
+    /** The block at the cube's centre, which is what a path is made of. */
     BlockPos absolutePosCenter() {
         final int half = this.size.width() / 2;
-        return this.absolutePosZero().offset(half, half, half);
+        return new BlockPos(this.minX() + half, this.minY() + half, this.minZ() + half);
+    }
+
+    /** The squared distance from the block at the cube's centre to pos, as BlockPos.distSqr has it. */
+    double centerDistSqr(BlockPos pos) {
+        final int half = this.size.width() / 2;
+        final double dx = this.minX() + half - pos.getX();
+        final double dy = this.minY() + half - pos.getY();
+        final double dz = this.minZ() + half - pos.getZ();
+        return dx * dx + dy * dy + dz * dz;
     }
 
     @Override
@@ -48,16 +71,16 @@ final class NodePos {
             return false;
         }
         final NodePos n = (NodePos) o;
-        return n.size == this.size && n.pos.equals(this.pos);
+        return n.size == this.size && n.x == this.x && n.y == this.y && n.z == this.z;
     }
 
     @Override
     public int hashCode() {
         long hash = 3241;
         hash = 6406146L * hash + this.size.ordinal();
-        hash = 3457689L * hash + this.pos.getX();
-        hash = 8734625L * hash + this.pos.getY();
-        hash = 2873465L * hash + this.pos.getZ();
+        hash = 3457689L * hash + this.x;
+        hash = 8734625L * hash + this.y;
+        hash = 2873465L * hash + this.z;
         return (int) (hash ^ (hash >>> 32));
     }
 }

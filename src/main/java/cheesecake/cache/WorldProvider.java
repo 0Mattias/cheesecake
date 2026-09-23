@@ -81,7 +81,7 @@ public class WorldProvider implements IWorldProvider {
                 Files.createDirectories(readmeDir);
                 Files.write(
                         readmeDir.resolve("readme.txt"),
-                        "https://github.com/cabaletta/cheesecake\n".getBytes(StandardCharsets.US_ASCII));
+                        "https://github.com/0Mattias/cheesecake\n".getBytes(StandardCharsets.US_ASCII));
             } catch (IOException ignored) {
             }
 
@@ -95,7 +95,7 @@ public class WorldProvider implements IWorldProvider {
             System.out.println("Cheesecake world data dir: " + worldDataDir);
             synchronized (worldCache) {
                 this.currentWorld = worldCache.computeIfAbsent(worldDataDir,
-                        d -> new WorldData(d, world.dimensionType()));
+                        d -> new WorldData(d, world.dimensionType(), world.dimension()));
             }
             this.mcWorld = ctx.world();
         });

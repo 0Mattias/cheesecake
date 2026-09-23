@@ -88,7 +88,7 @@ class Path extends PathBase {
         // If the position the player is at is different from the position we told A* to start from,
         // and A* gave us no movements, then add a fake node that will allow a movement to be created
         // that gets us to the single position in the path.
-        // See PathingBehavior#createPathfinder and https://github.com/cabaletta/cheesecake/pull/4519
+        // See PathingBehavior#createPathfinder and https://github.com/cabaletta/baritone/pull/4519
         var startNodePos = new BetterBlockPos(start.x, start.y, start.z);
         if (!realStart.equals(startNodePos) && start.equals(end)) {
             this.start = realStart;

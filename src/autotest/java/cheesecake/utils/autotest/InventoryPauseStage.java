@@ -66,6 +66,9 @@ public final class InventoryPauseStage extends Stage {
     protected void start() {
         this.t.stopEverything();
         BetterBlockPos p = this.t.platform;
+        // A clear of an empty inventory is reported as a failure, and the inventory is empty when this
+        // stage runs alone, so give it something to clear.
+        command("give " + this.t.playerName() + " minecraft:stick 1");
         command("clear " + this.t.playerName());
         for (String filler : FILLER) {
             command("give " + this.t.playerName() + " minecraft:" + filler + " 1");
