@@ -52,11 +52,13 @@ import net.minecraft.world.phys.Vec3;
 @SuppressWarnings({"unchecked"})
 public final class NetherPathfinderContext implements IElytraPathFinder {
 
-    // The native library needed this lock held while there were pointers to its chunks in Java.
-    // The port needs none of that: a chunk is an object that stays valid for whoever holds it, and
-    // the table takes lookups, inserts and culls from any thread at once. The lock is kept so that
-    // the threads still run in the order the flights were tested in -- packing, culling and
-    // generating searches on the write side, everything else on the read side.
+    // Chunk is not synchronized, and this lock is what keeps its writers and readers apart. Packing
+    // fills a chunk after the table already holds it and a block update changes one that a search
+    // may be reading, so both take the write lock, as culling and a search that generates terrain
+    // do; every other search, ElytraBehavior's tick and solver, and its check of a landing spot take
+    // the read lock, which also makes the last write visible to them. The table itself is
+    // concurrent: a chunk generated or read from a region file goes in complete, and a culled one
+    // stays valid for whoever still holds it.
     public final ReentrantReadWriteLock rwl = new ReentrantReadWriteLock();
     public final ReentrantReadWriteLock.ReadLock readLock = rwl.readLock();
     public final ReentrantReadWriteLock.WriteLock writeLock = rwl.writeLock();
