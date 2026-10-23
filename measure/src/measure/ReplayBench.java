@@ -17,7 +17,8 @@ import java.util.zip.GZIPInputStream;
 /**
  * Replays the chunk-cache lookups of a recorded flight (whole solves, in the order they ran)
  * through each way of caching the chunk: upstream 1.21.4's Java chunks (java*) and 26.3's native
- * ones (native*). One op is the whole replay; divide by the lookup count the setup prints for
+ * ones (native*). Every benchmark walks the solves the same way, so the variants differ only in the
+ * cache; a cache per solver is published to a field, as SolverContext would hold it. One op is the whole replay; divide by the lookup count the setup prints for
  * ns per lookup. The *2 benchmarks run two threads that share one cache (each its own, for the
  * cache per solver), both replaying the same flight one solve apart, as when a solve that was
  * cancelled overlaps the game thread's.
@@ -40,6 +41,8 @@ public class ReplayBench {
         JavaCaches.Table table;
         long context;
         final AtomicInteger lanes = new AtomicInteger();
+        /** Where a cache per solver is published, so that escape analysis cannot keep its fields in registers. */
+        Object solverContext;
         JavaCaches.Current javaCurrent;
         JavaCaches.RecordVolatile javaRecordVolatile;
         JavaCaches.RecordPlain javaRecordPlain;
@@ -152,11 +155,13 @@ public class ReplayBench {
     @Benchmark
     public int javaCurrent(Replay r) {
         final JavaCaches.Current c = r.javaCurrent;
-        final int[] xs = r.xs, ys = r.ys, zs = r.zs;
+        final int[] xs = r.xs, ys = r.ys, zs = r.zs, from = r.solveFrom;
         int solid = 0;
-        for (int i = 0, n = r.lookups; i < n; i++) {
-            if (c.get0(xs[i], ys[i], zs[i])) {
-                solid++;
+        for (int s = 0, n = r.solves; s < n; s++) {
+            for (int i = from[s], end = from[s + 1]; i < end; i++) {
+                if (c.get0(xs[i], ys[i], zs[i])) {
+                    solid++;
+                }
             }
         }
         return solid;
@@ -165,11 +170,13 @@ public class ReplayBench {
     @Benchmark
     public int javaRecordVolatile(Replay r) {
         final JavaCaches.RecordVolatile c = r.javaRecordVolatile;
-        final int[] xs = r.xs, ys = r.ys, zs = r.zs;
+        final int[] xs = r.xs, ys = r.ys, zs = r.zs, from = r.solveFrom;
         int solid = 0;
-        for (int i = 0, n = r.lookups; i < n; i++) {
-            if (c.get0(xs[i], ys[i], zs[i])) {
-                solid++;
+        for (int s = 0, n = r.solves; s < n; s++) {
+            for (int i = from[s], end = from[s + 1]; i < end; i++) {
+                if (c.get0(xs[i], ys[i], zs[i])) {
+                    solid++;
+                }
             }
         }
         return solid;
@@ -178,11 +185,13 @@ public class ReplayBench {
     @Benchmark
     public int javaRecordPlain(Replay r) {
         final JavaCaches.RecordPlain c = r.javaRecordPlain;
-        final int[] xs = r.xs, ys = r.ys, zs = r.zs;
+        final int[] xs = r.xs, ys = r.ys, zs = r.zs, from = r.solveFrom;
         int solid = 0;
-        for (int i = 0, n = r.lookups; i < n; i++) {
-            if (c.get0(xs[i], ys[i], zs[i])) {
-                solid++;
+        for (int s = 0, n = r.solves; s < n; s++) {
+            for (int i = from[s], end = from[s + 1]; i < end; i++) {
+                if (c.get0(xs[i], ys[i], zs[i])) {
+                    solid++;
+                }
             }
         }
         return solid;
@@ -191,11 +200,13 @@ public class ReplayBench {
     @Benchmark
     public int javaPerThread(Replay r) {
         final JavaCaches.PerThread c = r.javaPerThread;
-        final int[] xs = r.xs, ys = r.ys, zs = r.zs;
+        final int[] xs = r.xs, ys = r.ys, zs = r.zs, from = r.solveFrom;
         int solid = 0;
-        for (int i = 0, n = r.lookups; i < n; i++) {
-            if (c.get0(xs[i], ys[i], zs[i])) {
-                solid++;
+        for (int s = 0, n = r.solves; s < n; s++) {
+            for (int i = from[s], end = from[s + 1]; i < end; i++) {
+                if (c.get0(xs[i], ys[i], zs[i])) {
+                    solid++;
+                }
             }
         }
         return solid;
@@ -207,6 +218,7 @@ public class ReplayBench {
         int solid = 0;
         for (int s = 0, n = r.solves; s < n; s++) {
             final JavaCaches.Current c = new JavaCaches.Current(r.table, r.minY);
+            r.solverContext = c; // held by the solve's context, as SolverContext would, so it is a real heap object
             for (int i = from[s], end = from[s + 1]; i < end; i++) {
                 if (c.get0(xs[i], ys[i], zs[i])) {
                     solid++;
@@ -275,6 +287,7 @@ public class ReplayBench {
         for (int k = 0, n = r.solves; k < n; k++) {
             final int s = (k + lane.offset) % n;
             final JavaCaches.Current c = new JavaCaches.Current(r.table, r.minY);
+            r.solverContext = c; // held by the solve's context, as SolverContext would, so it is a real heap object
             for (int i = from[s], end = from[s + 1]; i < end; i++) {
                 if (c.get0(xs[i], ys[i], zs[i])) {
                     solid++;
@@ -287,11 +300,13 @@ public class ReplayBench {
     @Benchmark
     public int nativeCurrent(Replay r) {
         final NativeCaches.Current c = r.nativeCurrent;
-        final int[] xs = r.xs, ys = r.ys, zs = r.zs;
+        final int[] xs = r.xs, ys = r.ys, zs = r.zs, from = r.solveFrom;
         int solid = 0;
-        for (int i = 0, n = r.lookups; i < n; i++) {
-            if (c.get0(xs[i], ys[i], zs[i])) {
-                solid++;
+        for (int s = 0, n = r.solves; s < n; s++) {
+            for (int i = from[s], end = from[s + 1]; i < end; i++) {
+                if (c.get0(xs[i], ys[i], zs[i])) {
+                    solid++;
+                }
             }
         }
         return solid;
@@ -300,11 +315,13 @@ public class ReplayBench {
     @Benchmark
     public int nativeRecordVolatile(Replay r) {
         final NativeCaches.RecordVolatile c = r.nativeRecordVolatile;
-        final int[] xs = r.xs, ys = r.ys, zs = r.zs;
+        final int[] xs = r.xs, ys = r.ys, zs = r.zs, from = r.solveFrom;
         int solid = 0;
-        for (int i = 0, n = r.lookups; i < n; i++) {
-            if (c.get0(xs[i], ys[i], zs[i])) {
-                solid++;
+        for (int s = 0, n = r.solves; s < n; s++) {
+            for (int i = from[s], end = from[s + 1]; i < end; i++) {
+                if (c.get0(xs[i], ys[i], zs[i])) {
+                    solid++;
+                }
             }
         }
         return solid;
@@ -313,11 +330,13 @@ public class ReplayBench {
     @Benchmark
     public int nativeRecordPlain(Replay r) {
         final NativeCaches.RecordPlain c = r.nativeRecordPlain;
-        final int[] xs = r.xs, ys = r.ys, zs = r.zs;
+        final int[] xs = r.xs, ys = r.ys, zs = r.zs, from = r.solveFrom;
         int solid = 0;
-        for (int i = 0, n = r.lookups; i < n; i++) {
-            if (c.get0(xs[i], ys[i], zs[i])) {
-                solid++;
+        for (int s = 0, n = r.solves; s < n; s++) {
+            for (int i = from[s], end = from[s + 1]; i < end; i++) {
+                if (c.get0(xs[i], ys[i], zs[i])) {
+                    solid++;
+                }
             }
         }
         return solid;
@@ -326,11 +345,13 @@ public class ReplayBench {
     @Benchmark
     public int nativePerThread(Replay r) {
         final NativeCaches.PerThread c = r.nativePerThread;
-        final int[] xs = r.xs, ys = r.ys, zs = r.zs;
+        final int[] xs = r.xs, ys = r.ys, zs = r.zs, from = r.solveFrom;
         int solid = 0;
-        for (int i = 0, n = r.lookups; i < n; i++) {
-            if (c.get0(xs[i], ys[i], zs[i])) {
-                solid++;
+        for (int s = 0, n = r.solves; s < n; s++) {
+            for (int i = from[s], end = from[s + 1]; i < end; i++) {
+                if (c.get0(xs[i], ys[i], zs[i])) {
+                    solid++;
+                }
             }
         }
         return solid;
@@ -342,6 +363,7 @@ public class ReplayBench {
         int solid = 0;
         for (int s = 0, n = r.solves; s < n; s++) {
             final NativeCaches.Current c = new NativeCaches.Current(r.context, r.minY);
+            r.solverContext = c; // held by the solve's context, as SolverContext would, so it is a real heap object
             for (int i = from[s], end = from[s + 1]; i < end; i++) {
                 if (c.get0(xs[i], ys[i], zs[i])) {
                     solid++;
@@ -410,6 +432,7 @@ public class ReplayBench {
         for (int k = 0, n = r.solves; k < n; k++) {
             final int s = (k + lane.offset) % n;
             final NativeCaches.Current c = new NativeCaches.Current(r.context, r.minY);
+            r.solverContext = c; // held by the solve's context, as SolverContext would, so it is a real heap object
             for (int i = from[s], end = from[s + 1]; i < end; i++) {
                 if (c.get0(xs[i], ys[i], zs[i])) {
                     solid++;

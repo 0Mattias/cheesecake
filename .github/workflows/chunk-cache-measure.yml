@@ -8,9 +8,19 @@ on:
     branches: [claude/chunk-cache-measurements]
   workflow_dispatch:
 
+permissions:
+  contents: read
+  actions: read
+
+# The flights recorded in this run are replayed again instead of flying new ones, so that every
+# round of the benchmark replays exactly the same lookups. Empty it to record afresh.
+env:
+  REPLAY_RUN_ID: '40009380287'
+
 jobs:
   record:
     name: record ${{ matrix.stage }} (${{ matrix.mode }})
+    if: false # flights reused from REPLAY_RUN_ID; set to true to record new ones
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
@@ -119,6 +129,8 @@ jobs:
           pattern: replay-*
           path: replays
           merge-multiple: true
+          run-id: ${{ env.REPLAY_RUN_ID }}
+          github-token: ${{ github.token }}
 
       - name: Machine
         run: |
