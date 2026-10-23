@@ -20,13 +20,12 @@ package cheesecake.process.elytra;
 import cheesecake.process.elytra.pathfinder.Chunk;
 
 import java.io.DataOutputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.ByteBuffer;
-import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
@@ -61,6 +60,7 @@ public final class LookupTrace {
 
     private static final AtomicLong granted = new AtomicLong();
     private static volatile boolean full;
+    private static final AtomicLong failures = new AtomicLong();
     private static final AtomicLong outsideSolves = new AtomicLong();
     private static final List<Writer> writers = new ArrayList<>();
     private static final ThreadLocal<Writer> LOCAL = ThreadLocal.withInitial(Writer::new);
@@ -85,11 +85,22 @@ public final class LookupTrace {
         chunks.put(((long) x << 32) | (z & 0xFFFFFFFFL), new Object[]{x, z, chunk});
     }
 
-    /** Writes everything out. Called once on the game thread when the stages are done. */
-    public static void finish() {
-        if (!ON) {
+    private static boolean finished;
+
+    /** Writes everything out, once, on the game thread when the stages are done. Never throws. */
+    public static synchronized void finish() {
+        if (!ON || finished) {
             return;
         }
+        finished = true;
+        try {
+            finish0();
+        } catch (Throwable t) {
+            t.printStackTrace();
+        }
+    }
+
+    private static void finish0() {
         try {
             Thread.sleep(3000); // let the last solver threads wind down
         } catch (InterruptedException ignored) {}
@@ -106,6 +117,9 @@ public final class LookupTrace {
                     solves += w.solves;
                 }
             }
+        }
+        if (failures.get() > 0) {
+            System.err.println("[LookupTrace] " + failures.get() + " writes failed; the trace is incomplete");
         }
         try (DataOutputStream out = new DataOutputStream(new GZIPOutputStream(Files.newOutputStream(dir.resolve("chunks.bin.gz")), 1 << 16))) {
             out.writeInt(chunks.size());
@@ -144,7 +158,11 @@ public final class LookupTrace {
     }
 
     private static final class Writer {
-        private final FileChannel channel;
+        /**
+         * Not a FileChannel: the game cancels a solve by interrupting its thread, and an
+         * interrupt closes a FileChannel that thread is writing to. A stream ignores it.
+         */
+        private final FileOutputStream out;
         private final int[] buf = new int[3 * 8192];
         private int pos;
         private int allowance;
@@ -158,14 +176,17 @@ public final class LookupTrace {
 
         Writer() {
             final Thread t = Thread.currentThread();
+            FileOutputStream o = null;
             try {
                 final Path dir = Path.of(DIR);
                 Files.createDirectories(dir);
-                this.channel = FileChannel.open(dir.resolve("thread-" + t.threadId() + "-" + t.getName().replaceAll("[^A-Za-z0-9_-]", "_") + ".bin"),
-                        StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING);
+                o = new FileOutputStream(dir.resolve("thread-" + t.threadId() + "-" + t.getName().replaceAll("[^A-Za-z0-9_-]", "_") + ".bin").toFile());
             } catch (IOException e) {
-                throw new RuntimeException(e);
+                failures.incrementAndGet();
+                e.printStackTrace();
+                this.closed = true;
             }
+            this.out = o;
             synchronized (writers) {
                 writers.add(this);
             }
@@ -224,15 +245,16 @@ public final class LookupTrace {
             }
         }
 
+        // never throws: a failure here must not change what the solver does
         private synchronized void flush() {
-            final ByteBuffer bytes = ByteBuffer.allocate(this.pos * 4);
-            bytes.asIntBuffer().put(this.buf, 0, this.pos);
-            try {
-                while (bytes.hasRemaining()) {
-                    this.channel.write(bytes);
+            if (this.out != null && this.pos > 0) {
+                final ByteBuffer bytes = ByteBuffer.allocate(this.pos * 4);
+                bytes.asIntBuffer().put(this.buf, 0, this.pos);
+                try {
+                    this.out.write(bytes.array(), 0, this.pos * 4);
+                } catch (IOException e) {
+                    failures.incrementAndGet();
                 }
-            } catch (IOException e) {
-                throw new RuntimeException(e);
             }
             this.pos = 0;
         }
@@ -244,9 +266,11 @@ public final class LookupTrace {
             flush();
             this.closed = true;
             try {
-                this.channel.close();
+                if (this.out != null) {
+                    this.out.close();
+                }
             } catch (IOException e) {
-                e.printStackTrace();
+                failures.incrementAndGet();
             }
         }
     }
