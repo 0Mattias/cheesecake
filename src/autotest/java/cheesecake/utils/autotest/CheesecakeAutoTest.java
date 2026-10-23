@@ -18,6 +18,7 @@
 package cheesecake.utils.autotest;
 
 import cheesecake.Cheesecake;
+import cheesecake.process.elytra.LookupTrace;
 import cheesecake.api.event.events.PathEvent;
 import java.util.stream.Stream;
 import java.util.Comparator;
@@ -304,14 +305,14 @@ public final class CheesecakeAutoTest implements AbstractGameEventListener {
 
     private void pass(String message) {
         this.finished = true;
-        cheesecake.process.elytra.LookupTrace.finish();
+        LookupTrace.finish();
         log("PASS: " + message);
         Minecraft.getInstance().stop();
     }
 
     private void fail(String message, Throwable cause) {
         this.finished = true;
-        cheesecake.process.elytra.LookupTrace.finish();
+        LookupTrace.finish();
         log("FAIL: " + message);
         if (cause != null) {
             cause.printStackTrace();
