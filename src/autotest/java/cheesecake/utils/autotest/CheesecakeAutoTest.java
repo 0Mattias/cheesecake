@@ -304,12 +304,14 @@ public final class CheesecakeAutoTest implements AbstractGameEventListener {
 
     private void pass(String message) {
         this.finished = true;
+        cheesecake.process.elytra.LookupTrace.finish();
         log("PASS: " + message);
         Minecraft.getInstance().stop();
     }
 
     private void fail(String message, Throwable cause) {
         this.finished = true;
+        cheesecake.process.elytra.LookupTrace.finish();
         log("FAIL: " + message);
         if (cause != null) {
             cause.printStackTrace();

@@ -1,0 +1,150 @@
+# Measurement for cabaletta/baritone#5136, on a throwaway branch: flies the in-world test's Nether
+# elytra stages with LookupTrace on, then replays the recorded chunk-cache lookups through each way
+# of caching the chunk on x86-64 Linux and Windows, ARM Linux and Apple Silicon.
+name: chunk cache measurements
+
+on:
+  push:
+    branches: [claude/chunk-cache-measurements]
+  workflow_dispatch:
+
+jobs:
+  record:
+    name: record ${{ matrix.stage }} (${{ matrix.mode }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        stage: [elytra-nether-below-roof, elytra-nether-above-roof]
+        mode: [lookups, timing]
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Install a headless GL stack
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libgl1-mesa-dri libglx-mesa0 mesa-utils libopenal1
+
+      - name: Fly the stage
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+          GALLIUM_DRIVER: llvmpipe
+          CHEESECAKE_AUTO_TEST: 'true'
+          CHEESECAKE_AUTO_TEST_ONLY: ${{ matrix.stage }}
+          CHEESECAKE_TRACE_DIR: ${{ github.workspace }}/trace
+          CHEESECAKE_TRACE_LOOKUPS: ${{ matrix.mode == 'lookups' && '1' || '0' }}
+          CHEESECAKE_TRACE_CAP: '60000000'
+        run: |
+          set +e
+          lscpu | grep -E 'Model name|^CPU\(s\)'
+          xvfb-run -a --server-args="-screen 0 1280x720x24" \
+            timeout --signal=INT 1800 ./gradlew runClient --no-daemon --stacktrace > client.log 2>&1
+          echo "gradle exited $?"
+          grep -aE "PASS:|FAIL:|stage .* (passed|of)" client.log | tail -20
+          ls -la trace
+          cat trace/summary.txt
+
+      - name: Analyze
+        run: |
+          mkdir -p mclasses out
+          javac -d mclasses measure/src/measure/Analyze.java
+          if [ "${{ matrix.mode }}" = lookups ]; then
+            java -Xmx8g -cp mclasses measure.Analyze trace "out/${{ matrix.stage }}.bin.gz" 8000000 0 | tee "out/analysis-${{ matrix.stage }}-${{ matrix.mode }}.txt"
+          else
+            java -Xmx8g -cp mclasses measure.Analyze trace | tee "out/analysis-${{ matrix.stage }}-${{ matrix.mode }}.txt"
+          fi
+          cp trace/summary.txt "out/summary-${{ matrix.stage }}-${{ matrix.mode }}.txt"
+          ls -la out
+
+      - name: Upload the replay set
+        if: matrix.mode == 'lookups'
+        uses: actions/upload-artifact@v7
+        with:
+          name: replay-${{ matrix.stage }}
+          path: |
+            out/*.bin.gz
+            out/*.count
+          retention-days: 7
+
+      - name: Upload the analysis
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: analysis-${{ matrix.stage }}-${{ matrix.mode }}
+          path: |
+            out/*.txt
+            client.log
+          retention-days: 7
+
+  bench:
+    name: replay on ${{ matrix.os }}, JDK ${{ matrix.java }}
+    needs: record
+    if: ${{ !cancelled() }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, java: '25' }
+          - { os: ubuntu-latest, java: '21' }
+          - { os: windows-latest, java: '25' }
+          - { os: ubuntu-24.04-arm, java: '25' }
+          - { os: macos-14, java: '25' }
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up JDK ${{ matrix.java }}
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+
+      - name: Get the replay sets
+        uses: actions/download-artifact@v8
+        with:
+          pattern: replay-*
+          path: replays
+          merge-multiple: true
+
+      - name: Machine
+        run: |
+          uname -a
+          case "$RUNNER_OS" in
+            Linux) lscpu | grep -E 'Model name|^CPU\(s\)|Architecture' ;;
+            macOS) sysctl -n machdep.cpu.brand_string hw.ncpu hw.memsize ;;
+            Windows) powershell -Command "Get-CimInstance Win32_Processor | Select-Object -ExpandProperty Name; (Get-CimInstance Win32_ComputerSystem).NumberOfLogicalProcessors" ;;
+          esac
+          ls -la replays
+
+      - name: Replay
+        run: measure/run-bench.sh replays 3
+
+      - name: Summaries
+        if: always()
+        run: cat summary-*.md
+
+      - name: Upload the results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: results-${{ matrix.os }}-jdk${{ matrix.java }}
+          path: |
+            results-*.json
+            gc-*.json
+            summary-*.md
+            jmh-*.log
+          retention-days: 7

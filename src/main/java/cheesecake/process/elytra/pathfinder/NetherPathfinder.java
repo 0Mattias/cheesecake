@@ -152,12 +152,18 @@ public final class NetherPathfinder implements AutoCloseable {
             }
         }
         this.chunks.put(key(chunkX, chunkZ), new Entry(STATE_FROM_CALLER, chunk, chunkX, chunkZ));
+        if (cheesecake.process.elytra.LookupTrace.ON) {
+            cheesecake.process.elytra.LookupTrace.chunk(chunkX, chunkZ, chunk);
+        }
     }
 
     /** Inserts a new, empty chunk from the game at (x, z), replacing any chunk there, and returns it to be filled. */
     public Chunk allocateAndInsertChunk(int x, int z) {
         final Chunk chunk = new Chunk();
         this.chunks.put(key(x, z), new Entry(STATE_FROM_CALLER, chunk, x, z));
+        if (cheesecake.process.elytra.LookupTrace.ON) {
+            cheesecake.process.elytra.LookupTrace.chunk(x, z, chunk);
+        }
         return chunk;
     }
 
@@ -281,6 +287,9 @@ public final class NetherPathfinder implements AutoCloseable {
         }
         final Chunk chunk = this.generator.generateChunk(cx, cz);
         final Entry previous = this.chunks.putIfAbsent(key, new Entry(STATE_FAKE, chunk, cx, cz));
+        if (previous == null && cheesecake.process.elytra.LookupTrace.ON) {
+            cheesecake.process.elytra.LookupTrace.chunk(cx, cz, chunk);
+        }
         // someone else generated this chunk while we were generating it
         return previous != null ? previous.chunk : chunk;
     }
@@ -307,7 +316,12 @@ public final class NetherPathfinder implements AutoCloseable {
         }
         final long t1 = System.currentTimeMillis();
         final boolean read = BaritoneRegion.load(this.baritoneCache, regionX, regionZ,
-                (x, z, chunk) -> this.chunks.putIfAbsent(key(x, z), new Entry(STATE_FROM_CALLER, chunk, x, z)));
+                (x, z, chunk) -> {
+                    if (this.chunks.putIfAbsent(key(x, z), new Entry(STATE_FROM_CALLER, chunk, x, z)) == null
+                            && cheesecake.process.elytra.LookupTrace.ON) {
+                        cheesecake.process.elytra.LookupTrace.chunk(x, z, chunk);
+                    }
+                });
         return read ? System.currentTimeMillis() - t1 : 0;
     }
 }

@@ -55,6 +55,9 @@ public final class BlockStateOctreeInterface {
     }
 
     public boolean get0(final int x, final int y, final int z) {
+        if (LookupTrace.LOOKUPS) {
+            LookupTrace.lookup(x, y, z);
+        }
         final int adjustedY = y - this.minY;
         if (adjustedY < 0 || adjustedY > 383) {
             return false;

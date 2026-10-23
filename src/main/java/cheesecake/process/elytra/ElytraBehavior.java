@@ -363,6 +363,19 @@ public final class ElytraBehavior implements Helper {
 
         // requires the read lock to be held
         private void pathfindAroundObstacles() {
+            if (!LookupTrace.ON) {
+                this.pathfindAroundObstacles0();
+                return;
+            }
+            LookupTrace.begin(LookupTrace.OBSTACLES);
+            try {
+                this.pathfindAroundObstacles0();
+            } finally {
+                LookupTrace.end();
+            }
+        }
+
+        private void pathfindAroundObstacles0() {
             if (this.recalculating) {
                 return;
             }
@@ -727,6 +740,18 @@ public final class ElytraBehavior implements Helper {
 
     // calls passable which requires a read lock
     private Solution solveAngles(final SolverContext context) {
+        if (!LookupTrace.ON) {
+            return this.solveAngles0(context);
+        }
+        LookupTrace.begin(LookupTrace.SOLVE);
+        try {
+            return this.solveAngles0(context);
+        } finally {
+            LookupTrace.end();
+        }
+    }
+
+    private Solution solveAngles0(final SolverContext context) {
         final NetherPath path = context.path;
         final int playerNear = landingMode ? path.size() - 1 : context.playerNear;
         final Vec3 start = context.start;
