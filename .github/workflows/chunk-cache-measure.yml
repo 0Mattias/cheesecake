@@ -1,8 +1,9 @@
 # Measurement for cabaletta/baritone#5136, on a throwaway branch: flies the in-world test's Nether
 # elytra stages with LookupTrace on, then replays the recorded chunk-cache lookups through each way
 # of caching the chunk on x86-64 Linux and Windows, ARM Linux and Apple Silicon. The round on
-# claude/eager-planck-f3qj5c adds cabaletta/baritone#5156 and #5155 copied as they are, and replays
-# the Java (1.21.4) chunks only: the PRs target 1.21.4, and ThreadLocal was ruled out in round two.
+# claude/eager-planck-f3qj5c adds cabaletta/baritone#5156 and #5155 copied as they are, flies the
+# stages again and replays only this run's recordings through every variant, so nothing in its
+# tables comes from an earlier run.
 name: chunk cache measurements
 
 on:
@@ -14,15 +15,9 @@ permissions:
   contents: read
   actions: read
 
-# The flights recorded in this run are replayed again instead of flying new ones, so that every
-# round of the benchmark replays exactly the same lookups. Empty it to record afresh.
-env:
-  REPLAY_RUN_ID: '40009380287'
-
 jobs:
   record:
     name: record ${{ matrix.stage }} (${{ matrix.mode }})
-    if: false # flights reused from REPLAY_RUN_ID; set to true to record new ones
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
@@ -131,8 +126,6 @@ jobs:
           pattern: replay-*
           path: replays
           merge-multiple: true
-          run-id: ${{ env.REPLAY_RUN_ID }}
-          github-token: ${{ github.token }}
 
       - name: Machine
         run: |
@@ -145,9 +138,6 @@ jobs:
           ls -la replays
 
       - name: Replay
-        env:
-          NATIVE: 'false'
-          EXCLUDES: 'ReplayBench\.javaPerThread.*'
         run: measure/run-bench.sh replays 3
 
       - name: Summaries
