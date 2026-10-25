@@ -15,7 +15,8 @@ except (OSError, ValueError):
     pass
 
 variants = [("Current", "today's code"), ("RecordVolatile", "record + volatile"), ("RecordPlain", "record, plain field"),
-            ("PerSolver", "cache per solver"), ("PerThread", "ThreadLocal")]
+            ("Pr5156Record", "record as in #5156"), ("PerSolver", "cache per solver"),
+            ("Pr5155PerSolver", "cache per solver as in #5155, registry included"), ("PerThread", "ThreadLocal")]
 print(f"{lookups:,} lookups per replay; ± is JMH's 99.9% confidence interval\n")
 for impl, label in (("java", "Java chunks (1.21.4)"), ("native", "native chunks (26.3)")):
     for threads in ("", "2"):

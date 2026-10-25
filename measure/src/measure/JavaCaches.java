@@ -2,6 +2,9 @@ package measure;
 
 import baritone.process.elytra.pathfinder.Chunk;
 
+import java.util.Collections;
+import java.util.Set;
+import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -130,6 +133,65 @@ public final class JavaCaches {
                 this.cached = c;
             }
             return c.chunk.isSolid(x & 0xF, adjustedY, z & 0xF);
+        }
+    }
+
+    /**
+     * cabaletta/baritone#5156 (415acfcf) as it is, apart from the table type: the pair as a record
+     * behind a plain field, read once into a local, compared with the original xor trick.
+     */
+    public static final class Pr5156Record implements Get0 {
+        private final Table pathfinder;
+        private final int minY;
+        PrevChunk cached;
+
+        public Pr5156Record(Table pathfinder, int minY) {
+            this.pathfinder = pathfinder;
+            this.minY = minY;
+        }
+
+        @Override
+        public boolean get0(final int x, final int y, final int z) {
+            final int adjustedY = y - this.minY;
+            if (adjustedY < 0 || adjustedY > 383) {
+                return false;
+            }
+            final int chunkX = x >> 4;
+            final int chunkZ = z >> 4;
+            PrevChunk cached = this.cached;
+            final Chunk chunk;
+            if (cached == null || ((chunkX ^ cached.x()) | (chunkZ ^ cached.z())) != 0) {
+                chunk = this.pathfinder.getChunkOrDefault(chunkX, chunkZ, true);
+                this.cached = new PrevChunk(chunk, chunkX, chunkZ);
+            } else {
+                chunk = cached.chunk();
+            }
+            return chunk.isSolid(x & 0xF, adjustedY, z & 0xF);
+        }
+
+        private static record PrevChunk(Chunk chunk, int x, int z) {}
+    }
+
+    /**
+     * cabaletta/baritone#5155 (74dd28b2): the cache itself is Current, unchanged, one per reader,
+     * but every one is created through getBoi, which puts it in a weak set the writer walks to
+     * invalidate. getBoi is the part on the solve path; the walk runs on the write executor under
+     * the write lock, when no solve is running, so it is not replayed.
+     */
+    public static final class Pr5155Registry {
+        private final Table pathfinder;
+        private final int minY;
+        private final Set<Current> bois = Collections.newSetFromMap(new WeakHashMap<>());
+
+        public Pr5155Registry(Table pathfinder, int minY) {
+            this.pathfinder = pathfinder;
+            this.minY = minY;
+        }
+
+        public Current getBoi() {
+            Current boi = new Current(this.pathfinder, this.minY);
+            this.bois.add(boi);
+            return boi;
         }
     }
 

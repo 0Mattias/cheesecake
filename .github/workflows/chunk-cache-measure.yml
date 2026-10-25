@@ -1,11 +1,13 @@
 # Measurement for cabaletta/baritone#5136, on a throwaway branch: flies the in-world test's Nether
 # elytra stages with LookupTrace on, then replays the recorded chunk-cache lookups through each way
-# of caching the chunk on x86-64 Linux and Windows, ARM Linux and Apple Silicon.
+# of caching the chunk on x86-64 Linux and Windows, ARM Linux and Apple Silicon. The round on
+# claude/eager-planck-f3qj5c adds cabaletta/baritone#5156 and #5155 copied as they are, and replays
+# the Java (1.21.4) chunks only: the PRs target 1.21.4, and ThreadLocal was ruled out in round two.
 name: chunk cache measurements
 
 on:
   push:
-    branches: [claude/chunk-cache-measurements]
+    branches: [claude/chunk-cache-measurements, claude/eager-planck-f3qj5c]
   workflow_dispatch:
 
 permissions:
@@ -143,6 +145,9 @@ jobs:
           ls -la replays
 
       - name: Replay
+        env:
+          NATIVE: 'false'
+          EXCLUDES: 'ReplayBench\.javaPerThread.*'
         run: measure/run-bench.sh replays 3
 
       - name: Summaries

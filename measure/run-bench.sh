@@ -7,6 +7,11 @@ replays=$1
 forks=${2:-4}
 # iterations and their length; the defaults are what CI runs
 wi=${WI:-5}; it=${IT:-10}; w=${WT:-2s}; r=${RT:-2s}
+# NATIVE=false leaves out the 26.3 native library; EXCLUDES is a list of JMH -e regexes
+native=${NATIVE:-true}
+excludes=()
+for e in ${EXCLUDES:-}; do excludes+=(-e "$e"); done
+if [ "$native" != true ]; then excludes+=(-e 'ReplayBench\.native.*'); fi
 sep=':'
 py=python3
 if [ "${RUNNER_OS:-}" = "Windows" ]; then sep=';'; py=python; fi
@@ -31,14 +36,14 @@ java -version 2>&1
 for replay in "$replays"/*.bin.gz; do
   name=$(basename "$replay" .bin.gz)
   echo "::group::JMH $name"
-  java -cp "mbuild${sep}$cp" org.openjdk.jmh.Main 'ReplayBench' \
+  java -cp "mbuild${sep}$cp" org.openjdk.jmh.Main 'ReplayBench' ${excludes[@]+"${excludes[@]}"} \
     -f "$forks" -wi "$wi" -w "$w" -i "$it" -r "$r" -rf json -rff "results-$name.json" \
-    -jvmArgsAppend "-Xmx3g -Dreplay=$replay -Dnative=true" | tee "jmh-$name.log"
+    -jvmArgsAppend "-Xmx3g -Dreplay=$replay -Dnative=$native" | tee "jmh-$name.log"
   echo "::endgroup::"
   echo "::group::allocation $name"
-  java -cp "mbuild${sep}$cp" org.openjdk.jmh.Main 'ReplayBench\.(java|native)(Current|RecordVolatile|RecordPlain|PerThread|PerSolver)$' \
+  java -cp "mbuild${sep}$cp" org.openjdk.jmh.Main 'ReplayBench\.(java|native)(Current|RecordVolatile|RecordPlain|Pr5156Record|PerThread|PerSolver|Pr5155PerSolver)$' ${excludes[@]+"${excludes[@]}"} \
     -f 1 -wi 3 -w "$w" -i 3 -r "$r" -prof gc -rf json -rff "gc-$name.json" \
-    -jvmArgsAppend "-Xmx3g -Dreplay=$replay -Dnative=true" | tee "gc-$name.log"
+    -jvmArgsAppend "-Xmx3g -Dreplay=$replay -Dnative=$native" | tee "gc-$name.log"
   echo "::endgroup::"
   $py measure/summarize.py "$replay.count" "results-$name.json" "gc-$name.json" | tee "summary-$name.md"
 done

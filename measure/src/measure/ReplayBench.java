@@ -47,6 +47,8 @@ public class ReplayBench {
         JavaCaches.RecordVolatile javaRecordVolatile;
         JavaCaches.RecordPlain javaRecordPlain;
         JavaCaches.PerThread javaPerThread;
+        JavaCaches.Pr5156Record javaPr5156Record;
+        JavaCaches.Pr5155Registry javaPr5155Registry;
         NativeCaches.Current nativeCurrent;
         NativeCaches.RecordVolatile nativeRecordVolatile;
         NativeCaches.RecordPlain nativeRecordPlain;
@@ -124,6 +126,8 @@ public class ReplayBench {
             this.javaRecordVolatile = new JavaCaches.RecordVolatile(this.table, this.minY);
             this.javaRecordPlain = new JavaCaches.RecordPlain(this.table, this.minY);
             this.javaPerThread = new JavaCaches.PerThread(this.table, this.minY);
+            this.javaPr5156Record = new JavaCaches.Pr5156Record(this.table, this.minY);
+            this.javaPr5155Registry = new JavaCaches.Pr5155Registry(this.table, this.minY);
             if (useNative) {
                 this.nativeCurrent = new NativeCaches.Current(this.context, this.minY);
                 this.nativeRecordVolatile = new NativeCaches.RecordVolatile(this.context, this.minY);
@@ -296,6 +300,62 @@ public class ReplayBench {
         }
         return solid;
     }
+
+    /** #5156 as it is: one record behind a plain field, shared. */
+    @Benchmark
+    public int javaPr5156Record(Replay r) {
+        final JavaCaches.Pr5156Record c = r.javaPr5156Record;
+        final int[] xs = r.xs, ys = r.ys, zs = r.zs, from = r.solveFrom;
+        int solid = 0;
+        for (int s = 0, n = r.solves; s < n; s++) {
+            for (int i = from[s], end = from[s + 1]; i < end; i++) {
+                if (c.get0(xs[i], ys[i], zs[i])) {
+                    solid++;
+                }
+            }
+        }
+        return solid;
+    }
+
+    /** #5155 as it is: Current per solve, each one registered in the weak set as getBoi does. */
+    @Benchmark
+    public int javaPr5155PerSolver(Replay r) {
+        final JavaCaches.Pr5155Registry registry = r.javaPr5155Registry;
+        final int[] xs = r.xs, ys = r.ys, zs = r.zs, from = r.solveFrom;
+        int solid = 0;
+        for (int s = 0, n = r.solves; s < n; s++) {
+            final JavaCaches.Current c = registry.getBoi();
+            r.solverContext = c; // held by the solve's context, as SolverContext would, so it is a real heap object
+            for (int i = from[s], end = from[s + 1]; i < end; i++) {
+                if (c.get0(xs[i], ys[i], zs[i])) {
+                    solid++;
+                }
+            }
+        }
+        return solid;
+    }
+
+    @Benchmark
+    @Threads(2)
+    public int javaPr5156Record2(Replay r, Lane lane) {
+        final JavaCaches.Pr5156Record c = r.javaPr5156Record;
+        final int[] xs = r.xs, ys = r.ys, zs = r.zs, from = r.solveFrom;
+        int solid = 0;
+        for (int k = 0, n = r.solves; k < n; k++) {
+            final int s = (k + lane.offset) % n;
+            for (int i = from[s], end = from[s + 1]; i < end; i++) {
+                if (c.get0(xs[i], ys[i], zs[i])) {
+                    solid++;
+                }
+            }
+        }
+        return solid;
+    }
+
+    // No two-thread run of #5155's registry: in the game only the game thread calls getBoi (the
+    // solver's cache is made in onPostTick before the solve is submitted), and two threads adding to
+    // its WeakHashMap at once would measure a race the PR does not have. The caches themselves are
+    // Current, so javaPerSolver2 is the two-thread number for #5155 as well.
 
     @Benchmark
     public int nativeCurrent(Replay r) {
