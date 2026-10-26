@@ -85,7 +85,10 @@ public final class PathingBehavior extends Behavior implements IPathingBehavior,
     private void dispatchEvents() {
         ArrayList<PathEvent> curr = new ArrayList<>();
         toDispatch.drainTo(curr);
-        calcFailedLastTick = curr.contains(PathEvent.CALC_FAILED);
+        // Kept, not overwritten, until preTick has handed it to the process in control: the queue is drained
+        // twice a tick, and a failure that lands between the two drains would otherwise be replaced by the
+        // next tick's first drain, normally empty, before the process ever sees it.
+        calcFailedLastTick |= curr.contains(PathEvent.CALC_FAILED);
         for (PathEvent event : curr) {
             cheesecake.getGameEventHandler().onPathEvent(event);
         }
@@ -102,6 +105,7 @@ public final class PathingBehavior extends Behavior implements IPathingBehavior,
 
         expectedSegmentStart = pathStart();
         cheesecake.getPathingControlManager().preTick();
+        calcFailedLastTick = false; // delivered to exactly that preTick
         tickPath();
         ticksElapsedSoFar++;
         dispatchEvents();

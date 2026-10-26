@@ -396,6 +396,10 @@ jobs:
             exit 1
           fi
           echo "in-world test passed"
+          # Background threads do not fail a stage, so say what the client log holds either way.
+          echo "exceptions in the client log: $(grep -acE 'Exception|Caused by' autotest.log) line(s); ConcurrentModificationException: $(grep -ac ConcurrentModificationException autotest.log)"
+          # The headless runner always logs three: no narrator library (flite), no OpenAL device, no Realms login.
+          grep -naE 'Exception in thread|Exception|Caused by' autotest.log | grep -vE 'flite|OpenAL|Realms|SignedJWT|player/certificates|MinecraftClientHttpException|buildHttpException' | head -40 || true
 
       - name: Upload client log
         if: always()

@@ -188,7 +188,10 @@ public final class CachedChunk {
             return overview[internalPos];
         }
         if (special != null) {
-            String str = special.get(index);
+            // The tracked blocks are keyed by their world y: ChunkPacker records them there and the region file
+            // round trip keeps it. y here is relative to the world's floor, as CachedRegion.getBlock passes it,
+            // and the two differ by 64 blocks in the Overworld.
+            String str = special.get(getPositionIndex(x, y + dimension.minY(), z));
             if (str != null) {
                 return BlockUtils.stringToBlockRequired(str).defaultBlockState();
             }
