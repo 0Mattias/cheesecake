@@ -106,6 +106,8 @@ public final class CheesecakeAutoTest implements AbstractGameEventListener {
             new GetToBlockStage(),
             new BackfillStage(),
             new InventoryPauseStage(),
+            new FrostWalkerStage(),
+            new FreeLookCameraStage(),
             new ElytraStage(ElytraStage.Trip.OVERWORLD_ABOVE_LIMIT),
             new ElytraStage(ElytraStage.Trip.OVERWORLD_AUTO_JUMP),
             new ElytraStage(ElytraStage.Trip.NETHER_BELOW_ROOF),

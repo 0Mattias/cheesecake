@@ -37,7 +37,7 @@ import java.util.Optional;
 
 /**
  * Based on EmersonDove's work
- * <a href="https://github.com/cabaletta/cheesecake/pull/2544">...</a>
+ * <a href="https://github.com/cabaletta/baritone/pull/2544">...</a>
  *
  * @author rycbar
  * @since 22.09.2022

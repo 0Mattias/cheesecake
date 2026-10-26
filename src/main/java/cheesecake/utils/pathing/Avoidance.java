@@ -68,7 +68,7 @@ public class Avoidance {
         double mobSpawnerCoeff = Cheesecake.settings().mobSpawnerAvoidanceCoefficient.value;
         double mobCoeff = Cheesecake.settings().mobAvoidanceCoefficient.value;
         if (mobSpawnerCoeff != 1.0D) {
-            ctx.worldData().getCachedWorld().getLocationsOf("mob_spawner", 1, ctx.playerFeet().x, ctx.playerFeet().z, 2)
+            ctx.worldData().getCachedWorld().getLocationsOf("spawner", 1, ctx.playerFeet().x, ctx.playerFeet().z, 2)
                     .forEach(mobspawner -> res.add(new Avoidance(mobspawner, mobSpawnerCoeff, Cheesecake.settings().mobSpawnerAvoidanceRadius.value)));
         }
         if (mobCoeff != 1.0D) {

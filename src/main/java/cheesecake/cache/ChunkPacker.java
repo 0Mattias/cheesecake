@@ -33,6 +33,8 @@ import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.chunk.PalettedContainer;
 import net.minecraft.world.level.dimension.DimensionType;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
 import static cheesecake.utils.BlockStateInterface.getFromChunk;
@@ -163,7 +165,7 @@ public final class ChunkPacker {
         return PathingBlockType.SOLID;
     }
 
-    public static BlockState pathingTypeToBlock(PathingBlockType type, DimensionType dimension) {
+    public static BlockState pathingTypeToBlock(PathingBlockType type, DimensionType dimension, ResourceKey<Level> dimensionId) {
         switch (type) {
             case AIR:
                 return Blocks.AIR.defaultBlockState();
@@ -173,13 +175,13 @@ public final class ChunkPacker {
                 return Blocks.LAVA.defaultBlockState();
             case SOLID:
                 // Dimension solid types
-                if (dimension.hasSkyLight()) {
+                if (dimensionId == Level.NETHER) {
+                    return Blocks.NETHERRACK.defaultBlockState();
+                } else if (dimensionId == Level.END) {
+                    return Blocks.END_STONE.defaultBlockState();
+                } else { // overworld, or some custom dimension
                     return Blocks.STONE.defaultBlockState();
                 }
-                if (dimension.hasCeiling()) {
-                    return Blocks.NETHERRACK.defaultBlockState();
-                }
-                return Blocks.END_STONE.defaultBlockState();
             default:
                 return null;
         }

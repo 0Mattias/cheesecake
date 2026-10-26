@@ -37,6 +37,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.dimension.DimensionType;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.level.Level;
 
 /**
  * @author Brady
@@ -75,8 +77,9 @@ public final class CachedWorld implements ICachedWorld, Helper {
             .<ChunkPos, LevelChunk>build().asMap();
 
     private final DimensionType dimension;
+    private final ResourceKey<Level> dimensionId;
 
-    CachedWorld(Path directory, DimensionType dimension) {
+    CachedWorld(Path directory, DimensionType dimension, ResourceKey<Level> dimensionId) {
         if (!Files.exists(directory)) {
             try {
                 Files.createDirectories(directory);
@@ -85,6 +88,7 @@ public final class CachedWorld implements ICachedWorld, Helper {
         }
         this.directory = directory.toString();
         this.dimension = dimension;
+        this.dimensionId = dimensionId;
         System.out.println("Cached world directory: " + directory);
         Cheesecake.getExecutor().execute(new PackerThread());
         Cheesecake.getExecutor().execute(() -> {
@@ -266,7 +270,7 @@ public final class CachedWorld implements ICachedWorld, Helper {
      */
     private synchronized CachedRegion getOrCreateRegion(int regionX, int regionZ) {
         return cachedRegions.computeIfAbsent(getRegionID(regionX, regionZ), id -> {
-            CachedRegion newRegion = new CachedRegion(regionX, regionZ, dimension);
+            CachedRegion newRegion = new CachedRegion(regionX, regionZ, dimension, dimensionId);
             newRegion.load(this.directory);
             return newRegion;
         });

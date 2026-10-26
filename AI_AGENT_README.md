@@ -83,7 +83,7 @@ for line in f:
 }
 ```
 
-`process` is null when nothing is in control, and the position fields are absent when the player is not in a world. The tick estimates are null when there is no path; twenty ticks make a second at normal speed. In chat the line is prefixed like any other message.
+`process` is null when nothing is in control, and the position fields are absent when the player is not in a world. The tick estimates are null when there is no path or the player is not in a world; twenty ticks make a second at normal speed. In chat the line is prefixed like any other message.
 
 ## Commands
 

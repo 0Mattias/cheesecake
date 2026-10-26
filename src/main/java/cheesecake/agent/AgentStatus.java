@@ -99,8 +99,9 @@ public final class AgentStatus {
             path.addProperty("segmentPosition", executor.getPosition());
             path.addProperty("segmentLength", executor.getPath().length());
         }
-        path.add("ticksRemainingInSegment", number(pathing.ticksRemainingInSegment()));
-        path.add("estimatedTicksToGoal", number(pathing.estimatedTicksToGoal()));
+        // Both estimates start from the player's position, which there is none of outside a world.
+        path.add("ticksRemainingInSegment", inWorld ? number(pathing.ticksRemainingInSegment()) : JsonNull.INSTANCE);
+        path.add("estimatedTicksToGoal", inWorld ? number(pathing.estimatedTicksToGoal()) : JsonNull.INSTANCE);
         status.add("pathing", path);
 
         IElytraProcess elytra = cheesecake.getElytraProcess();
