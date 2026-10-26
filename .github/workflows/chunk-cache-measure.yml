@@ -8,7 +8,7 @@ name: chunk cache measurements
 
 on:
   push:
-    branches: [claude/chunk-cache-measurements, claude/eager-planck-f3qj5c]
+    branches: [claude/chunk-cache-measurements]
   workflow_dispatch:
 
 permissions:

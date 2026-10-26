@@ -29,19 +29,17 @@ public final class BlockStateOctreeInterface {
     private final NetherPathfinder pathfinder;
     private final int minY;
     /**
-     * The chunk the last lookup fell in, so that a run of lookups inside one chunk costs one
-     * table lookup. Every solver thread under the read lock shares this object, and the read lock
-     * admits them all at once -- there are two of them for a moment whenever a flight is re-planned,
-     * the old behavior's solver finishing while the new one's starts -- so the pair is one immutable
-     * value swapped through a single reference. A reader sees a whole (position, chunk) pair or
-     * nothing, never one thread's coordinates against another's chunk, which three separate
-     * fields allowed and which answered a query out of the wrong chunk. The writer clears it under
-     * the write lock whenever chunks are replaced or culled, so that a lookup does not go on
-     * answering out of a chunk the table no longer holds.
+     * The chunk the last lookup fell in, so that a run of lookups inside one chunk costs one table
+     * lookup. Every solver thread under the read lock shares this object, and the read lock admits
+     * them all at once -- there are two of them for a moment whenever a flight is re-planned -- so
+     * the pair is one immutable record swapped through a single reference: a reader sees a whole
+     * (chunk, position) pair or nothing, never one thread's coordinates against another's chunk,
+     * which three separate fields allowed. The field is plain, not volatile: the record's fields are
+     * final, so whoever sees the reference sees the whole pair, and the writer clears it under the
+     * write lock, which every later read-lock hold orders after. This is cabaletta/baritone#5156
+     * (ZacSharp, 415acfcf) as it is.
      */
-    private volatile CachedChunk cached;
-
-    private record CachedChunk(int chunkX, int chunkZ, Chunk chunk) {}
+    PrevChunk cached;
 
     public BlockStateOctreeInterface(final NetherPathfinderContext context) {
         this.context = context;
@@ -64,11 +62,16 @@ public final class BlockStateOctreeInterface {
         }
         final int chunkX = x >> 4;
         final int chunkZ = z >> 4;
-        CachedChunk c = this.cached;
-        if (c == null || c.chunkX != chunkX || c.chunkZ != chunkZ) {
-            c = new CachedChunk(chunkX, chunkZ, this.pathfinder.getChunkOrDefault(chunkX, chunkZ, true));
-            this.cached = c;
+        PrevChunk cached = this.cached;
+        final Chunk chunk;
+        if (cached == null || ((chunkX ^ cached.x()) | (chunkZ ^ cached.z())) != 0) {
+            chunk = this.pathfinder.getChunkOrDefault(chunkX, chunkZ, true);
+            this.cached = new PrevChunk(chunk, chunkX, chunkZ);
+        } else {
+            chunk = cached.chunk();
         }
-        return c.chunk.isSolid(x & 0xF, adjustedY, z & 0xF);
+        return chunk.isSolid(x & 0xF, adjustedY, z & 0xF);
     }
+
+    private static record PrevChunk(Chunk chunk, int x, int z) {}
 }
