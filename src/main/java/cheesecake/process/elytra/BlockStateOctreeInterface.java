@@ -30,16 +30,16 @@ public final class BlockStateOctreeInterface {
     private final int minY;
     /**
      * The chunk the last lookup fell in, so that a run of lookups inside one chunk costs one table
-     * lookup. Three plain fields, as upstream had them, which is safe because this object is no
-     * longer shared: cabaletta/baritone#5155 (ZacSharp, 74dd28b2), ported as it is, gives every
-     * reader its own through {@link NetherPathfinderContext#getBoi()}, and the writer clears all of
-     * them under the write lock.
+     * lookup. Every solver thread under the read lock shares this object, and the read lock admits
+     * them all at once -- there are two of them for a moment whenever a flight is re-planned -- so
+     * the pair is one immutable record swapped through a single reference: a reader sees a whole
+     * (chunk, position) pair or nothing, never one thread's coordinates against another's chunk,
+     * which three separate fields allowed. The field is plain, not volatile: the record's fields are
+     * final, so whoever sees the reference sees the whole pair, and the writer clears it under the
+     * write lock, which every later read-lock hold orders after. This is cabaletta/baritone#5156
+     * (ZacSharp, 415acfcf) as it is.
      */
-    Chunk chunk;
-
-    // Guarantee that the first lookup will fetch the context by setting MAX_VALUE
-    private int prevChunkX = Integer.MAX_VALUE;
-    private int prevChunkZ = Integer.MAX_VALUE;
+    PrevChunk cached;
 
     public BlockStateOctreeInterface(final NetherPathfinderContext context) {
         this.context = context;
@@ -49,13 +49,9 @@ public final class BlockStateOctreeInterface {
 
     /** Forgets the cached chunk. Called under the write lock by whatever replaces or culls chunks. */
     void invalidate() {
-        this.chunk = null;
+        this.cached = null;
     }
 
-    /**
-     * The caller must hold the context read lock and have exclusive access
-     * to this {@code BlockStateOctreeInterface}.
-     */
     public boolean get0(final int x, final int y, final int z) {
         if (LookupTrace.LOOKUPS) {
             LookupTrace.lookup(x, y, z);
@@ -66,11 +62,16 @@ public final class BlockStateOctreeInterface {
         }
         final int chunkX = x >> 4;
         final int chunkZ = z >> 4;
-        if (this.chunk == null | ((chunkX ^ this.prevChunkX) | (chunkZ ^ this.prevChunkZ)) != 0) {
-            this.prevChunkX = chunkX;
-            this.prevChunkZ = chunkZ;
-            this.chunk = this.pathfinder.getChunkOrDefault(chunkX, chunkZ, true);
+        PrevChunk cached = this.cached;
+        final Chunk chunk;
+        if (cached == null || ((chunkX ^ cached.x()) | (chunkZ ^ cached.z())) != 0) {
+            chunk = this.pathfinder.getChunkOrDefault(chunkX, chunkZ, true);
+            this.cached = new PrevChunk(chunk, chunkX, chunkZ);
+        } else {
+            chunk = cached.chunk();
         }
-        return this.chunk.isSolid(x & 0xF, adjustedY, z & 0xF);
+        return chunk.isSolid(x & 0xF, adjustedY, z & 0xF);
     }
+
+    private static record PrevChunk(Chunk chunk, int x, int z) {}
 }

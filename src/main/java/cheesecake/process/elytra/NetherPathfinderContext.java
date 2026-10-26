@@ -27,9 +27,6 @@ import cheesecake.utils.accessor.IPalettedContainer;
 
 import java.lang.ref.SoftReference;
 import java.nio.file.Path;
-import java.util.Collections;
-import java.util.Set;
-import java.util.WeakHashMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -76,12 +73,7 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
     /** Whether a region cache was given, in which case a path calculation can insert chunks. */
     private final boolean cached;
     final int minY;
-
-    // We want to do caching on concurrent lookups without synchronizing the cache,
-    // so we need to give each reader a separate cache. We also need to keep
-    // references to all caches so we can invalidate them, and those references
-    // have to be weak so we don't leak memory. That gets us this funky setup.
-    private final Set<BlockStateOctreeInterface> bois = Collections.newSetFromMap(new WeakHashMap<>());
+    private final BlockStateOctreeInterface boi;
 
     /**
      * Named, so that a crash log or a trace says which thread was inside the pathfinder rather
@@ -112,6 +104,7 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
         this.context = new NetherPathfinder(seed, cache != null ? cache.toString() : null, dim, height);
         this.cached = cache != null;
         this.seed = seed;
+        this.boi = new BlockStateOctreeInterface(this);
     }
 
     public boolean hasChunk(ChunkPos pos) {
@@ -122,7 +115,7 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
         this.writeExecutor.execute(() -> {
             writeLock.lock();
             try {
-                this.bois.forEach(BlockStateOctreeInterface::invalidate);
+                this.boi.invalidate();
                 this.context.cullFarChunks(chunkX, chunkZ, maxDistanceBlocks);
             } finally {
                 writeLock.unlock();
@@ -140,7 +133,7 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
                 writeLock.lock();
                 try {
                     // we might replace this chunk
-                    this.bois.forEach(BlockStateOctreeInterface::invalidate);
+                    this.boi.invalidate();
                     final Chunk packed = this.context.allocateAndInsertChunk(chunk.getPos().x(), chunk.getPos().z());
                     writeChunkData(chunk, packed);
                 } finally {
@@ -388,10 +381,8 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
         }
     }
 
-    public BlockStateOctreeInterface getBoi() {
-        BlockStateOctreeInterface boi = new BlockStateOctreeInterface(this);
-        this.bois.add(boi);
-        return boi;
+    public boolean passable(int x, int y, int z) {
+        return !this.boi.get0(x, y, z);
     }
 
     public void cancel() {
