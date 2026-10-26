@@ -392,7 +392,7 @@ public final class ElytraBehavior implements Helper {
                 return;
             }
             final BetterBlockPos rangeStart = path.get(rangeStartIncl);
-            if (!ElytraBehavior.this.passable(rangeStart.x, rangeStart.y, rangeStart.z, false)) {
+            if (!ElytraBehavior.this.passable(ElytraBehavior.this.npfContext.getBoi(), rangeStart.x, rangeStart.y, rangeStart.z, false)) {
                 // we're in a wall
                 return; // previous iterations of this function SHOULD have fixed this by now :rage_cat:
             }
@@ -899,6 +899,7 @@ public final class ElytraBehavior implements Helper {
         public final boolean ignoreLava;
         public final FireworkBoost boost;
         public final IAimProcessor aimProcessor;
+        public final BlockStateOctreeInterface boi;
 
         /**
          * Creates a new SolverContext using the current state of the path, player, and
@@ -933,6 +934,8 @@ public final class ElytraBehavior implements Helper {
                 aim.advance(1);
             }
             this.aimProcessor = aim;
+
+            this.boi = ElytraBehavior.this.npfContext.getBoi();
         }
 
         @Override
@@ -1336,7 +1339,7 @@ public final class ElytraBehavior implements Helper {
             for (int x = xmin; x < xmax; x++) {
                 for (int y = ymin; y < ymax; y++) {
                     for (int z = zmin; z < zmax; z++) {
-                        if (!this.passable(x, y, z, context.ignoreLava)) {
+                        if (!this.passable(context.boi, x, y, z, context.ignoreLava)) {
                             return null;
                         }
                     }
@@ -1400,12 +1403,15 @@ public final class ElytraBehavior implements Helper {
     }
 
     // any call to this must be done with the lock held
-    private boolean passable(int x, int y, int z, boolean ignoreLava) {
+    private boolean passable(BlockStateOctreeInterface boi, int x, int y, int z, boolean ignoreLava) {
         if (ignoreLava) {
             final BlockState state = this.bsi.get0(x, y, z);
             return state.isAir() || state.is(Blocks.LAVA);
         } else {
-            return passable(x, y, z);
+            if (y > ctx.world().getMaxY() || y < ctx.world().getMinY()) {
+                return true;
+            }
+            return !boi.get0(x, y, z);
         }
     }
 
@@ -1533,12 +1539,5 @@ public final class ElytraBehavior implements Helper {
         }
 
         return npfContext.raytrace(count, src, dst, visibility);
-    }
-
-    public boolean passable(int x, int y, int z) {
-        if (y > ctx.world().getMaxY() || y < ctx.world().getMinY()) {
-            return true;
-        }
-        return npfContext.passable(x, y, z);
     }
 }
