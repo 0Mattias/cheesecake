@@ -75,6 +75,7 @@ Cheesecake began as a port of Baritone's 1.19.4 branch to Minecraft 1.21.11. Ups
 - The cache's rule that prices the bottom five layers of the Overworld and the Nether as obsidian, so that a path prefers breaking known stone above them, compares the y it is given, which is already relative to the world's floor, with 5. Upstream compares it with the floor plus 5, which in the Overworld is -59, so the rule never fires there.
 - `#find` searches the cache around the player's x and z. Upstream passes the player's y as the z.
 - Spawner avoidance looks the cache up under `spawner`, the block's name since 1.13. Upstream asks for `mob_spawner` and never finds one.
+- A path calculation's `CALC_FAILED` is kept until the process in control has been told about it. Upstream drains the path-event queue twice a tick and overwrites the flag on every drain, so a calculation that fails between the two drains -- a fast failure, such as a search that exhausts a small enclosed area, lands there -- is overwritten by the next tick's first drain before `PathingControlManager` reads it, and a process waiting on the failure, such as `#mine` blacklisting an unreachable ore, asks for the same path again ([#24](https://github.com/0Mattias/cheesecake/issues/24)).
 
 ### Verification
 
