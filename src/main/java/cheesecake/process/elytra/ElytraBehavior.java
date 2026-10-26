@@ -634,7 +634,7 @@ public final class ElytraBehavior implements Helper {
         }
 
         // ctx AND context???? :DDD
-        this.bsi = new BlockStateInterface(ctx);
+        this.bsi = new BlockStateInterface(ctx, true);
         this.pathManager.tick();
 
         final int playerNear = this.pathManager.getNear();
